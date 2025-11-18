@@ -1,1 +1,12 @@
+# DEPRECATED - Use the comprehensive JavaScript library instead
+# This was the original simple script, now superseded by:
+# - src/btc-locker.js for the full library
+# - scripts/timelock-p2sh.script for proper P2SH redeem scripts
+
+# Original simple timelock (for reference only):
 1757462400 OP_CHECKLOCKTIMEVERIFY OP_DROP 0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798 OP_CHECKSIG
+
+# For production use, please use the JavaScript library:
+# const { BTCLocker, TimeUtils } = require('btc-locker');
+# const locker = new BTCLocker();
+# const script = locker.createTimelockScript(locktime, publicKey);

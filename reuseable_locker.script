@@ -1,1 +1,12 @@
+# DEPRECATED - Use the comprehensive JavaScript library instead
+# This was the original reusable template, now superseded by:
+# - src/btc-locker.js for the full library
+# - scripts/ directory for complete P2SH implementations
+
+# Original reusable template (for reference only):
 <locktime> OP_CHECKLOCKTIMEVERIFY OP_DROP OP_CHECKSIG
+
+# For production use, please use the JavaScript library:
+# const { BTCLocker, TimeUtils } = require('btc-locker');
+# const locker = new BTCLocker();
+# const script = locker.createTimelockScript(TimeUtils.addDuration(TimeUtils.DURATIONS.WEEK), publicKey);
