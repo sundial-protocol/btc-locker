@@ -177,7 +177,73 @@ OP_ELSE
 OP_ENDIF
 ```
 
-## 🌐 Browser Usage
+## 🖥️ Command Line Interface (CLI)
+
+The package includes a powerful CLI for testing and managing Bitcoin timelock scripts:
+
+### Installation & Setup
+
+```bash
+npm install -g btc-locker
+# or run locally:
+npm run cli
+```
+
+### Basic Commands
+
+```bash
+# Generate a new key pair (testnet by default)
+btc-locker keygen
+
+# Generate mainnet key pair
+btc-locker --network mainnet keygen
+
+# Create a timelock script
+btc-locker timelock --time 1765064511 --pubkey 02eb121c6fc...
+
+# Create multisig timelock
+btc-locker multisig --time 1765064511 --required 2 --pubkeys "02eb121c...,03f9308a...,03c6047f..."
+
+# Create HODL script with emergency escape
+btc-locker hodl --time 1765064511 --owner 02eb121c... --emergency 03f9308a...
+
+# Check if timelock has expired
+btc-locker check --time 1765064511
+
+# Interactive mode
+btc-locker interactive
+```
+
+### Utility Commands
+
+```bash
+# Validate keys
+btc-locker utils validate-key 02eb121c6fc425e894a936c87367c3f1871170af9e131cc2aa598d6ae4ee4a1cbe
+
+# Convert time formats
+btc-locker utils time 1765064511
+btc-locker utils time "1 week"
+```
+
+### CLI Options
+
+- `--network <mainnet|testnet>`: Choose Bitcoin network (default: testnet)
+- `--json`: Output results in JSON format
+- `--verbose`: Enable verbose logging
+
+### Examples
+
+```bash
+# Create a 1-week timelock on testnet
+btc-locker timelock --time $(node -e "console.log(Math.floor(Date.now()/1000) + 604800)") --pubkey $(btc-locker keygen --json | jq -r .publicKey)
+
+# Check timelock status
+btc-locker check --time 1765064511
+
+# Get help
+btc-locker --help
+btc-locker timelock --help
+```
 
 ```html
 <!DOCTYPE html>

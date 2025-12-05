@@ -1,0 +1,562 @@
+#!/usr/bin/env node
+
+/**
+ * BTC Locker CLI
+ * Command-line interface for testing Bitcoin timelock scripts
+ */
+
+const { Command } = require("commander");
+const inquirer = require("inquirer");
+const chalk = require("chalk");
+const bitcoin = require("bitcoinjs-lib");
+const {
+  BTCLocker,
+  TimeUtils,
+  ScriptUtils,
+  TransactionUtils,
+} = require("../src/index");
+
+const program = new Command();
+
+// Configure CLI
+program
+  .name("btc-locker")
+  .description("CLI for Bitcoin timelock script management")
+  .version("1.0.0");
+
+// Global options
+program
+  .option(
+    "-n, --network <network>",
+    "Bitcoin network (mainnet|testnet)",
+    "testnet"
+  )
+  .option("-v, --verbose", "Enable verbose logging")
+  .option("--json", "Output results in JSON format");
+
+/**
+ * Initialize BTCLocker instance based on network option
+ */
+function initLocker(options) {
+  const network =
+    options.network === "mainnet"
+      ? bitcoin.networks.bitcoin
+      : bitcoin.networks.testnet;
+  return new BTCLocker(network);
+}
+
+/**
+ * Display results in formatted or JSON format
+ */
+function displayResult(data, options, title) {
+  if (options.json) {
+    console.log(JSON.stringify(data, null, 2));
+  } else {
+    console.log(chalk.green(`\n${title}`));
+    console.log(chalk.blue("=".repeat(50)));
+    Object.entries(data).forEach(([key, value]) => {
+      if (typeof value === "object" && value !== null) {
+        console.log(chalk.yellow(`${key}:`));
+        Object.entries(value).forEach(([subKey, subValue]) => {
+          console.log(`  ${subKey}: ${subValue}`);
+        });
+      } else {
+        console.log(`${key}: ${value}`);
+      }
+    });
+    console.log("");
+  }
+}
+
+/**
+ * Generate key pair command
+ */
+program
+  .command("keygen")
+  .description("Generate a new Bitcoin key pair")
+  .action((options) => {
+    const parentOptions = program.opts();
+    const locker = initLocker(parentOptions);
+
+    const keyPair = locker.generateKeyPair();
+
+    displayResult(keyPair, parentOptions, "Generated Key Pair");
+
+    if (!parentOptions.json) {
+      console.log(chalk.red("⚠️  IMPORTANT: Save your private key securely!"));
+      console.log(chalk.yellow(`Network: ${parentOptions.network}`));
+    }
+  });
+
+/**
+ * Create timelock script command
+ */
+program
+  .command("timelock")
+  .description("Create a timelock script")
+  .option(
+    "-t, --time <time>",
+    'Lock time (Unix timestamp or human readable like "1 week")'
+  )
+  .option("-p, --pubkey <pubkey>", "Public key (hex)")
+  .action(async (cmdOptions) => {
+    const parentOptions = program.opts();
+    const locker = initLocker(parentOptions);
+
+    let locktime = cmdOptions.time;
+    let publicKey = cmdOptions.pubkey;
+
+    // Interactive prompts if options not provided
+    if (!locktime || !publicKey) {
+      const answers = await inquirer.prompt([
+        {
+          type: "input",
+          name: "locktime",
+          message:
+            'Enter locktime (Unix timestamp or duration like "1 week", "30 days"):',
+          when: () => !locktime,
+          validate: (input) => {
+            if (input.match(/^\d+$/)) return true;
+            if (input.match(/^\d+\s*(minute|hour|day|week|month|year)s?$/i))
+              return true;
+            return 'Please enter a Unix timestamp or duration like "1 week"';
+          },
+        },
+        {
+          type: "input",
+          name: "publicKey",
+          message: "Enter public key (hex):",
+          when: () => !publicKey,
+          validate: (input) =>
+            ScriptUtils.isValidPublicKey(input) || "Invalid public key format",
+        },
+      ]);
+
+      locktime = locktime || answers.locktime;
+      publicKey = publicKey || answers.publicKey;
+    }
+
+    // Parse human-readable time
+    if (!locktime.match(/^\d+$/)) {
+      const match = locktime.match(
+        /^(\d+)\s*(minute|hour|day|week|month|year)s?$/i
+      );
+      if (match) {
+        const amount = parseInt(match[1]);
+        const unit = match[2].toLowerCase();
+        const unitMap = {
+          minute: TimeUtils.DURATIONS.MINUTE,
+          hour: TimeUtils.DURATIONS.HOUR,
+          day: TimeUtils.DURATIONS.DAY,
+          week: TimeUtils.DURATIONS.WEEK,
+          month: TimeUtils.DURATIONS.MONTH,
+          year: TimeUtils.DURATIONS.YEAR,
+        };
+        const duration = amount * unitMap[unit];
+        locktime = TimeUtils.addDuration(duration);
+      } else {
+        console.error(chalk.red("Invalid time format"));
+        return;
+      }
+    } else {
+      locktime = parseInt(locktime);
+    }
+
+    try {
+      const script = locker.createTimelockScript(locktime, publicKey);
+      script.locktime_readable = new Date(locktime * 1000).toISOString();
+
+      displayResult(script, parentOptions, "Timelock Script Created");
+
+      if (!parentOptions.json) {
+        console.log(chalk.yellow(`Send Bitcoin to: ${script.address}`));
+        console.log(
+          chalk.yellow(`Funds locked until: ${script.locktime_readable}`)
+        );
+      }
+    } catch (error) {
+      console.error(chalk.red(`Error: ${error.message}`));
+    }
+  });
+
+/**
+ * Create multisig timelock script command
+ */
+program
+  .command("multisig")
+  .description("Create a multisig timelock script")
+  .option("-t, --time <time>", "Lock time (Unix timestamp or human readable)")
+  .option("-m, --required <m>", "Required signatures", "2")
+  .option("-p, --pubkeys <pubkeys>", "Comma-separated public keys")
+  .action(async (cmdOptions) => {
+    const parentOptions = program.opts();
+    const locker = initLocker(parentOptions);
+
+    let locktime = cmdOptions.time;
+    let m = parseInt(cmdOptions.required);
+    let pubkeys = cmdOptions.pubkeys;
+
+    // Interactive prompts
+    if (!locktime || !pubkeys) {
+      const answers = await inquirer.prompt([
+        {
+          type: "input",
+          name: "locktime",
+          message: "Enter locktime:",
+          when: () => !locktime,
+        },
+        {
+          type: "input",
+          name: "pubkeys",
+          message: "Enter public keys (comma-separated):",
+          when: () => !pubkeys,
+          validate: (input) => {
+            const keys = input.split(",").map((k) => k.trim());
+            return keys.length >= 2 || "Need at least 2 public keys";
+          },
+        },
+      ]);
+
+      locktime = locktime || answers.locktime;
+      pubkeys = pubkeys || answers.pubkeys;
+    }
+
+    // Parse inputs
+    const publicKeys = pubkeys.split(",").map((k) => k.trim());
+
+    if (!locktime.match(/^\d+$/)) {
+      const match = locktime.match(
+        /^(\d+)\s*(minute|hour|day|week|month|year)s?$/i
+      );
+      if (match) {
+        const amount = parseInt(match[1]);
+        const unit = match[2].toLowerCase();
+        const unitMap = {
+          minute: TimeUtils.DURATIONS.MINUTE,
+          hour: TimeUtils.DURATIONS.HOUR,
+          day: TimeUtils.DURATIONS.DAY,
+          week: TimeUtils.DURATIONS.WEEK,
+          month: TimeUtils.DURATIONS.MONTH,
+          year: TimeUtils.DURATIONS.YEAR,
+        };
+        const duration = amount * unitMap[unit];
+        locktime = TimeUtils.addDuration(duration);
+      }
+    } else {
+      locktime = parseInt(locktime);
+    }
+
+    try {
+      const script = locker.createMultisigTimelockScript(
+        locktime,
+        m,
+        publicKeys
+      );
+      script.locktime_readable = new Date(locktime * 1000).toISOString();
+
+      displayResult(
+        script,
+        parentOptions,
+        `${m}-of-${publicKeys.length} Multisig Timelock Created`
+      );
+    } catch (error) {
+      console.error(chalk.red(`Error: ${error.message}`));
+    }
+  });
+
+/**
+ * Create HODL script command
+ */
+program
+  .command("hodl")
+  .description("Create a HODL script with emergency escape")
+  .option("-t, --time <time>", "Lock time")
+  .option("-o, --owner <pubkey>", "Owner public key")
+  .option("-e, --emergency <pubkey>", "Emergency public key")
+  .action(async (cmdOptions) => {
+    const parentOptions = program.opts();
+    const locker = initLocker(parentOptions);
+
+    let locktime = cmdOptions.time;
+    let ownerPubKey = cmdOptions.owner;
+    let emergencyPubKey = cmdOptions.emergency;
+
+    // Interactive prompts
+    if (!locktime || !ownerPubKey || !emergencyPubKey) {
+      const answers = await inquirer.prompt([
+        {
+          type: "input",
+          name: "locktime",
+          message: "Enter locktime:",
+          when: () => !locktime,
+        },
+        {
+          type: "input",
+          name: "ownerPubKey",
+          message: "Enter owner public key:",
+          when: () => !ownerPubKey,
+          validate: (input) =>
+            ScriptUtils.isValidPublicKey(input) || "Invalid public key",
+        },
+        {
+          type: "input",
+          name: "emergencyPubKey",
+          message: "Enter emergency public key:",
+          when: () => !emergencyPubKey,
+          validate: (input) =>
+            ScriptUtils.isValidPublicKey(input) || "Invalid public key",
+        },
+      ]);
+
+      locktime = locktime || answers.locktime;
+      ownerPubKey = ownerPubKey || answers.ownerPubKey;
+      emergencyPubKey = emergencyPubKey || answers.emergencyPubKey;
+    }
+
+    // Parse time
+    if (!locktime.match(/^\d+$/)) {
+      const match = locktime.match(
+        /^(\d+)\s*(minute|hour|day|week|month|year)s?$/i
+      );
+      if (match) {
+        const amount = parseInt(match[1]);
+        const unit = match[2].toLowerCase();
+        const unitMap = {
+          minute: TimeUtils.DURATIONS.MINUTE,
+          hour: TimeUtils.DURATIONS.HOUR,
+          day: TimeUtils.DURATIONS.DAY,
+          week: TimeUtils.DURATIONS.WEEK,
+          month: TimeUtils.DURATIONS.MONTH,
+          year: TimeUtils.DURATIONS.YEAR,
+        };
+        const duration = amount * unitMap[unit];
+        locktime = TimeUtils.addDuration(duration);
+      }
+    } else {
+      locktime = parseInt(locktime);
+    }
+
+    try {
+      const script = locker.createHodlScript(
+        locktime,
+        ownerPubKey,
+        emergencyPubKey
+      );
+      script.locktime_readable = new Date(locktime * 1000).toISOString();
+
+      displayResult(script, parentOptions, "HODL Script Created");
+
+      if (!parentOptions.json) {
+        console.log(chalk.yellow("Spending Options:"));
+        console.log(
+          chalk.green(
+            "• Normal: Wait until locktime, spend with owner key only"
+          )
+        );
+        console.log(
+          chalk.green(
+            "• Emergency: Anytime with both owner + emergency signatures"
+          )
+        );
+      }
+    } catch (error) {
+      console.error(chalk.red(`Error: ${error.message}`));
+    }
+  });
+
+/**
+ * Check if timelock has expired
+ */
+program
+  .command("check")
+  .description("Check if a timelock has expired")
+  .option("-t, --time <timestamp>", "Timelock timestamp to check")
+  .action(async (cmdOptions) => {
+    const parentOptions = program.opts();
+    const locker = initLocker(parentOptions);
+
+    let locktime = cmdOptions.time;
+
+    if (!locktime) {
+      const answer = await inquirer.prompt([
+        {
+          type: "input",
+          name: "locktime",
+          message: "Enter timelock timestamp:",
+          validate: (input) =>
+            input.match(/^\d+$/) || "Please enter a Unix timestamp",
+        },
+      ]);
+      locktime = answer.locktime;
+    }
+
+    locktime = parseInt(locktime);
+    const isExpired = locker.isTimelockExpired(locktime);
+    const currentTime = Math.floor(Date.now() / 1000);
+
+    const result = {
+      locktime,
+      locktime_readable: new Date(locktime * 1000).toISOString(),
+      current_time: currentTime,
+      current_time_readable: new Date(currentTime * 1000).toISOString(),
+      is_expired: isExpired,
+      time_until_expiry: isExpired ? 0 : locktime - currentTime,
+    };
+
+    displayResult(result, parentOptions, "Timelock Status");
+
+    if (!parentOptions.json) {
+      if (isExpired) {
+        console.log(
+          chalk.green("✅ Timelock has expired - funds can be spent")
+        );
+      } else {
+        console.log(
+          chalk.yellow(
+            `⏳ Timelock active - ${result.time_until_expiry} seconds remaining`
+          )
+        );
+      }
+    }
+  });
+
+/**
+ * Interactive mode
+ */
+program
+  .command("interactive")
+  .alias("i")
+  .description("Interactive mode for creating scripts")
+  .action(async () => {
+    const parentOptions = program.opts();
+
+    console.log(chalk.blue("🔒 BTC Locker Interactive Mode"));
+    console.log(chalk.yellow(`Network: ${parentOptions.network}`));
+    console.log("");
+
+    const { action } = await inquirer.prompt([
+      {
+        type: "list",
+        name: "action",
+        message: "What would you like to do?",
+        choices: [
+          { name: "Generate new key pair", value: "keygen" },
+          { name: "Create timelock script", value: "timelock" },
+          { name: "Create multisig timelock script", value: "multisig" },
+          { name: "Create HODL script", value: "hodl" },
+          { name: "Check timelock status", value: "check" },
+          { name: "Exit", value: "exit" },
+        ],
+      },
+    ]);
+
+    if (action === "exit") {
+      console.log(chalk.blue("Goodbye! 👋"));
+      return;
+    }
+
+    // Execute the chosen action
+    const command = program.commands.find((cmd) => cmd.name() === action);
+    if (command) {
+      await command.action({});
+    }
+  });
+
+/**
+ * Utilities command group
+ */
+const utilsCommand = program.command("utils").description("Utility commands");
+
+utilsCommand
+  .command("validate-key <key>")
+  .description("Validate a public or private key")
+  .action((key, cmd) => {
+    const parentOptions = { json: false, network: "testnet" }; // Default options for subcommands
+
+    const isValidPubKey = ScriptUtils.isValidPublicKey(key);
+    const isValidPrivKey = ScriptUtils.isValidPrivateKey(key);
+
+    const result = {
+      key: key.substring(0, 20) + "...",
+      key_length: key.length,
+      is_valid_public_key: isValidPubKey,
+      is_valid_private_key: isValidPrivKey,
+      key_type: isValidPubKey
+        ? "public"
+        : isValidPrivKey
+        ? "private"
+        : "invalid",
+    };
+
+    displayResult(result, parentOptions, "Key Validation");
+  });
+
+utilsCommand
+  .command("time <input>")
+  .description("Convert time formats")
+  .action((input, cmd) => {
+    const parentOptions = { json: false, network: "testnet" }; // Default options for subcommands
+
+    let result;
+
+    if (input.match(/^\d+$/)) {
+      // Unix timestamp
+      const timestamp = parseInt(input);
+      result = {
+        input,
+        input_type: "unix_timestamp",
+        readable: new Date(timestamp * 1000).toISOString(),
+        is_expired: timestamp < Math.floor(Date.now() / 1000),
+      };
+    } else {
+      // Try to parse as duration
+      const match = input.match(
+        /^(\d+)\s*(minute|hour|day|week|month|year)s?$/i
+      );
+      if (match) {
+        const amount = parseInt(match[1]);
+        const unit = match[2].toLowerCase();
+        const unitMap = {
+          minute: TimeUtils.DURATIONS.MINUTE,
+          hour: TimeUtils.DURATIONS.HOUR,
+          day: TimeUtils.DURATIONS.DAY,
+          week: TimeUtils.DURATIONS.WEEK,
+          month: TimeUtils.DURATIONS.MONTH,
+          year: TimeUtils.DURATIONS.YEAR,
+        };
+        const duration = amount * unitMap[unit];
+        const timestamp = TimeUtils.addDuration(duration);
+
+        result = {
+          input,
+          input_type: "duration",
+          duration_seconds: duration,
+          future_timestamp: timestamp,
+          future_readable: new Date(timestamp * 1000).toISOString(),
+        };
+      } else {
+        result = { error: "Invalid time format" };
+      }
+    }
+
+    displayResult(result, parentOptions, "Time Conversion");
+  });
+
+// Error handling
+program.configureHelp({
+  sortSubcommands: true,
+});
+
+program.on("command:*", function (operands) {
+  console.error(chalk.red(`Unknown command: ${operands[0]}`));
+  console.log(chalk.yellow('Run "btc-locker --help" for available commands'));
+  process.exit(1);
+});
+
+// Parse arguments
+program.parse(process.argv);
+
+// Show help if no command provided
+if (!process.argv.slice(2).length) {
+  program.outputHelp();
+}

@@ -14,7 +14,8 @@
     "lint:fix": "eslint src/**/*.js --fix",
     "docs": "jsdoc src/*.js -d docs",
     "prepare": "npm run build",
-    "example": "node examples/basic-usage.js"
+    "example": "node examples/basic-usage.js",
+    "cli": "node bin/btc-locker"
   },
   "keywords": [
     "bitcoin",
@@ -36,10 +37,16 @@
     "url": "https://github.com/sundial-protocol/btc-locker/issues"
   },
   "homepage": "https://github.com/sundial-protocol/btc-locker#readme",
+  "bin": {
+    "btc-locker": "./bin/btc-locker"
+  },
   "dependencies": {
     "bitcoinjs-lib": "^6.1.5",
     "bip32": "^4.0.0",
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
     "ecpair": "^2.1.0",
+    "inquirer": "^8.2.6",
     "tiny-secp256k1": "^2.2.3"
   },
   "devDependencies": {
