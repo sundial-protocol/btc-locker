@@ -285,6 +285,75 @@ class BTCLocker {
       address,
     };
   }
+
+  /**
+   * Generate key pair from existing private key
+   * @param {string} privateKeyHex - Private key in hex format
+   * @returns {Object} Key pair with address
+   */
+  generateKeyPairFromPrivateKey(privateKeyHex) {
+    const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKeyHex, "hex"), {
+      network: this.network,
+    });
+    const { address } = bitcoin.payments.p2pkh({
+      pubkey: keyPair.publicKey,
+      network: this.network,
+    });
+
+    return {
+      privateKey: keyPair.privateKey.toString("hex"),
+      publicKey: keyPair.publicKey.toString("hex"),
+      address,
+      keyPair, // Include keyPair object for signing
+    };
+  }
+
+  /**
+   * Create a funding transaction to send Bitcoin to a timelock script
+   * @param {Object} params - Transaction parameters
+   * @param {Array} params.inputs - Input UTXOs
+   * @param {Array} params.outputs - Output destinations
+   * @param {string} params.privateKey - Private key for signing inputs
+   * @returns {Object} Signed transaction
+   */
+  createFundingTransaction(params) {
+    const { inputs, outputs, privateKey } = params;
+
+    const psbt = new bitcoin.Psbt({ network: this.network });
+    const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, "hex"), {
+      network: this.network,
+    });
+
+    // Add inputs
+    for (const input of inputs) {
+      psbt.addInput({
+        hash: input.txid,
+        index: input.vout,
+        nonWitnessUtxo: Buffer.alloc(0), // Will be filled by the library if needed
+      });
+    }
+
+    // Add outputs
+    for (const output of outputs) {
+      psbt.addOutput({
+        address: output.address,
+        value: output.value,
+      });
+    }
+
+    // Sign all inputs
+    for (let i = 0; i < inputs.length; i++) {
+      try {
+        psbt.signInput(i, keyPair);
+      } catch (error) {
+        console.warn(`Could not sign input ${i}:`, error.message);
+      }
+    }
+
+    // Finalize and extract transaction
+    psbt.finalizeAllInputs();
+    return psbt.extractTransaction();
+  }
 }
 
 module.exports = BTCLocker;
