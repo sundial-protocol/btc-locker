@@ -15,6 +15,7 @@ const {
   ScriptUtils,
   TransactionUtils,
 } = require("../src/index");
+const BitcoinAPI = require("../src/bitcoin-api");
 
 const program = new Command();
 
@@ -421,6 +422,109 @@ program
   });
 
 /**
+ * Inspect address command
+ */
+program
+  .command("inspect")
+  .description("Check address balance and UTXOs")
+  .option("-a, --address <address>", "Bitcoin address to check")
+  .option(
+    "--api <provider>",
+    "API provider (mempool|blockstream|blockcypher)",
+    "mempool"
+  )
+  .action(async (cmdOptions) => {
+    const parentOptions = program.opts();
+    const api = new BitcoinAPI(parentOptions.network, cmdOptions.api);
+
+    let address = cmdOptions.address;
+
+    if (!address) {
+      const answer = await inquirer.prompt([
+        {
+          type: "input",
+          name: "address",
+          message: "Enter Bitcoin address to check:",
+          validate: (input) =>
+            ScriptUtils.isValidAddress(input) || "Invalid Bitcoin address",
+        },
+      ]);
+      address = answer.address;
+    }
+
+    try {
+      console.log(
+        chalk.blue(`Checking ${address} on ${parentOptions.network}...`)
+      );
+
+      const [addressInfo, utxos, feeEstimates] = await Promise.all([
+        api.getAddressInfo(address),
+        api.getAddressUtxos(address),
+        api.getFeeEstimates(),
+      ]);
+
+      const totalBalance =
+        addressInfo.chain_stats.funded_txo_sum -
+        addressInfo.chain_stats.spent_txo_sum;
+      const confirmedUtxos = utxos.filter((u) => u.status.confirmed);
+      const unconfirmedUtxos = utxos.filter((u) => !u.status.confirmed);
+
+      const result = {
+        address,
+        network: parentOptions.network,
+        balance: {
+          confirmed: totalBalance,
+          confirmed_btc: TransactionUtils.satoshisToBTC(totalBalance),
+          unconfirmed: addressInfo.mempool_stats.funded_txo_sum,
+          unconfirmed_btc: TransactionUtils.satoshisToBTC(
+            addressInfo.mempool_stats.funded_txo_sum
+          ),
+        },
+        utxos: {
+          confirmed: confirmedUtxos.length,
+          unconfirmed: unconfirmedUtxos.length,
+          total: utxos.length,
+          spendable_value: confirmedUtxos.reduce((sum, u) => sum + u.value, 0),
+        },
+        fees: {
+          fast: feeEstimates["1"] || 20,
+          medium: feeEstimates["6"] || 10,
+          slow: feeEstimates["144"] || 5,
+        },
+      };
+
+      if (parentOptions.verbose) {
+        result.utxo_details = utxos;
+      }
+
+      displayResult(result, parentOptions, "Address Information");
+
+      if (!parentOptions.json) {
+        if (totalBalance > 0) {
+          console.log(
+            chalk.green(
+              `✅ Address has ${TransactionUtils.satoshisToBTC(
+                totalBalance
+              )} BTC`
+            )
+          );
+        } else {
+          console.log(chalk.yellow("⚠️  Address has no funds"));
+          if (parentOptions.network === "testnet") {
+            console.log(
+              chalk.blue(
+                "Get testnet coins from: https://coinfaucet.eu/en/btc-testnet/"
+              )
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error(chalk.red(`Error: ${error.message}`));
+    }
+  });
+
+/**
  * Interactive mode
  */
 program
@@ -445,6 +549,7 @@ program
           { name: "Create multisig timelock script", value: "multisig" },
           { name: "Create HODL script", value: "hodl" },
           { name: "Check timelock status", value: "check" },
+          { name: "Check address balance & UTXOs", value: "inspect" },
           { name: "Exit", value: "exit" },
         ],
       },
