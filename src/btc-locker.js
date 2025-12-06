@@ -274,7 +274,7 @@ class BTCLocker {
    */
   generateKeyPair() {
     const keyPair = ECPair.makeRandom({ network: this.network });
-    const { address } = bitcoin.payments.p2pkh({
+    const { address } = bitcoin.payments.p2wpkh({
       pubkey: keyPair.publicKey,
       network: this.network,
     });
@@ -295,7 +295,7 @@ class BTCLocker {
     const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKeyHex, "hex"), {
       network: this.network,
     });
-    const { address } = bitcoin.payments.p2pkh({
+    const { address } = bitcoin.payments.p2wpkh({
       pubkey: keyPair.publicKey,
       network: this.network,
     });
