@@ -173,13 +173,52 @@ class BitcoinAPI {
         this.apiProvider === "mempool" ||
         this.apiProvider === "blockstream"
       ) {
-        return await this.makeRequest("/tx", "POST", txHex);
+        return await this.makeBroadcastRequest("/tx", txHex);
       } else if (this.apiProvider === "blockcypher") {
         return await this.makeRequest("/txs/push", "POST", { tx: txHex });
       }
     } catch (error) {
       throw new Error(`Failed to broadcast transaction: ${error.message}`);
     }
+  }
+
+  /**
+   * Make broadcast request (for raw hex data)
+   */
+  async makeBroadcastRequest(endpoint, txHex) {
+    return new Promise((resolve, reject) => {
+      const url = `${this.baseUrl}${endpoint}`;
+      const urlObj = new URL(url);
+
+      const options = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || 443,
+        path: urlObj.pathname + urlObj.search,
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain",
+          "User-Agent": "btc-locker-cli/1.0.0",
+          "Content-Length": Buffer.byteLength(txHex),
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let body = "";
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            // Return the response as-is (usually the txid)
+            resolve({ txid: body.trim() });
+          } else {
+            reject(new Error(`API Error ${res.statusCode}: ${body}`));
+          }
+        });
+      });
+
+      req.on("error", (error) => reject(error));
+      req.write(txHex);
+      req.end();
+    });
   }
 
   /**

@@ -326,11 +326,19 @@ class BTCLocker {
 
     // Add inputs
     for (const input of inputs) {
-      psbt.addInput({
+      const inputData = {
         hash: input.txid,
         index: input.vout,
-        nonWitnessUtxo: Buffer.alloc(0), // Will be filled by the library if needed
-      });
+        witnessUtxo: {
+          script: bitcoin.payments.p2wpkh({
+            pubkey: keyPair.publicKey,
+            network: this.network,
+          }).output,
+          value: input.value,
+        },
+      };
+
+      psbt.addInput(inputData);
     }
 
     // Add outputs
@@ -347,6 +355,7 @@ class BTCLocker {
         psbt.signInput(i, keyPair);
       } catch (error) {
         console.warn(`Could not sign input ${i}:`, error.message);
+        throw error; // Re-throw to help with debugging
       }
     }
 
