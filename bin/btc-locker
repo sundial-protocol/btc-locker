@@ -682,8 +682,22 @@ program
       console.log(chalk.blue(`Checking UTXOs for ${scriptAddress}...`));
 
       // Get UTXOs for the script address
-      const utxos = await api.getAddressUtxos(scriptAddress);
-      const confirmedUtxos = utxos.filter((u) => u.status.confirmed);
+      let utxos;
+      try {
+        utxos = await api.getAddressUtxos(scriptAddress);
+      } catch (apiError) {
+        console.error(chalk.red(`Failed to get UTXOs: ${apiError.message}`));
+        return;
+      }
+
+      if (!utxos || !Array.isArray(utxos)) {
+        console.error(chalk.red("Invalid UTXO response from API"));
+        return;
+      }
+
+      const confirmedUtxos = utxos.filter(
+        (u) => u.status && u.status.confirmed
+      );
 
       if (confirmedUtxos.length === 0) {
         console.log(

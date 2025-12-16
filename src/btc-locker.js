@@ -179,79 +179,112 @@ class BTCLocker {
 
   /**
    * Create spending transaction for timelock scripts
-   * @param {Object} scriptInfo - Script information from create methods
-   * @param {Array} utxos - Array of UTXOs to spend
-   * @param {string} destinationAddress - Where to send the funds
-   * @param {number} fee - Transaction fee in satoshis
-   * @param {Array} privateKeys - Private keys for signing
+   * @param {Object} params - Transaction parameters
+   * @param {Array} params.inputs - Input UTXOs
+   * @param {Array} params.outputs - Output destinations
+   * @param {string} params.redeemScript - Redeem script (hex)
+   * @param {Array} params.privateKeys - Private keys for signing
    * @returns {Object} Transaction details
    */
-  createSpendingTransaction(
-    scriptInfo,
-    utxos,
-    destinationAddress,
-    fee,
-    privateKeys
-  ) {
-    const psbt = new bitcoin.Psbt({ network: this.network });
+  createSpendingTransaction(params) {
+    const { inputs, outputs, redeemScript, privateKeys } = params;
 
-    // Add inputs
-    utxos.forEach((utxo) => {
-      const input = {
-        hash: utxo.txid,
-        index: utxo.vout,
-        nonWitnessUtxo: Buffer.from(utxo.hex, "hex"),
-        redeemScript: Buffer.from(scriptInfo.redeemScript, "hex"),
-      };
+    // First, check if this is a timelock script and if it has expired
+    const redeemScriptBuffer = Buffer.from(redeemScript, "hex");
+    let locktime = null;
 
-      // Set sequence for relative timelock scripts
-      if (scriptInfo.type === "relative-timelock") {
-        input.sequence = scriptInfo.sequence;
+    try {
+      const ops = bitcoin.script.decompile(redeemScriptBuffer);
+      if (
+        ops &&
+        ops.length > 1 &&
+        typeof ops[0] === "number" &&
+        ops[1] === bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY
+      ) {
+        locktime = ops[0];
+        const currentTime = Math.floor(Date.now() / 1000);
+
+        if (currentTime < locktime) {
+          const timeRemaining = locktime - currentTime;
+          const expiryDate = new Date(locktime * 1000).toISOString();
+          throw new Error(
+            `Timelock has not expired yet. ` +
+              `Current time: ${currentTime}, Locktime: ${locktime}. ` +
+              `Time remaining: ${timeRemaining} seconds. ` +
+              `Expires at: ${expiryDate}`
+          );
+        }
       }
-
-      psbt.addInput(input);
-    });
-
-    // Calculate total input value
-    const totalInput = utxos.reduce((sum, utxo) => sum + utxo.value, 0);
-    const outputValue = totalInput - fee;
-
-    // Add output
-    psbt.addOutput({
-      address: destinationAddress,
-      value: outputValue,
-    });
-
-    // Set locktime for absolute timelock scripts
-    if (
-      scriptInfo.type === "timelock" ||
-      scriptInfo.type === "multisig-timelock" ||
-      scriptInfo.type === "hodl"
-    ) {
-      psbt.setLocktime(scriptInfo.locktime);
+    } catch (error) {
+      if (error.message.includes("Timelock has not expired")) {
+        throw error; // Re-throw timelock errors
+      }
+      console.warn("Could not parse locktime from script:", error.message);
     }
 
-    // Sign inputs
-    privateKeys.forEach((privateKey, index) => {
-      if (typeof privateKey === "string") {
-        privateKey = Buffer.from(privateKey, "hex");
-      }
-      const keyPair = ECPair.fromPrivateKey(privateKey, {
-        network: this.network,
-      });
-      psbt.signInput(index, keyPair);
+    // Create transaction manually for better P2SH support
+    const tx = new bitcoin.Transaction();
+    tx.version = 2;
+
+    if (locktime) {
+      tx.locktime = locktime;
+    }
+
+    // Add inputs
+    inputs.forEach((utxo) => {
+      // For OP_CHECKLOCKTIMEVERIFY, the input sequence must be < 0xffffffff
+      // Convert txid string to Buffer and reverse for correct byte order
+      const txHash = Buffer.from(utxo.txid, "hex").reverse();
+      tx.addInput(txHash, utxo.vout, 0xfffffffe);
     });
 
-    // Finalize and build transaction
-    psbt.finalizeAllInputs();
-    const transaction = psbt.extractTransaction();
+    // Add outputs
+    outputs.forEach((output) => {
+      tx.addOutput(
+        bitcoin.address.toOutputScript(output.address, this.network),
+        output.value
+      );
+    });
 
-    return {
-      hex: transaction.toHex(),
-      txid: transaction.getId(),
-      size: transaction.virtualSize(),
-      fee,
-    };
+    // Sign inputs
+    inputs.forEach((utxo, inputIndex) => {
+      privateKeys.forEach((privateKey) => {
+        if (typeof privateKey === "string") {
+          privateKey = Buffer.from(privateKey, "hex");
+        }
+
+        const keyPair = ECPair.fromPrivateKey(privateKey, {
+          network: this.network,
+        });
+        const redeemScriptBuf = Buffer.from(redeemScript, "hex");
+        const hashType = bitcoin.Transaction.SIGHASH_ALL;
+
+        // Create signature hash
+        const signatureHash = tx.hashForSignature(
+          inputIndex,
+          redeemScriptBuf,
+          hashType
+        );
+
+        // Sign with canonical DER encoding
+        const signature = keyPair.sign(signatureHash);
+        const signatureWithHashType = bitcoin.script.signature.encode(
+          signature,
+          hashType
+        );
+
+        // Create scriptSig
+        const scriptSig = bitcoin.script.compile([
+          signatureWithHashType,
+          redeemScriptBuf,
+        ]);
+
+        // Set input script
+        tx.setInputScript(inputIndex, scriptSig);
+      });
+    });
+
+    return tx;
   }
 
   /**
