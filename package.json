@@ -1,5 +1,5 @@
 {
-  "name": "btc-locker",
+  "name": "@sundial-protocol/btc-locker",
   "version": "1.0.0",
   "description": "A comprehensive Bitcoin timelock script library for creating and managing time-locked transactions",
   "main": "src/index.js",
@@ -32,6 +32,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/sundial-protocol/btc-locker.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "bugs": {
     "url": "https://github.com/sundial-protocol/btc-locker/issues"
