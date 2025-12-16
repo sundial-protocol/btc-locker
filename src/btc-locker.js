@@ -198,21 +198,33 @@ class BTCLocker {
       if (
         ops &&
         ops.length > 1 &&
-        typeof ops[0] === "number" &&
         ops[1] === bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY
       ) {
-        locktime = ops[0];
-        const currentTime = Math.floor(Date.now() / 1000);
+        // Extract locktime from the first operation (could be number or Buffer)
+        if (typeof ops[0] === "number") {
+          locktime = ops[0];
+        } else if (Buffer.isBuffer(ops[0])) {
+          // Convert buffer to number (little endian)
+          let locktimeValue = 0;
+          for (let i = 0; i < ops[0].length; i++) {
+            locktimeValue += ops[0][i] << (8 * i);
+          }
+          locktime = locktimeValue;
+        }
 
-        if (currentTime < locktime) {
-          const timeRemaining = locktime - currentTime;
-          const expiryDate = new Date(locktime * 1000).toISOString();
-          throw new Error(
-            `Timelock has not expired yet. ` +
-              `Current time: ${currentTime}, Locktime: ${locktime}. ` +
-              `Time remaining: ${timeRemaining} seconds. ` +
-              `Expires at: ${expiryDate}`
-          );
+        if (locktime) {
+          const currentTime = Math.floor(Date.now() / 1000);
+
+          if (currentTime < locktime) {
+            const timeRemaining = locktime - currentTime;
+            const expiryDate = new Date(locktime * 1000).toISOString();
+            throw new Error(
+              `Timelock has not expired yet. ` +
+                `Current time: ${currentTime}, Locktime: ${locktime}. ` +
+                `Time remaining: ${timeRemaining} seconds. ` +
+                `Expires at: ${expiryDate}`
+            );
+          }
         }
       }
     } catch (error) {
@@ -248,40 +260,41 @@ class BTCLocker {
 
     // Sign inputs
     inputs.forEach((utxo, inputIndex) => {
-      privateKeys.forEach((privateKey) => {
-        if (typeof privateKey === "string") {
-          privateKey = Buffer.from(privateKey, "hex");
-        }
+      // For simple timelock scripts, use the first private key
+      // For multisig or HODL scripts, this would need to be adjusted
+      const privateKey =
+        typeof privateKeys[0] === "string"
+          ? Buffer.from(privateKeys[0], "hex")
+          : privateKeys[0];
 
-        const keyPair = ECPair.fromPrivateKey(privateKey, {
-          network: this.network,
-        });
-        const redeemScriptBuf = Buffer.from(redeemScript, "hex");
-        const hashType = bitcoin.Transaction.SIGHASH_ALL;
-
-        // Create signature hash
-        const signatureHash = tx.hashForSignature(
-          inputIndex,
-          redeemScriptBuf,
-          hashType
-        );
-
-        // Sign with canonical DER encoding
-        const signature = keyPair.sign(signatureHash);
-        const signatureWithHashType = bitcoin.script.signature.encode(
-          signature,
-          hashType
-        );
-
-        // Create scriptSig
-        const scriptSig = bitcoin.script.compile([
-          signatureWithHashType,
-          redeemScriptBuf,
-        ]);
-
-        // Set input script
-        tx.setInputScript(inputIndex, scriptSig);
+      const keyPair = ECPair.fromPrivateKey(privateKey, {
+        network: this.network,
       });
+      const redeemScriptBuf = Buffer.from(redeemScript, "hex");
+      const hashType = bitcoin.Transaction.SIGHASH_ALL;
+
+      // Create signature hash
+      const signatureHash = tx.hashForSignature(
+        inputIndex,
+        redeemScriptBuf,
+        hashType
+      );
+
+      // Sign with canonical DER encoding
+      const signature = keyPair.sign(signatureHash);
+      const signatureWithHashType = bitcoin.script.signature.encode(
+        signature,
+        hashType
+      );
+
+      // Create scriptSig
+      const scriptSig = bitcoin.script.compile([
+        signatureWithHashType,
+        redeemScriptBuf,
+      ]);
+
+      // Set input script
+      tx.setInputScript(inputIndex, scriptSig);
     });
 
     return tx;
