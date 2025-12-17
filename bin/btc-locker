@@ -9,6 +9,8 @@ const { Command } = require("commander");
 const inquirer = require("inquirer");
 const chalk = require("chalk");
 const bitcoin = require("bitcoinjs-lib");
+const fs = require("fs");
+const path = require("path");
 const {
   BTCLocker,
   TimeUtils,
@@ -70,22 +72,89 @@ function displayResult(data, options, title) {
 }
 
 /**
+ * Format key pair data for file output
+ */
+function formatKeyPairForFile(data) {
+  const content = `BTC Locker Key Pair
+Generated: ${data.generated_at}
+Network: ${data.network}
+
+${data.warning}
+
+=== KEY PAIR DETAILS ===
+Private Key: ${data.key_pair.privateKey}
+Public Key: ${data.key_pair.publicKey}
+Address: ${data.key_pair.address}
+
+=== USAGE INSTRUCTIONS ===
+1. Keep your private key secure and never share it
+2. Use the address to receive Bitcoin
+3. Use the private key to sign transactions
+4. This key pair works on ${data.network} network
+
+=== SECURITY NOTES ===
+- Store this file in a secure location
+- Consider encrypting this file
+- Make backup copies in secure locations
+- Never share your private key with anyone
+- Test with small amounts first on testnet
+
+Generated with BTC Locker CLI
+`;
+  return content;
+}
+
+/**
  * Generate key pair command
  */
 program
   .command("keygen")
   .description("Generate a new Bitcoin key pair")
-  .action((options) => {
+  .option("-o, --output <file>", "Save output to file")
+  .action((cmdOptions) => {
     const parentOptions = program.opts();
     const locker = initLocker(parentOptions);
 
     const keyPair = locker.generateKeyPair();
 
-    displayResult(keyPair, parentOptions, "Generated Key Pair");
+    // If output file specified, write to file
+    if (cmdOptions.output) {
+      const outputData = {
+        generated_at: new Date().toISOString(),
+        network: parentOptions.network,
+        key_pair: keyPair,
+        warning: "⚠️ IMPORTANT: This file contains your private key. Keep it secure and never share it!"
+      };
 
-    if (!parentOptions.json) {
-      console.log(chalk.red("⚠️  IMPORTANT: Save your private key securely!"));
-      console.log(chalk.yellow(`Network: ${parentOptions.network}`));
+      try {
+        // Ensure directory exists
+        const outputDir = path.dirname(cmdOptions.output);
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
+
+        // Write to file
+        const outputContent = parentOptions.json 
+          ? JSON.stringify(outputData, null, 2)
+          : formatKeyPairForFile(outputData);
+
+        fs.writeFileSync(cmdOptions.output, outputContent, 'utf8');
+        
+        console.log(chalk.green(`✅ Key pair saved to: ${cmdOptions.output}`));
+        console.log(chalk.red("⚠️  IMPORTANT: Keep this file secure - it contains your private key!"));
+        console.log(chalk.yellow(`Network: ${parentOptions.network}`));
+      } catch (error) {
+        console.error(chalk.red(`Failed to save to file: ${error.message}`));
+        console.log(chalk.blue("Displaying output instead:"));
+        displayResult(keyPair, parentOptions, "Generated Key Pair");
+      }
+    } else {
+      displayResult(keyPair, parentOptions, "Generated Key Pair");
+
+      if (!parentOptions.json) {
+        console.log(chalk.red("⚠️  IMPORTANT: Save your private key securely!"));
+        console.log(chalk.yellow(`Network: ${parentOptions.network}`));
+      }
     }
   });
 
