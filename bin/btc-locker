@@ -666,6 +666,263 @@ program
   });
 
 /**
+ * Distribute yield back to timelock script command
+ */
+program
+  .command("distribute")
+  .description("Distribute yield or earnings back to a timelock script")
+  .option("-f, --from-key <key>", "Private key to send from (hex)")
+  .option("-t, --to <address>", "Timelock script address to send yield to")
+  .option("-a, --amount <satoshis>", "Amount to distribute in satoshis")
+  .option("--fee <satoshis>", "Fee in satoshis", "1000")
+  .option("--dry-run", "Create transaction but don't broadcast")
+  .option("-m, --memo <memo>", "Optional memo for the distribution")
+  .action(async (cmdOptions) => {
+    const parentOptions = program.opts();
+    const locker = initLocker(parentOptions);
+    const api = new BitcoinAPI(parentOptions.network);
+
+    let fromPrivateKey = cmdOptions.fromKey;
+    let toAddress = cmdOptions.to;
+    let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
+    let feeAmount = parseInt(cmdOptions.fee);
+    let memo = cmdOptions.memo;
+
+    // Interactive prompts if options not provided
+    if (!fromPrivateKey || !toAddress || !amount) {
+      const answers = await inquirer.prompt([
+        {
+          type: "input",
+          name: "fromPrivateKey",
+          message: "Enter private key to send yield from (hex):",
+          when: () => !fromPrivateKey,
+          validate: (input) =>
+            ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
+        },
+        {
+          type: "input",
+          name: "toAddress",
+          message: "Enter timelock script address to distribute yield to:",
+          when: () => !toAddress,
+          validate: (input) =>
+            ScriptUtils.isValidAddress(input) || "Invalid address",
+        },
+        {
+          type: "input",
+          name: "amount",
+          message: "Enter amount to distribute (in satoshis):",
+          when: () => !amount,
+          validate: (input) => {
+            const num = parseInt(input);
+            return (num > 0 && num < 21000000 * 100000000) || "Invalid amount";
+          },
+        },
+        {
+          type: "input",
+          name: "memo",
+          message: "Enter optional memo for this distribution:",
+          when: () => !memo,
+        },
+      ]);
+
+      fromPrivateKey = fromPrivateKey || answers.fromPrivateKey;
+      toAddress = toAddress || answers.toAddress;
+      amount = amount || parseInt(answers.amount);
+      memo = memo || answers.memo;
+    }
+
+    try {
+      // Generate address from private key to check balance
+      const keyPair = locker.generateKeyPairFromPrivateKey(fromPrivateKey);
+      const fromAddress = keyPair.address;
+
+      console.log(chalk.blue(`Checking balance for ${fromAddress}...`));
+
+      // Get UTXOs for the source address
+      const utxos = await api.getAddressUtxos(fromAddress);
+      const confirmedUtxos = utxos.filter((u) => u.status.confirmed);
+
+      if (confirmedUtxos.length === 0) {
+        console.log(
+          chalk.yellow("⚠️  No confirmed UTXOs found at source address")
+        );
+        if (parentOptions.network === "testnet") {
+          console.log(
+            chalk.blue(
+              "Get testnet coins from: https://coinfaucet.eu/en/btc-testnet/"
+            )
+          );
+        }
+        return;
+      }
+
+      // Calculate total available
+      const totalInputValue = confirmedUtxos.reduce(
+        (sum, utxo) => sum + utxo.value,
+        0
+      );
+      const totalRequired = amount + feeAmount;
+
+      if (totalInputValue < totalRequired) {
+        console.log(
+          chalk.red(
+            `❌ Insufficient funds. Have ${totalInputValue} sat, need ${totalRequired} sat`
+          )
+        );
+        return;
+      }
+
+      // Calculate change
+      const changeAmount = totalInputValue - totalRequired;
+
+      console.log(chalk.blue("Creating yield distribution transaction..."));
+
+      // Create the distribution transaction
+      const txInputs = confirmedUtxos.map((utxo) => ({
+        txid: utxo.txid,
+        vout: utxo.vout,
+        value: utxo.value,
+        address: fromAddress,
+      }));
+
+      const outputs = [
+        {
+          address: toAddress,
+          value: amount,
+        },
+      ];
+
+      // Add change output if needed
+      if (changeAmount > 546) {
+        // Dust threshold
+        outputs.push({
+          address: fromAddress,
+          value: changeAmount,
+        });
+      } else if (changeAmount > 0) {
+        // Add dust to fee
+        feeAmount += changeAmount;
+        console.log(
+          chalk.yellow(
+            `Adding ${changeAmount} sat dust to fee (total fee: ${feeAmount} sat)`
+          )
+        );
+      }
+
+      const distributionTx = locker.createFundingTransaction({
+        inputs: txInputs,
+        outputs: outputs,
+        privateKey: fromPrivateKey,
+      });
+
+      const result = {
+        transaction: {
+          hex: distributionTx.toHex(),
+          txid: distributionTx.getId(),
+          size: distributionTx.byteLength(),
+          fee: feeAmount,
+          fee_rate: (feeAmount / distributionTx.byteLength()).toFixed(2),
+        },
+        inputs: {
+          count: confirmedUtxos.length,
+          total_value: totalInputValue,
+          total_btc: TransactionUtils.satoshisToBTC(totalInputValue),
+        },
+        outputs: {
+          timelock_address: toAddress,
+          distributed_amount: amount,
+          distributed_btc: TransactionUtils.satoshisToBTC(amount),
+          change_amount: changeAmount > 546 ? changeAmount : 0,
+          change_btc:
+            changeAmount > 546
+              ? TransactionUtils.satoshisToBTC(changeAmount)
+              : 0,
+        },
+        memo: memo || "Yield distribution to timelock",
+      };
+
+      displayResult(
+        result,
+        parentOptions,
+        "Yield Distribution Transaction Created"
+      );
+
+      if (cmdOptions.dryRun) {
+        console.log(chalk.yellow("🔍 Dry run - transaction not broadcasted"));
+        console.log(chalk.blue(`Transaction hex: ${distributionTx.toHex()}`));
+        return;
+      }
+
+      // Ask for confirmation before broadcasting
+      const confirmationMessage = memo
+        ? `Distribute ${TransactionUtils.satoshisToBTC(
+            amount
+          )} BTC yield to timelock with ${feeAmount} sat fee?\nMemo: ${memo}`
+        : `Distribute ${TransactionUtils.satoshisToBTC(
+            amount
+          )} BTC yield to timelock with ${feeAmount} sat fee?`;
+
+      const { confirm } = await inquirer.prompt([
+        {
+          type: "confirm",
+          name: "confirm",
+          message: confirmationMessage,
+          default: false,
+        },
+      ]);
+
+      if (!confirm) {
+        console.log(chalk.yellow("⏹️  Distribution cancelled"));
+        return;
+      }
+
+      console.log(chalk.blue("Broadcasting distribution transaction..."));
+
+      // Broadcast the transaction
+      const broadcastResult = await api.broadcastTransaction(
+        distributionTx.toHex()
+      );
+
+      console.log(chalk.green("✅ Yield distributed successfully!"));
+      console.log(
+        chalk.blue(
+          `Transaction ID: ${broadcastResult.txid || distributionTx.getId()}`
+        )
+      );
+      console.log(
+        chalk.yellow(
+          `Distributed ${TransactionUtils.satoshisToBTC(
+            amount
+          )} BTC yield to: ${toAddress}`
+        )
+      );
+
+      if (memo) {
+        console.log(chalk.cyan(`📝 Memo: ${memo}`));
+      }
+
+      if (parentOptions.network === "testnet") {
+        console.log(
+          chalk.blue(
+            `View on explorer: https://mempool.space/testnet/tx/${distributionTx.getId()}`
+          )
+        );
+      } else {
+        console.log(
+          chalk.blue(
+            `View on explorer: https://mempool.space/tx/${distributionTx.getId()}`
+          )
+        );
+      }
+    } catch (error) {
+      console.error(chalk.red(`Error: ${error.message}`));
+      if (parentOptions.verbose) {
+        console.error(error.stack);
+      }
+    }
+  });
+
+/**
  * Spend from timelock script command
  */
 program
@@ -1075,6 +1332,7 @@ program
           { name: "Create multisig timelock script", value: "multisig" },
           { name: "Create HODL script", value: "hodl" },
           { name: "Lock funds in timelock script", value: "lock" },
+          { name: "Distribute yield to timelock script", value: "distribute" },
           { name: "Check timelock status", value: "check" },
           { name: "Check address balance & UTXOs", value: "inspect" },
           { name: "Spend from timelock script", value: "spend" },
