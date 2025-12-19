@@ -13,6 +13,7 @@ const fs = require("fs");
 const path = require("path");
 const {
   BTCLocker,
+  createBTCLocker,
   TimeUtils,
   ScriptUtils,
   TransactionUtils,
@@ -40,12 +41,12 @@ program
 /**
  * Initialize BTCLocker instance based on network option
  */
-function initLocker(options) {
+async function initLocker(options) {
   const network =
     options.network === "mainnet"
       ? bitcoin.networks.bitcoin
       : bitcoin.networks.testnet;
-  return new BTCLocker(network);
+  return await createBTCLocker(network);
 }
 
 /**
@@ -111,11 +112,11 @@ program
   .command("keygen")
   .description("Generate a new Bitcoin key pair")
   .option("-o, --output <file>", "Save output to file")
-  .action((cmdOptions) => {
+  .action(async (cmdOptions) => {
     const parentOptions = program.opts();
-    const locker = initLocker(parentOptions);
+    const locker = await initLocker(parentOptions);
 
-    const keyPair = locker.generateKeyPair();
+    const keyPair = await locker.generateKeyPair();
 
     // If output file specified, write to file
     if (cmdOptions.output) {
@@ -178,7 +179,7 @@ program
   .option("-p, --pubkey <pubkey>", "Public key (hex)")
   .action(async (cmdOptions) => {
     const parentOptions = program.opts();
-    const locker = initLocker(parentOptions);
+    const locker = await initLocker(parentOptions);
 
     let locktime = cmdOptions.time;
     let publicKey = cmdOptions.pubkey;
@@ -240,7 +241,7 @@ program
     }
 
     try {
-      const script = locker.createTimelockScript(locktime, publicKey);
+      const script = await locker.createTimelockScript(locktime, publicKey);
       script.locktime_readable = new Date(locktime * 1000).toISOString();
 
       displayResult(script, parentOptions, "Timelock Script Created");
@@ -267,7 +268,7 @@ program
   .option("-p, --pubkeys <pubkeys>", "Comma-separated public keys")
   .action(async (cmdOptions) => {
     const parentOptions = program.opts();
-    const locker = initLocker(parentOptions);
+    const locker = await initLocker(parentOptions);
 
     let locktime = cmdOptions.time;
     let m = parseInt(cmdOptions.required);
@@ -352,7 +353,7 @@ program
   .option("-e, --emergency <pubkey>", "Emergency public key")
   .action(async (cmdOptions) => {
     const parentOptions = program.opts();
-    const locker = initLocker(parentOptions);
+    const locker = await initLocker(parentOptions);
 
     let locktime = cmdOptions.time;
     let ownerPubKey = cmdOptions.owner;
@@ -454,7 +455,7 @@ program
   .option("--dry-run", "Create transaction but don't broadcast")
   .action(async (cmdOptions) => {
     const parentOptions = program.opts();
-    const locker = initLocker(parentOptions);
+    const locker = await initLocker(parentOptions);
     const api = new BitcoinAPI(parentOptions.network);
 
     let fromPrivateKey = cmdOptions.fromKey;
@@ -500,7 +501,9 @@ program
 
     try {
       // Generate address from private key to check balance
-      const keyPair = locker.generateKeyPairFromPrivateKey(fromPrivateKey);
+      const keyPair = await locker.generateKeyPairFromPrivateKey(
+        fromPrivateKey
+      );
       const fromAddress = keyPair.address;
 
       console.log(chalk.blue(`Checking balance for ${fromAddress}...`));
@@ -686,7 +689,7 @@ program
   .option("-m, --memo <memo>", "Optional memo for the distribution")
   .action(async (cmdOptions) => {
     const parentOptions = program.opts();
-    const locker = initLocker(parentOptions);
+    const locker = await initLocker(parentOptions);
     const api = new BitcoinAPI(parentOptions.network);
 
     let fromPrivateKey = cmdOptions.fromKey;
@@ -739,7 +742,9 @@ program
 
     try {
       // Generate address from private key to check balance
-      const keyPair = locker.generateKeyPairFromPrivateKey(fromPrivateKey);
+      const keyPair = await locker.generateKeyPairFromPrivateKey(
+        fromPrivateKey
+      );
       const fromAddress = keyPair.address;
 
       console.log(chalk.blue(`Checking balance for ${fromAddress}...`));
@@ -922,7 +927,7 @@ program
   .option("--dry-run", "Create transaction but don't broadcast")
   .action(async (cmdOptions) => {
     const parentOptions = program.opts();
-    const locker = initLocker(parentOptions);
+    const locker = await initLocker(parentOptions);
     const api = new BitcoinAPI(parentOptions.network);
 
     let scriptAddress = cmdOptions.address;
@@ -1142,7 +1147,7 @@ program
   .option("-t, --time <timestamp>", "Timelock timestamp to check")
   .action(async (cmdOptions) => {
     const parentOptions = program.opts();
-    const locker = initLocker(parentOptions);
+    const locker = await initLocker(parentOptions);
 
     let locktime = cmdOptions.time;
 

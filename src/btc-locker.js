@@ -6,11 +6,33 @@
 const bitcoin = require("bitcoinjs-lib");
 const { BIP32Factory } = require("bip32");
 const { ECPairFactory } = require("ecpair");
-const ecc = require("tiny-secp256k1");
 
-// Initialize BIP32 and ECPair with secp256k1
-const bip32 = BIP32Factory(ecc);
-const ECPair = ECPairFactory(ecc);
+// ECC will be initialized asynchronously
+let ecc = null;
+let bip32 = null;
+let ECPair = null;
+
+// Initialize ECC asynchronously for browser compatibility
+async function initECC() {
+  if (!ecc) {
+    try {
+      const tinysecp = require("tiny-secp256k1");
+
+      // In browser environments, tiny-secp256k1 exports a Promise
+      if (typeof tinysecp === "object" && typeof tinysecp.then === "function") {
+        ecc = await tinysecp;
+      } else {
+        ecc = tinysecp;
+      }
+
+      bip32 = BIP32Factory(ecc);
+      ECPair = ECPairFactory(ecc);
+    } catch (error) {
+      throw new Error(`Failed to initialize ECC: ${error.message}`);
+    }
+  }
+  return { ecc, bip32, ECPair };
+}
 
 /**
  * Bitcoin Timelock Script Generator
@@ -18,6 +40,26 @@ const ECPair = ECPairFactory(ecc);
 class BTCLocker {
   constructor(network = bitcoin.networks.bitcoin) {
     this.network = network;
+    this.initialized = false;
+  }
+
+  /**
+   * Initialize the ECC library (must be called before other methods)
+   */
+  async init() {
+    if (!this.initialized) {
+      await initECC();
+      this.initialized = true;
+    }
+  }
+
+  /**
+   * Ensure ECC is initialized
+   */
+  async ensureInitialized() {
+    if (!this.initialized) {
+      await this.init();
+    }
   }
 
   /**
@@ -26,7 +68,9 @@ class BTCLocker {
    * @param {Buffer|string} publicKey - Public key buffer or hex string
    * @returns {Object} Script details
    */
-  createTimelockScript(locktime, publicKey) {
+  async createTimelockScript(locktime, publicKey) {
+    await this.ensureInitialized();
+
     if (typeof publicKey === "string") {
       publicKey = Buffer.from(publicKey, "hex");
     }
@@ -186,7 +230,8 @@ class BTCLocker {
    * @param {Array} params.privateKeys - Private keys for signing
    * @returns {Object} Transaction details
    */
-  createSpendingTransaction(params) {
+  async createSpendingTransaction(params) {
+    await this.ensureInitialized();
     const { inputs, outputs, redeemScript, privateKeys } = params;
 
     // First, check if this is a timelock script and if it has expired
@@ -318,7 +363,8 @@ class BTCLocker {
    * Generate a new key pair
    * @returns {Object} Key pair with private key, public key, and address
    */
-  generateKeyPair() {
+  async generateKeyPair() {
+    await this.ensureInitialized();
     const keyPair = ECPair.makeRandom({ network: this.network });
     const { address } = bitcoin.payments.p2wpkh({
       pubkey: keyPair.publicKey,
@@ -337,7 +383,8 @@ class BTCLocker {
    * @param {string} privateKeyHex - Private key in hex format
    * @returns {Object} Key pair with address
    */
-  generateKeyPairFromPrivateKey(privateKeyHex) {
+  async generateKeyPairFromPrivateKey(privateKeyHex) {
+    await this.ensureInitialized();
     const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKeyHex, "hex"), {
       network: this.network,
     });
@@ -420,7 +467,8 @@ class BTCLocker {
    * @param {string} params.memo - Optional memo for the distribution
    * @returns {Object} Signed distribution transaction
    */
-  distributeYield(params) {
+  async distributeYield(params) {
+    await this.ensureInitialized();
     const { inputs, timelockAddress, amount, privateKey, memo } = params;
 
     const psbt = new bitcoin.Psbt({ network: this.network });
