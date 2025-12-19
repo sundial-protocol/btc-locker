@@ -123,7 +123,8 @@ program
         generated_at: new Date().toISOString(),
         network: parentOptions.network,
         key_pair: keyPair,
-        warning: "⚠️ IMPORTANT: This file contains your private key. Keep it secure and never share it!"
+        warning:
+          "⚠️ IMPORTANT: This file contains your private key. Keep it secure and never share it!",
       };
 
       try {
@@ -134,14 +135,18 @@ program
         }
 
         // Write to file
-        const outputContent = parentOptions.json 
+        const outputContent = parentOptions.json
           ? JSON.stringify(outputData, null, 2)
           : formatKeyPairForFile(outputData);
 
-        fs.writeFileSync(cmdOptions.output, outputContent, 'utf8');
-        
+        fs.writeFileSync(cmdOptions.output, outputContent, "utf8");
+
         console.log(chalk.green(`✅ Key pair saved to: ${cmdOptions.output}`));
-        console.log(chalk.red("⚠️  IMPORTANT: Keep this file secure - it contains your private key!"));
+        console.log(
+          chalk.red(
+            "⚠️  IMPORTANT: Keep this file secure - it contains your private key!"
+          )
+        );
         console.log(chalk.yellow(`Network: ${parentOptions.network}`));
       } catch (error) {
         console.error(chalk.red(`Failed to save to file: ${error.message}`));
@@ -152,7 +157,9 @@ program
       displayResult(keyPair, parentOptions, "Generated Key Pair");
 
       if (!parentOptions.json) {
-        console.log(chalk.red("⚠️  IMPORTANT: Save your private key securely!"));
+        console.log(
+          chalk.red("⚠️  IMPORTANT: Save your private key securely!")
+        );
         console.log(chalk.yellow(`Network: ${parentOptions.network}`));
       }
     }
@@ -685,7 +692,6 @@ program
     let fromPrivateKey = cmdOptions.fromKey;
     let toAddress = cmdOptions.to;
     let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
-    let feeAmount = parseInt(cmdOptions.fee);
     let memo = cmdOptions.memo;
 
     // Interactive prompts if options not provided
@@ -761,7 +767,7 @@ program
         (sum, utxo) => sum + utxo.value,
         0
       );
-      const totalRequired = amount + feeAmount;
+      const totalRequired = amount + 1000; // Use default fee for validation
 
       if (totalInputValue < totalRequired) {
         console.log(
@@ -772,56 +778,32 @@ program
         return;
       }
 
-      // Calculate change
-      const changeAmount = totalInputValue - totalRequired;
-
       console.log(chalk.blue("Creating yield distribution transaction..."));
 
-      // Create the distribution transaction
+      // Create the distribution transaction using the distributeYield method
       const txInputs = confirmedUtxos.map((utxo) => ({
         txid: utxo.txid,
         vout: utxo.vout,
         value: utxo.value,
-        address: fromAddress,
       }));
 
-      const outputs = [
-        {
-          address: toAddress,
-          value: amount,
-        },
-      ];
-
-      // Add change output if needed
-      if (changeAmount > 546) {
-        // Dust threshold
-        outputs.push({
-          address: fromAddress,
-          value: changeAmount,
-        });
-      } else if (changeAmount > 0) {
-        // Add dust to fee
-        feeAmount += changeAmount;
-        console.log(
-          chalk.yellow(
-            `Adding ${changeAmount} sat dust to fee (total fee: ${feeAmount} sat)`
-          )
-        );
-      }
-
-      const distributionTx = locker.createFundingTransaction({
+      const distributionResult = locker.distributeYield({
         inputs: txInputs,
-        outputs: outputs,
+        timelockAddress: toAddress,
+        amount: amount,
         privateKey: fromPrivateKey,
+        memo: memo,
       });
 
       const result = {
         transaction: {
-          hex: distributionTx.toHex(),
-          txid: distributionTx.getId(),
-          size: distributionTx.byteLength(),
-          fee: feeAmount,
-          fee_rate: (feeAmount / distributionTx.byteLength()).toFixed(2),
+          hex: distributionResult.hex,
+          txid: distributionResult.txid,
+          size: distributionResult.size,
+          fee: distributionResult.fee,
+          fee_rate: (distributionResult.fee / distributionResult.size).toFixed(
+            2
+          ),
         },
         inputs: {
           count: confirmedUtxos.length,
@@ -830,15 +812,16 @@ program
         },
         outputs: {
           timelock_address: toAddress,
-          distributed_amount: amount,
-          distributed_btc: TransactionUtils.satoshisToBTC(amount),
-          change_amount: changeAmount > 546 ? changeAmount : 0,
-          change_btc:
-            changeAmount > 546
-              ? TransactionUtils.satoshisToBTC(changeAmount)
-              : 0,
+          distributed_amount: distributionResult.distribution.amount,
+          distributed_btc: TransactionUtils.satoshisToBTC(
+            distributionResult.distribution.amount
+          ),
+          change_amount: distributionResult.distribution.change,
+          change_btc: TransactionUtils.satoshisToBTC(
+            distributionResult.distribution.change
+          ),
         },
-        memo: memo || "Yield distribution to timelock",
+        memo: distributionResult.memo,
       };
 
       displayResult(
@@ -849,18 +832,20 @@ program
 
       if (cmdOptions.dryRun) {
         console.log(chalk.yellow("🔍 Dry run - transaction not broadcasted"));
-        console.log(chalk.blue(`Transaction hex: ${distributionTx.toHex()}`));
+        console.log(chalk.blue(`Transaction hex: ${distributionResult.hex}`));
         return;
       }
 
       // Ask for confirmation before broadcasting
       const confirmationMessage = memo
         ? `Distribute ${TransactionUtils.satoshisToBTC(
-            amount
-          )} BTC yield to timelock with ${feeAmount} sat fee?\nMemo: ${memo}`
+            distributionResult.distribution.amount
+          )} BTC yield to timelock with ${
+            distributionResult.fee
+          } sat fee?\nMemo: ${memo}`
         : `Distribute ${TransactionUtils.satoshisToBTC(
-            amount
-          )} BTC yield to timelock with ${feeAmount} sat fee?`;
+            distributionResult.distribution.amount
+          )} BTC yield to timelock with ${distributionResult.fee} sat fee?`;
 
       const { confirm } = await inquirer.prompt([
         {
@@ -880,19 +865,19 @@ program
 
       // Broadcast the transaction
       const broadcastResult = await api.broadcastTransaction(
-        distributionTx.toHex()
+        distributionResult.hex
       );
 
       console.log(chalk.green("✅ Yield distributed successfully!"));
       console.log(
         chalk.blue(
-          `Transaction ID: ${broadcastResult.txid || distributionTx.getId()}`
+          `Transaction ID: ${broadcastResult.txid || distributionResult.txid}`
         )
       );
       console.log(
         chalk.yellow(
           `Distributed ${TransactionUtils.satoshisToBTC(
-            amount
+            distributionResult.distribution.amount
           )} BTC yield to: ${toAddress}`
         )
       );
@@ -904,13 +889,13 @@ program
       if (parentOptions.network === "testnet") {
         console.log(
           chalk.blue(
-            `View on explorer: https://mempool.space/testnet/tx/${distributionTx.getId()}`
+            `View on explorer: https://mempool.space/testnet/tx/${distributionResult.txid}`
           )
         );
       } else {
         console.log(
           chalk.blue(
-            `View on explorer: https://mempool.space/tx/${distributionTx.getId()}`
+            `View on explorer: https://mempool.space/tx/${distributionResult.txid}`
           )
         );
       }

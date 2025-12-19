@@ -109,6 +109,27 @@ Creates a HODL script with emergency escape.
 - `penaltyPubKey`: Emergency contact's public key
 - Returns: Script information object
 
+#### `distributeYield(params)`
+
+Distribute yield or earnings back to a timelock script address.
+
+- `params.inputs`: Array of input UTXOs from yield source
+- `params.timelockAddress`: Timelock script address to send yield to
+- `params.amount`: Amount to distribute in satoshis
+- `params.privateKey`: Private key for signing inputs (hex string)
+- `params.memo`: Optional memo for the distribution
+- Returns: Transaction object with metadata including hex, txid, fee, and distribution details
+
+```javascript
+const result = locker.distributeYield({
+  inputs: confirmedUtxos,
+  timelockAddress: "2N3x3iMrEYYTMM5YMjzM34jXhWrRLRCFU1E",
+  amount: 10000,
+  privateKey: "your_private_key_here",
+  memo: "Q1 2026 Yield Distribution",
+});
+```
+
 ### TimeUtils Class
 
 #### Static Methods
