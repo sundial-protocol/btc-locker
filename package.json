@@ -15,7 +15,10 @@
     "docs": "jsdoc src/*.js -d docs",
     "prepare": "npm run build",
     "example": "node examples/basic-usage.js",
-    "cli": "node bin/btc-locker"
+    "cli": "node bin/btc-locker",
+    "demo": "node demo/demo-server.js",
+    "demo:dev": "nodemon demo/demo-server.js",
+    "start": "node demo/demo-server.js"
   },
   "keywords": [
     "bitcoin",
@@ -44,11 +47,12 @@
     "btc-locker": "./bin/btc-locker"
   },
   "dependencies": {
-    "bitcoinjs-lib": "^6.1.5",
     "bip32": "^4.0.0",
+    "bitcoinjs-lib": "^6.1.5",
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
     "ecpair": "^2.1.0",
+    "express": "^4.22.1",
     "inquirer": "^8.2.6",
     "tiny-secp256k1": "^2.2.3"
   },
