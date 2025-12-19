@@ -101,6 +101,24 @@ app.get("/cli", (req, res) => {
   }
 });
 
+// Serve API documentation
+app.get("/docs", (req, res) => {
+  const docsPath = path.join(__dirname, "..", "docs", "index.html");
+
+  if (fs.existsSync(docsPath)) {
+    res.sendFile(docsPath);
+  } else {
+    res
+      .status(404)
+      .json({
+        error: "API documentation not found. Run 'npm run docs' to generate.",
+      });
+  }
+});
+
+// Serve docs static assets
+app.use("/docs", express.static(path.join(__dirname, "..", "docs")));
+
 // Error handler
 app.use((error, req, res, next) => {
   console.error("Server error:", error);
@@ -120,7 +138,9 @@ app.use((req, res) => {
 
 // Start server
 app.listen(port, () => {
-  console.log(`Demo Server running on http://localhost:${port}`);
+  console.log(`Demo: http://localhost:${port}`);
+  console.log(`API Docs: http://localhost:${port}/docs`);
+  console.log(`CLI Docs: http://localhost:${port}/cli`);
 });
 
 module.exports = app;
