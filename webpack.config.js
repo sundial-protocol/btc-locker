@@ -8,9 +8,11 @@ module.exports = {
     library: {
       name: "BTCLocker",
       type: "umd",
+      umdNamedDefine: true,
     },
     globalObject: "this",
     chunkFormat: "array-push",
+    publicPath: "",
   },
   mode: "production",
   target: "web",

@@ -23,7 +23,7 @@ async function createBTCLocker(network = "testnet") {
   return locker;
 }
 
-module.exports = {
+const exports = {
   BTCLocker,
   createBTCLocker,
   TimeUtils,
@@ -33,3 +33,9 @@ module.exports = {
   ValidationError,
   TimelockError,
 };
+
+// For CommonJS
+module.exports = exports;
+
+// For ES6 modules (if bundler supports it)
+module.exports.default = exports;
