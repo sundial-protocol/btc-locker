@@ -97,7 +97,7 @@ app.get("/examples/:filename", (req, res) => {
 
 // Serve CLI documentation
 app.get("/cli", (req, res) => {
-  const cliMdPath = path.join(__dirname, "CLI.md");
+  const cliMdPath = path.join(__dirname, "..", "CLI.md");
 
   if (fs.existsSync(cliMdPath)) {
     const content = fs.readFileSync(cliMdPath, "utf8");
@@ -108,22 +108,44 @@ app.get("/cli", (req, res) => {
   }
 });
 
-// Serve API documentation
-app.get("/docs", (req, res) => {
+// Serve API documentation index (specific handler for the root docs page)
+app.get("/docs/", (req, res) => {
   const docsPath = path.join(__dirname, "..", "docs", "index.html");
 
   if (fs.existsSync(docsPath)) {
     res.sendFile(docsPath);
   } else {
-    res
-      .status(404)
-      .json({
-        error: "API documentation not found. Run 'npm run docs' to generate.",
-      });
+    // Try to generate docs automatically
+    const { exec } = require("child_process");
+    exec("npm run docs", { cwd: path.join(__dirname, "..") }, (error, stdout, stderr) => {
+      if (error) {
+        res.status(404).json({
+          error: "API documentation not found and could not be generated.",
+          message: "Run 'npm run docs' manually to generate documentation.",
+          details: error.message
+        });
+      } else {
+        // Check again if docs were created
+        if (fs.existsSync(docsPath)) {
+          res.sendFile(docsPath);
+        } else {
+          res.status(500).json({
+            error: "Documentation generation completed but files not found.",
+            stdout: stdout,
+            stderr: stderr
+          });
+        }
+      }
+    });
   }
 });
 
-// Serve docs static assets
+// Redirect /docs to /docs/ to ensure proper static file serving
+app.get("/docs", (req, res) => {
+  res.redirect("/docs/");
+});
+
+// Serve docs static assets (for CSS, JS, images, etc.)
 app.use("/docs", express.static(path.join(__dirname, "..", "docs")));
 
 // Error handler
