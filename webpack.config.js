@@ -1,7 +1,7 @@
 const path = require("path");
 
 module.exports = {
-  entry: "./src/index.js",
+  entry: ["./src/index.js"],
   output: {
     path: path.resolve(__dirname, "dist"),
     filename: "btc-locker.bundle.js",
@@ -12,12 +12,17 @@ module.exports = {
     },
     globalObject: "this",
     chunkFormat: "array-push",
-    publicPath: "/dist/",
+    publicPath: "",
+    assetModuleFilename: '[name][ext]',
+    webassemblyModuleFilename: 'btc-locker.wasm',
   },
   mode: "production",
   target: "web",
   experiments: {
     asyncWebAssembly: true,
+  },
+  optimization: {
+    moduleIds: 'deterministic',
   },
   resolve: {
     fallback: {

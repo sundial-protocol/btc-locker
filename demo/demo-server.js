@@ -16,6 +16,27 @@ app.use(express.static(__dirname));
 // Serve the built bundle from the parent dist directory
 app.use("/dist", express.static(path.join(__dirname, "..", "dist")));
 
+// Serve WASM files with correct MIME type and better error handling
+app.use("/dist", (req, res, next) => {
+  if (req.path.endsWith('.wasm')) {
+    res.set('Content-Type', 'application/wasm');
+  }
+  next();
+});
+
+// Also serve WASM files from the demo directory root for relative paths
+app.use((req, res, next) => {
+  if (req.path.endsWith('.wasm')) {
+    const wasmPath = path.join(__dirname, "..", "dist", path.basename(req.path));
+    if (fs.existsSync(wasmPath)) {
+      res.set('Content-Type', 'application/wasm');
+      res.sendFile(wasmPath);
+      return;
+    }
+  }
+  next();
+});
+
 // CORS for browser testing
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>External Usage Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h2>External Usage Test (Simulating npm package usage)</h2>
+    <div id="output"></div>
+    
+    <!-- Simulate how someone would include the bundle from node_modules or a CDN -->
+    <script src="../dist/btc-locker.bundle.js"></script>
+    <script>
+        const output = document.getElementById("output");
+
+        function log(message, type = "info") {
+            const div = document.createElement("div");
+            div.className = type;
+            div.innerHTML = message;
+            output.appendChild(div);
+            console.log(message);
+        }
+
+        async function testExternalUsage() {
+            log("=== External Usage Test ===", "info");
+            log("This simulates how the package would be used in another project", "info");
+
+            try {
+                log("1. Checking bundle availability...", "info");
+                if (typeof window.BTCLocker === "undefined") {
+                    log("✗ Bundle not loaded", "error");
+                    return;
+                }
+                log("✓ Bundle loaded successfully", "success");
+
+                log("2. Creating BTCLocker instance...", "info");
+                const locker = await window.BTCLocker.createBTCLocker("testnet");
+                log("✓ BTCLocker instance created successfully", "success");
+
+                log("3. Testing functionality...", "info");
+                const keyPair = await locker.generateKeyPair();
+                log("✓ Key pair generated", "success");
+
+                const locktime = Math.floor(Date.now() / 1000) + 3600;
+                const script = await locker.createTimelockScript(locktime, keyPair.publicKey);
+                log("✓ Timelock script created: " + script.address, "success");
+
+                log("=== EXTERNAL USAGE TEST PASSED ===", "success");
+                log("This configuration should work when the package is installed via npm", "success");
+            } catch (error) {
+                log("✗ External usage test failed: " + error.message, "error");
+                log("Error details: " + error.stack, "error");
+            }
+        }
+
+        testExternalUsage().catch(err => {
+            log("✗ Test suite failed: " + err.message, "error");
+        });
+    </script>
+</body>
+</html>
