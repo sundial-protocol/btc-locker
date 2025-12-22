@@ -12,7 +12,7 @@ module.exports = {
     },
     globalObject: "this",
     chunkFormat: "array-push",
-    publicPath: "",
+    publicPath: "/dist/",
   },
   mode: "production",
   target: "web",

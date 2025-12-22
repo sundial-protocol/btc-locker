@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Bundle Test</title>
+    <style>
+      body {
+        font-family: monospace;
+        padding: 20px;
+      }
+      .success {
+        color: green;
+      }
+      .error {
+        color: red;
+      }
+      .info {
+        color: blue;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>BTC Locker Bundle Test</h2>
+    <div id="output"></div>
+    <script src="/dist/btc-locker.bundle.js"></script>
+    <script>
+      const output = document.getElementById("output");
+
+      function log(message, type = "info") {
+        const div = document.createElement("div");
+        div.className = type;
+        div.innerHTML = message;
+        output.appendChild(div);
+        console.log(message);
+      }
+
+      async function runTests() {
+        log("=== BTC Locker Bundle Test ===", "info");
+
+        // Test 1: Check if bundle is loaded
+        log("1. Checking bundle loading...", "info");
+        if (typeof window.BTCLocker !== "undefined") {
+          log("✓ Bundle loaded successfully", "success");
+          log(
+            "Available exports: " + Object.keys(window.BTCLocker).join(", "),
+            "info"
+          );
+        } else {
+          log("✗ Bundle not loaded", "error");
+          return;
+        }
+
+        // Test 2: Check BTCLocker constructor
+        log("2. Testing BTCLocker constructor...", "info");
+        if (typeof window.BTCLocker.BTCLocker === "function") {
+          log("✓ BTCLocker is a constructor function", "success");
+        } else {
+          log(
+            "✗ BTCLocker is not a function: " +
+              typeof window.BTCLocker.BTCLocker,
+            "error"
+          );
+          return;
+        }
+
+        // Test 3: Test createBTCLocker factory
+        log("3. Testing createBTCLocker factory...", "info");
+        if (typeof window.BTCLocker.createBTCLocker === "function") {
+          log("✓ createBTCLocker is available", "success");
+
+          try {
+            log("Initializing BTCLocker with testnet...", "info");
+            const locker = await window.BTCLocker.createBTCLocker("testnet");
+            log("✓ BTCLocker instance created successfully", "success");
+
+            // Test 4: Generate key pair
+            log("4. Testing key generation...", "info");
+            const keyPair = await locker.generateKeyPair();
+            log("✓ Key pair generated successfully", "success");
+            log(
+              "Public key: " + keyPair.publicKey.substring(0, 20) + "...",
+              "info"
+            );
+
+            // Test 5: Create timelock
+            log("5. Testing timelock creation...", "info");
+            const locktime = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+            const script = await locker.createTimelockScript(
+              locktime,
+              keyPair.publicKey
+            );
+            log("✓ Timelock script created successfully", "success");
+            log("Address: " + script.address, "info");
+
+            log("=== ALL TESTS PASSED ===", "success");
+          } catch (error) {
+            log("✗ Error during testing: " + error.message, "error");
+          }
+        } else {
+          log("✗ createBTCLocker not available", "error");
+        }
+      }
+
+      // Run tests when page loads
+      runTests().catch((err) => {
+        log("✗ Test suite failed: " + err.message, "error");
+      });
+    </script>
+  </body>
+</html>

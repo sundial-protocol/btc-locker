@@ -9,10 +9,12 @@ const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
-app.use(express.static("."));
 
-// Serve the built bundle
-app.use("/dist", express.static("dist"));
+// Serve static files from the demo directory
+app.use(express.static(__dirname));
+
+// Serve the built bundle from the parent dist directory
+app.use("/dist", express.static(path.join(__dirname, "..", "dist")));
 
 // CORS for browser testing
 app.use((req, res, next) => {
@@ -32,7 +34,7 @@ app.get("/", (req, res) => {
 
 // Serve the bundle file
 app.get("/btc-locker.js", (req, res) => {
-  const bundlePath = path.join(__dirname, "dist", "btc-locker.bundle.js");
+  const bundlePath = path.join(__dirname, "..", "dist", "btc-locker.bundle.js");
   if (fs.existsSync(bundlePath)) {
     res.sendFile(bundlePath);
   } else {
@@ -44,7 +46,7 @@ app.get("/btc-locker.js", (req, res) => {
 
 // Simple API endpoint to get bundle status
 app.get("/api/bundle-info", (req, res) => {
-  const bundlePath = path.join(__dirname, "dist", "btc-locker.bundle.js");
+  const bundlePath = path.join(__dirname, "..", "dist", "btc-locker.bundle.js");
   const exists = fs.existsSync(bundlePath);
 
   let stats = null;
@@ -74,6 +76,11 @@ app.get("/api/health", (req, res) => {
     timestamp: new Date().toISOString(),
     version: require("../package.json").version,
   });
+});
+
+// Serve the main demo page
+app.get("/test-bundle", (req, res) => {
+  res.sendFile(path.join(__dirname, "test-bundle.html"));
 });
 
 // Serve example files
@@ -141,6 +148,7 @@ app.listen(port, () => {
   console.log(`Demo: http://localhost:${port}`);
   console.log(`API Docs: http://localhost:${port}/docs`);
   console.log(`CLI Docs: http://localhost:${port}/cli`);
+  console.log(`Test Bundle: http://localhost:${port}/test-bundle`);
 });
 
 module.exports = app;
