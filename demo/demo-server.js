@@ -113,7 +113,12 @@ app.get("/docs/", (req, res) => {
   const docsPath = path.join(__dirname, "..", "docs", "index.html");
 
   if (fs.existsSync(docsPath)) {
-    res.sendFile(docsPath);
+    // Read the file and inject base href if not present
+    let content = fs.readFileSync(docsPath, "utf8");
+    if (!content.includes('<base href="/docs/">')) {
+      content = content.replace('<head>', '<head>\n    <base href="/docs/">');
+    }
+    res.send(content);
   } else {
     // Try to generate docs automatically
     const { exec } = require("child_process");
@@ -127,7 +132,11 @@ app.get("/docs/", (req, res) => {
       } else {
         // Check again if docs were created
         if (fs.existsSync(docsPath)) {
-          res.sendFile(docsPath);
+          let content = fs.readFileSync(docsPath, "utf8");
+          if (!content.includes('<base href="/docs/">')) {
+            content = content.replace('<head>', '<head>\n    <base href="/docs/">');
+          }
+          res.send(content);
         } else {
           res.status(500).json({
             error: "Documentation generation completed but files not found.",
@@ -147,6 +156,25 @@ app.get("/docs", (req, res) => {
 
 // Serve docs static assets (for CSS, JS, images, etc.)
 app.use("/docs", express.static(path.join(__dirname, "..", "docs")));
+
+// Middleware to inject base href into HTML files in docs
+app.use("/docs", (req, res, next) => {
+  // Only process HTML files
+  if (req.path.endsWith('.html')) {
+    const filePath = path.join(__dirname, "..", "docs", req.path);
+    
+    if (fs.existsSync(filePath)) {
+      let content = fs.readFileSync(filePath, "utf8");
+      if (!content.includes('<base href="/docs/">')) {
+        content = content.replace('<head>', '<head>\n    <base href="/docs/">');
+      }
+      res.set('Content-Type', 'text/html');
+      res.send(content);
+      return;
+    }
+  }
+  next();
+});
 
 // Error handler
 app.use((error, req, res, next) => {
