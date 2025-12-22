@@ -85,8 +85,8 @@
             log("5. Testing timelock creation...", "info");
             const locktime = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
             const script = await locker.createTimelockScript(
-              keyPair.publicKey,
-              locktime
+              locktime,
+              keyPair.publicKey
             );
             log("✓ Timelock script created successfully", "success");
             log("Address: " + script.address, "info");
