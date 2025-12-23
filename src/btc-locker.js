@@ -16,9 +16,8 @@ let ECPair = null;
 async function initECC() {
   if (!ecc) {
     try {
-      const tinysecp = require("tiny-secp256k1");
+      const tinysecp = require("@bitcoinerlab/secp256k1"); // @noble/secp256k1 wrapped to mimic tiny-secp256k1
 
-      // In browser environments, tiny-secp256k1 exports a Promise
       if (typeof tinysecp === "object" && typeof tinysecp.then === "function") {
         ecc = await tinysecp;
       } else {
