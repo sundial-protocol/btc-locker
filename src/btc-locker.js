@@ -16,7 +16,7 @@ let ECPair = null;
 async function initECC() {
   if (!ecc) {
     try {
-      const tinysecp = require("@bitcoinerlab/secp256k1"); // @noble/secp256k1 wrapped to mimic tiny-secp256k1
+      const tinysecp = require("@bitcoinerlab/secp256k1");
 
       if (typeof tinysecp === "object" && typeof tinysecp.then === "function") {
         ecc = await tinysecp;
@@ -24,8 +24,28 @@ async function initECC() {
         ecc = tinysecp;
       }
 
+      // Validate ECC library has required methods
+      if (!ecc || typeof ecc !== 'object') {
+        throw new Error('ECC library is not an object');
+      }
+      
+      const requiredMethods = ['isPoint', 'isPrivate', 'pointFromScalar'];
+      for (const method of requiredMethods) {
+        if (typeof ecc[method] !== 'function') {
+          throw new Error(`ECC library missing required method: ${method}`);
+        }
+      }
+
+      // Initialize bitcoinjs-lib with the ECC library
+      bitcoin.initEccLib(ecc);
+      
       bip32 = BIP32Factory(ecc);
       ECPair = ECPairFactory(ecc);
+      
+      // Validate factories
+      if (!bip32 || !ECPair) {
+        throw new Error('Failed to create BIP32 or ECPair factories');
+      }
     } catch (error) {
       throw new Error(`Failed to initialize ECC: ${error.message}`);
     }
@@ -70,32 +90,69 @@ class BTCLocker {
   async createTimelockScript(locktime, publicKey) {
     await this.ensureInitialized();
 
-    if (typeof publicKey === "string") {
-      publicKey = Buffer.from(publicKey, "hex");
+    // Validate inputs
+    if (locktime === undefined || locktime === null) {
+      throw new Error('locktime cannot be undefined or null');
+    }
+    
+    if (publicKey === undefined || publicKey === null) {
+      throw new Error('publicKey cannot be undefined or null');
     }
 
-    const redeemScript = bitcoin.script.compile([
-      bitcoin.script.number.encode(locktime),
-      bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
-      bitcoin.opcodes.OP_DROP,
-      publicKey,
-      bitcoin.opcodes.OP_CHECKSIG,
-    ]);
+    // Convert and validate public key
+    let publicKeyBuffer;
+    if (typeof publicKey === "string") {
+      if (!/^[0-9a-fA-F]+$/.test(publicKey)) {
+        throw new Error('publicKey string must contain only hexadecimal characters');
+      }
+      try {
+        publicKeyBuffer = Buffer.from(publicKey, "hex");
+      } catch (error) {
+        throw new Error(`Invalid public key hex string: ${error.message}`);
+      }
+    } else if (Buffer.isBuffer(publicKey)) {
+      publicKeyBuffer = publicKey;
+    } else {
+      throw new Error('publicKey must be a string or Buffer');
+    }
 
-    const scriptHash = bitcoin.crypto.hash160(redeemScript);
-    const address = bitcoin.payments.p2sh({
-      hash: scriptHash,
-      network: this.network,
-    }).address;
+    // Validate public key length
+    if (publicKeyBuffer.length !== 33 && publicKeyBuffer.length !== 65) {
+      throw new Error(`Invalid public key length: ${publicKeyBuffer.length}. Expected 33 (compressed) or 65 (uncompressed) bytes`);
+    }
 
-    return {
-      redeemScript: redeemScript.toString("hex"),
-      scriptHash: scriptHash.toString("hex"),
-      address,
-      locktime,
-      publicKey: publicKey.toString("hex"),
-      type: "timelock",
-    };
+    // Validate locktime
+    const locktimeNumber = Number(locktime);
+    if (!Number.isInteger(locktimeNumber) || locktimeNumber < 0) {
+      throw new Error('locktime must be a non-negative integer');
+    }
+
+    try {
+      const redeemScript = bitcoin.script.compile([
+        bitcoin.script.number.encode(locktimeNumber),
+        bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
+        bitcoin.opcodes.OP_DROP,
+        publicKeyBuffer,
+        bitcoin.opcodes.OP_CHECKSIG,
+      ]);
+
+      const scriptHash = bitcoin.crypto.hash160(redeemScript);
+      const address = bitcoin.payments.p2sh({
+        hash: scriptHash,
+        network: this.network,
+      }).address;
+
+      return {
+        redeemScript: redeemScript.toString("hex"),
+        scriptHash: scriptHash.toString("hex"),
+        address,
+        locktime: locktimeNumber,
+        publicKey: publicKeyBuffer.toString("hex"),
+        type: "timelock",
+      };
+    } catch (error) {
+      throw new Error(`Failed to create timelock script: ${error.message}`);
+    }
   }
 
   /**
