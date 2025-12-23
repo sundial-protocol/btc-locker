@@ -6,6 +6,7 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { BIP32Factory } from "bip32";
 import { ECPairFactory } from "ecpair";
+import tinysecp from "@bitcoinerlab/secp256k1";
 
 // ECC will be initialized asynchronously
 let ecc = null;
@@ -16,8 +17,6 @@ let ECPair = null;
 async function initECC() {
   if (!ecc) {
     try {
-      const tinysecp = await import("@bitcoinerlab/secp256k1");
-
       // Handle ES module default export
       ecc = tinysecp.default || tinysecp;
 

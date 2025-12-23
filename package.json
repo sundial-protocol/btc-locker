@@ -3,7 +3,6 @@
   "version": "1.0.8",
   "description": "A comprehensive Bitcoin timelock script library for creating and managing time-locked transactions",
   "main": "src/index.js",
-  "browser": "dist/btc-locker.bundle.js",
   "types": "types/index.d.ts",
   "scripts": {
     "build": "webpack --mode production",
