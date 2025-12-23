@@ -3,9 +3,9 @@
  * A comprehensive library for creating and managing Bitcoin timelock scripts
  */
 
-const bitcoin = require("bitcoinjs-lib");
-const { BIP32Factory } = require("bip32");
-const { ECPairFactory } = require("ecpair");
+import * as bitcoin from "bitcoinjs-lib";
+import { BIP32Factory } from "bip32";
+import { ECPairFactory } from "ecpair";
 
 // ECC will be initialized asynchronously
 let ecc = null;
@@ -16,13 +16,10 @@ let ECPair = null;
 async function initECC() {
   if (!ecc) {
     try {
-      const tinysecp = require("@bitcoinerlab/secp256k1");
+      const tinysecp = await import("@bitcoinerlab/secp256k1");
 
-      if (typeof tinysecp === "object" && typeof tinysecp.then === "function") {
-        ecc = await tinysecp;
-      } else {
-        ecc = tinysecp;
-      }
+      // Handle ES module default export
+      ecc = tinysecp.default || tinysecp;
 
       // Validate ECC library has required methods
       if (!ecc || typeof ecc !== 'object') {
@@ -604,4 +601,4 @@ class BTCLocker {
   }
 }
 
-module.exports = BTCLocker;
+export default BTCLocker;

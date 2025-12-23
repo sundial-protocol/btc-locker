@@ -5,20 +5,19 @@
  * Command-line interface for testing Bitcoin timelock scripts
  */
 
-const { Command } = require("commander");
-const inquirer = require("inquirer");
-const chalk = require("chalk");
-const bitcoin = require("bitcoinjs-lib");
-const fs = require("fs");
-const path = require("path");
-const {
-  BTCLocker,
+import { Command } from "commander";
+import inquirer from "inquirer";
+import chalk from "chalk";
+import * as bitcoin from "bitcoinjs-lib";
+import fs from "fs";
+import path from "path";
+import {
   createBTCLocker,
   TimeUtils,
   ScriptUtils,
   TransactionUtils,
-} = require("../src/index");
-const BitcoinAPI = require("../src/bitcoin-api");
+} from "../src/index.js";
+import BitcoinAPI from "../src/bitcoin-api.js";
 
 const program = new Command();
 

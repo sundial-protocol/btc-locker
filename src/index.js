@@ -2,16 +2,16 @@
  * Main entry point for BTC Locker library
  */
 
-const bitcoin = require("bitcoinjs-lib");
-const BTCLocker = require("./btc-locker");
-const {
+import * as bitcoin from "bitcoinjs-lib";
+import BTCLocker from "./btc-locker.js";
+import {
   TimeUtils,
   ScriptUtils,
   TransactionUtils,
   BTCLockerError,
   ValidationError,
   TimelockError,
-} = require("./utils");
+} from "./utils.js";
 
 /**
  * Factory function to create an initialized BTCLocker instance
@@ -45,7 +45,7 @@ async function createBTCLocker(network = "testnet") {
   return locker;
 }
 
-const exports = {
+export {
   BTCLocker,
   createBTCLocker,
   TimeUtils,
@@ -56,8 +56,14 @@ const exports = {
   TimelockError,
 };
 
-// For CommonJS
-module.exports = exports;
-
-// For ES6 modules (if bundler supports it)
-module.exports.default = exports;
+// Default export
+export default {
+  BTCLocker,
+  createBTCLocker,
+  TimeUtils,
+  ScriptUtils,
+  TransactionUtils,
+  BTCLockerError,
+  ValidationError,
+  TimelockError,
+};

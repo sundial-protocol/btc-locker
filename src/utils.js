@@ -2,7 +2,7 @@
  * Utility functions for BTC Locker
  */
 
-const bitcoin = require("bitcoinjs-lib");
+import * as bitcoin from "bitcoinjs-lib";
 
 /**
  * Time and date utilities
@@ -197,7 +197,7 @@ class TimelockError extends BTCLockerError {
   }
 }
 
-module.exports = {
+export {
   TimeUtils,
   ScriptUtils,
   TransactionUtils,

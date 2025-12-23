@@ -3,7 +3,7 @@
  * Integrates with various Bitcoin APIs for testnet/mainnet operations
  */
 
-const https = require("https");
+import https from "https";
 
 class BitcoinAPI {
   constructor(network = "testnet", apiProvider = "mempool") {
@@ -265,4 +265,4 @@ class BitcoinAPI {
   }
 }
 
-module.exports = BitcoinAPI;
+export default BitcoinAPI;
