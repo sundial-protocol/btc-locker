@@ -11,6 +11,7 @@ import chalk from "chalk";
 import * as bitcoin from "bitcoinjs-lib";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import {
   createBTCLocker,
   TimeUtils,
@@ -19,13 +20,21 @@ import {
 } from "../src/index.js";
 import BitcoinAPI from "../src/bitcoin-api.js";
 
+// Get the directory of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Read version from package.json
+const packageJsonPath = path.join(__dirname, "..", "package.json");
+const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+
 const program = new Command();
 
 // Configure CLI
 program
   .name("btc-locker")
   .description("CLI for Bitcoin timelock script management")
-  .version("1.0.0");
+  .version(packageJson.version);
 
 // Global options
 program
