@@ -59,9 +59,31 @@ btc-locker inspect --address SCRIPT_ADDRESS
 
 ## Installation
 
+### Install via npm
+
+Setup .npmrc to use the Sundial Protocol package registry:
+
 ```bash
-npm install -g btc-locker
-# or run locally:
+# Add these lines to ~/.npmrc (or %USERPROFILE%\.npmrc on Windows)
+@sundial-protocol:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=THEIR_GITHUB_TOKEN
+```
+
+Install the CLI globally:
+
+```bash
+npm install -g @sundial-protocol/btc-locker
+```
+
+Confirm installation:
+
+```bash
+btc-locker --version
+```
+
+### Run Locally
+
+```bash
 npm run cli
 ```
 
