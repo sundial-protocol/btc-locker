@@ -1,6 +1,6 @@
 # BTC Locker CLI Quick Reference
 
-## 🧪 Testing Against Bitcoin Testnet
+## Testing Against Bitcoin Testnet
 
 ### What You Need:
 
@@ -165,10 +165,3 @@ btc-locker timelock --time $FUTURE_TIME --pubkey $PUBKEY
 ```bash
 btc-locker check --time $FUTURE_TIME
 ```
-
-## Testing on Bitcoin Networks
-
-- **Testnet** (default): Safe for testing, no real Bitcoin
-- **Mainnet**: Real Bitcoin - use with extreme caution!
-
-⚠️ **Always test on testnet first!**

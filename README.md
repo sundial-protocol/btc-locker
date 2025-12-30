@@ -1,13 +1,15 @@
-# BTC Locker 🔒
+![](readme-header.jpg)
 
-A comprehensive Bitcoin timelock script library for creating and managing time-locked transactions. This library provides easy-to-use functions for creating various types of Bitcoin locking scripts including simple timelocks, multisig timelocks, relative timelocks, and HODL scripts with emergency escape mechanisms.
+## BTC Locker
+
+A comprehensive Bitcoin staking library for Sundial Protocol, enabling the creation of various timelock scripts to securely lock Bitcoin funds for yield generation, as well yield calculation and distribution utlities for our yield providers.
 
 This library has two main interfaces:
 
 1. **JavaScript/TypeScript Library**: For integration into web applications, Node.js backends, or any JavaScript/TypeScript environment.
 2. **Command Line Interface (CLI)**: A user-friendly CLI tool for generating and managing Bitcoin timelock scripts directly from the terminal. This is expected to be most used by yield providers who want to create yield distributions locally.
 
-## 🚀 Features
+## Features
 
 - **Simple Timelock Scripts**: Lock funds until a specific date/time
 - **Relative Timelock Scripts**: Lock funds for a specific duration from transaction confirmation
@@ -17,7 +19,7 @@ This library has two main interfaces:
 - **TypeScript Support**: Full type definitions included
 - **Comprehensive Examples**: Ready-to-use examples for all script types
 
-## 📦 Installation
+## Installation
 
 This package sits in a private GitHub Package Registry. To install, first set up your `.env` with an authorized github token to be used by `.npmrc`:
 
@@ -37,7 +39,7 @@ For browser usage, you can also include the bundled version:
 <script src="node_modules/btc-locker/dist/btc-locker.bundle.js"></script>
 ```
 
-## 🔧 Quick Start
+## Quick Start
 
 ### Basic Timelock Example
 
@@ -78,7 +80,7 @@ const multisigScript = locker.createMultisigTimelockScript(
 console.log("2-of-3 Multisig address:", multisigScript.address);
 ```
 
-## 📚 API Documentation
+## API Documentation
 
 Detailed API documentation is available in the [Docs Directory](docs/). You can generate the latest docs by running:
 
@@ -92,13 +94,13 @@ You can also run a documentation server for them at `http://localhost:3000/docs`
 npm start
 ```
 
-## 🖥️ Command Line Interface (CLI)
+## Command Line Interface (CLI)
 
 The package includes a CLI tool for interacting with the same endpoints exposed in the JS library.
 
 More details can be found in the [CLI Documentation](CLI.md), including a full E2E walkthrough of a staking flow.
 
-## 📁 Examples
+## Examples
 
 Check the `examples/` directory for comprehensive usage examples:
 
