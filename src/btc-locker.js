@@ -69,13 +69,9 @@ class BTCLocker {
   }
 
   /**
-   * Ensure ECC is initialized
+   * Alias for semantic clarity for internal use
    */
-  async ensureInitialized() {
-    if (!this.initialized) {
-      await this.init();
-    }
-  }
+  ensureInitialized = init;
 
   /**
    * Create a simple timelock script (absolute time)
