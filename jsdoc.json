@@ -8,6 +8,7 @@
     "destination": "./docs/"
   },
   "plugins": ["plugins/markdown"],
+  "sourceType": "module",
   "templates": {
     "cleverLinks": false,
     "monospaceLinks": false

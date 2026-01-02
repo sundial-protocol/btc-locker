@@ -1,6 +1,5 @@
 /**
  * @fileoverview Timelock script creation functionality
- * @module locker/timelock
  */
 
 import * as bitcoin from "bitcoinjs-lib";
@@ -9,13 +8,11 @@ import { BTCLockerCore } from "./core.js";
 /**
  * Timelock script management class for creating time-locked Bitcoin scripts
  * @class TimelockManager
- * @extends BTCLockerCore
  */
 export class TimelockManager extends BTCLockerCore {
   /**
    * Create a simple timelock script (absolute time)
    * @async
-   * @method createTimelockScript
    * @param {number} locktime - Unix timestamp (for time-based) or block height (for height-based)
    * @param {Buffer|string} publicKey - Public key as buffer or hex string
    * @returns {Promise<Object>} Script details object
@@ -105,7 +102,6 @@ export class TimelockManager extends BTCLockerCore {
   /**
    * Create a relative timelock script (CSV - CheckSequenceVerify)
    * @async
-   * @method createRelativeTimelockScript
    * @param {number} sequence - Relative timelock value (blocks or time units)
    * @param {Buffer|string} publicKey - Public key as buffer or hex string
    * @returns {Promise<Object>} Script details object

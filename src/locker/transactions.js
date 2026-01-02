@@ -1,21 +1,18 @@
 /**
- * @fileoverview Transaction creation and spending functionality
- * @module locker/transactions
+ * @fileoverview Transaction creation and management functionality
  */
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore, getECC } from "./core.js";
 
 /**
- * Transaction management class for creating and spending Bitcoin transactions
+ * Transaction management class for creating funding and spending transactions
  * @class TransactionManager
- * @extends BTCLockerCore
  */
 export class TransactionManager extends BTCLockerCore {
   /**
    * Create spending transaction for timelock scripts
    * @async
-   * @method createSpendingTransaction
    * @param {Object} params - Transaction parameters
    * @param {Array<Object>} params.inputs - Input UTXOs array
    * @param {string} params.inputs[].txid - Transaction ID of the UTXO
@@ -160,7 +157,6 @@ export class TransactionManager extends BTCLockerCore {
   /**
    * Create a funding transaction to send Bitcoin to a timelock script
    * @async
-   * @method createFundingTransaction
    * @param {Object} params - Funding transaction parameters
    * @param {Array<Object>} params.inputs - Input UTXOs to spend from
    * @param {string} params.inputs[].txid - Transaction ID of the UTXO

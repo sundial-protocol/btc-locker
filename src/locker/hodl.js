@@ -1,21 +1,18 @@
 /**
- * @fileoverview HODL script functionality
- * @module locker/hodl
+ * @fileoverview HODL script creation functionality
  */
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core.js";
 
 /**
- * HODL script creation class for creating emergency escape mechanisms
+ * HODL script creation class with emergency escape mechanisms
  * @class HodlScriptCreator
- * @extends BTCLockerCore
  */
 export class HodlScriptCreator extends BTCLockerCore {
   /**
    * Create a HODL script with emergency escape mechanism
    * @async
-   * @method createHodlScript
    * @param {number} locktime - Unix timestamp or block height for the HODL period
    * @param {Buffer|string} ownerPubKey - Owner's public key (normal spending after locktime)
    * @param {Buffer|string} penaltyPubKey - Emergency escape public key (immediate spending)

@@ -1,6 +1,5 @@
 /**
  * @fileoverview Key pair generation functionality
- * @module locker/keypair
  */
 
 import * as bitcoin from "bitcoinjs-lib";
@@ -9,14 +8,15 @@ import { BTCLockerCore, getECC } from "./core.js";
 /**
  * Key pair generation class for Bitcoin addresses
  * @class KeyPairGenerator
- * @extends BTCLockerCore
  */
 export class KeyPairGenerator extends BTCLockerCore {
   /**
    * Generate a new key pair
    * @async
-   * @method generateKeyPair
    * @returns {Promise<Object>} Key pair with private key, public key, and address
+   * @returns {string} returns.privateKey - Private key in hex format
+   * @returns {string} returns.publicKey - Public key in hex format
+   * @returns {string} returns.address - Bitcoin address (P2WPKH)
    * @example
    * const generator = new KeyPairGenerator();
    * const keyPair = await generator.generateKeyPair();
@@ -42,7 +42,6 @@ export class KeyPairGenerator extends BTCLockerCore {
   /**
    * Generate key pair from existing private key
    * @async
-   * @method generateKeyPairFromPrivateKey
    * @param {string} privateKeyHex - Private key in hex format (64 characters)
    * @returns {Promise<Object>} Key pair object
    * @returns {string} returns.privateKey - Private key in hex format

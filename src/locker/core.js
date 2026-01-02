@@ -1,6 +1,5 @@
 /**
  * @fileoverview Core BTCLocker initialization and utilities
- * @module locker/core
  */
 
 import * as bitcoin from "bitcoinjs-lib";
@@ -73,11 +72,6 @@ export function getECC() {
   return { ecc, bip32, ECPair };
 }
 
-/**
- * Base class for all BTC Locker functionality
- * @class BTCLockerCore
- * @description Provides core initialization and network management for all BTC Locker components
- */
 export class BTCLockerCore {
   /**
    * Create a new BTCLockerCore instance
@@ -95,7 +89,6 @@ export class BTCLockerCore {
   /**
    * Initialize the BTCLocker with ECC library
    * @async
-   * @method init
    * @returns {Promise<void>} Promise that resolves when initialization is complete
    * @throws {Error} If ECC initialization fails
    * @example
@@ -112,7 +105,6 @@ export class BTCLockerCore {
   /**
    * Ensure the instance is initialized, throw error if not
    * @async
-   * @method ensureInitialized
    * @returns {Promise<void>} Promise that resolves if initialized
    * @throws {Error} If not initialized
    * @private

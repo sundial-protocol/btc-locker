@@ -1,6 +1,5 @@
 /**
- * @fileoverview Multisig timelock script functionality
- * @module locker/multisig
+ * @fileoverview Multisig timelock script creation functionality
  */
 
 import * as bitcoin from "bitcoinjs-lib";
@@ -9,13 +8,11 @@ import { BTCLockerCore } from "./core.js";
 /**
  * Multisig timelock script management class for M-of-N timelock operations
  * @class MultisigTimelockManager
- * @extends BTCLockerCore
  */
 export class MultisigTimelockManager extends BTCLockerCore {
   /**
    * Create a multisig timelock script
    * @async
-   * @method createMultisigTimelockScript
    * @param {number} locktime - Unix timestamp or block height for timelock
    * @param {number} m - Required number of signatures (M-of-N multisig)
    * @param {Array<Buffer|string>} publicKeys - Array of public keys (buffers or hex strings)

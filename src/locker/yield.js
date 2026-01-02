@@ -1,6 +1,5 @@
 /**
  * @fileoverview Yield distribution functionality
- * @module locker/yield
  */
 
 import * as bitcoin from "bitcoinjs-lib";
@@ -9,13 +8,11 @@ import { BTCLockerCore, getECC } from "./core.js";
 /**
  * Yield distribution class for distributing yields to timelock addresses
  * @class YieldDistributor
- * @extends BTCLockerCore
  */
 export class YieldDistributor extends BTCLockerCore {
   /**
    * Distribute yield back to a timelock script
    * @async
-   * @method distributeYield
    * @param {Object} params - Distribution parameters
    * @param {Array<Object>} params.inputs - Input UTXOs from yield source
    * @param {string} params.inputs[].txid - Transaction ID of the UTXO
