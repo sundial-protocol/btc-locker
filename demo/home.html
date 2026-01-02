@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BTC Locker - Bitcoin Timelock Library</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 40px;
+      }
+      .card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 15px 0;
+      }
+      .card h3 {
+        margin-top: 0;
+        color: #333;
+      }
+      .btn {
+        display: inline-block;
+        background: #007bff;
+        color: white;
+        padding: 10px 20px;
+        text-decoration: none;
+        border-radius: 5px;
+        margin: 5px;
+      }
+      .btn:hover {
+        background: #0056b3;
+      }
+      .btn.secondary {
+        background: #6c757d;
+      }
+      .btn.secondary:hover {
+        background: #545b62;
+      }
+      .features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>🔐 BTC Locker</h1>
+      <p>
+        A comprehensive Bitcoin timelock script library for creating and
+        managing time-locked transactions
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>📚 API Documentation</h3>
+      <p>Interactive API documentation with live testing capabilities</p>
+      <a href="/api-docs" class="btn">Swagger API Docs</a>
+      <a href="/api-docs.json" class="btn secondary">OpenAPI Spec (JSON)</a>
+    </div>
+
+    <div class="card">
+      <h3>📖 Traditional Documentation</h3>
+      <p>
+        Comprehensive JSDoc-generated documentation for all classes and methods
+      </p>
+      <a href="/docs" class="btn secondary">JSDoc Documentation</a>
+    </div>
+
+    <div class="card">
+      <h3>🧪 Interactive Demo</h3>
+      <p>Try out the BTC Locker library directly in your browser</p>
+      <a href="/demo.html" class="btn">Live Demo</a>
+      <a href="/test-bundle" class="btn secondary">Test Bundle</a>
+    </div>
+
+    <div class="card">
+      <h3>🛠️ CLI Tools</h3>
+      <p>Command-line interface documentation and examples</p>
+      <a href="/cli" class="btn secondary">CLI Documentation</a>
+    </div>
+
+    <div class="features">
+      <div class="card">
+        <h3>✨ Key Features</h3>
+        <ul>
+          <li>Absolute & Relative Timelock Scripts</li>
+          <li>Multisig Timelock Operations</li>
+          <li>HODL Scripts with Emergency Escape</li>
+          <li>Transaction Creation & Spending</li>
+          <li>Yield Distribution</li>
+          <li>Full Bitcoin & Testnet Support</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>🔧 API Endpoints</h3>
+        <ul>
+          <li><code>POST /api/keypair/generate</code></li>
+          <li><code>POST /api/timelock/create</code></li>
+          <li><code>POST /api/multisig/create</code></li>
+          <li><code>POST /api/hodl/create</code></li>
+          <li><code>POST /api/transactions/*</code></li>
+          <li><code>POST /api/yield/*</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🔗 Quick Links</h3>
+      <a
+        href="https://github.com/sundial-protocol/btc-locker"
+        class="btn secondary"
+        >GitHub Repository</a
+      >
+      <a href="/api-docs" class="btn">Get Started with API</a>
+    </div>
+  </body>
+</html>

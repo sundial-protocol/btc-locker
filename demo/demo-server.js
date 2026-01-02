@@ -3,12 +3,45 @@
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("../swagger.config.js");
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json());
+
+// Import API routes
+const apiRoutes = require("./api-routes.js");
+
+// Swagger UI setup
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "BTC Locker API Documentation",
+    customfavIcon: "/favicon.ico",
+    swaggerOptions: {
+      explorer: true,
+      displayOperationId: false,
+      displayRequestDuration: true,
+      defaultModelRendering: "model",
+      defaultModelsExpandDepth: 2,
+      defaultModelExpandDepth: 2,
+    },
+  })
+);
+
+// Serve Swagger JSON spec
+app.get("/api-docs.json", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.send(swaggerSpec);
+});
+
+// API routes
+app.use("/api", apiRoutes);
 
 // Serve static files from the demo directory
 app.use(express.static(__dirname));
@@ -18,18 +51,23 @@ app.use("/dist", express.static(path.join(__dirname, "..", "dist")));
 
 // Serve WASM files with correct MIME type and better error handling
 app.use("/dist", (req, res, next) => {
-  if (req.path.endsWith('.wasm')) {
-    res.set('Content-Type', 'application/wasm');
+  if (req.path.endsWith(".wasm")) {
+    res.set("Content-Type", "application/wasm");
   }
   next();
 });
 
 // Also serve WASM files from the demo directory root for relative paths
 app.use((req, res, next) => {
-  if (req.path.endsWith('.wasm')) {
-    const wasmPath = path.join(__dirname, "..", "dist", path.basename(req.path));
+  if (req.path.endsWith(".wasm")) {
+    const wasmPath = path.join(
+      __dirname,
+      "..",
+      "dist",
+      path.basename(req.path)
+    );
     if (fs.existsSync(wasmPath)) {
-      res.set('Content-Type', 'application/wasm');
+      res.set("Content-Type", "application/wasm");
       res.sendFile(wasmPath);
       return;
     }
@@ -50,7 +88,16 @@ app.use((req, res, next) => {
 
 // Serve the main demo page
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "demo.html"));
+  const homePath = path.join(__dirname, "home.html");
+
+  if (fs.existsSync(homePath)) {
+    res.sendFile(homePath);
+  } else {
+    res.status(404).json({
+      error: "Home page not found",
+      path: "demo/home.html",
+    });
+  }
 });
 
 // Serve the bundle file
@@ -137,36 +184,43 @@ app.get("/docs/", (req, res) => {
     // Read the file and inject base href if not present
     let content = fs.readFileSync(docsPath, "utf8");
     if (!content.includes('<base href="/docs/">')) {
-      content = content.replace('<head>', '<head>\n    <base href="/docs/">');
+      content = content.replace("<head>", '<head>\n    <base href="/docs/">');
     }
     res.send(content);
   } else {
     // Try to generate docs automatically
     const { exec } = require("child_process");
-    exec("npm run docs", { cwd: path.join(__dirname, "..") }, (error, stdout, stderr) => {
-      if (error) {
-        res.status(404).json({
-          error: "API documentation not found and could not be generated.",
-          message: "Run 'npm run docs' manually to generate documentation.",
-          details: error.message
-        });
-      } else {
-        // Check again if docs were created
-        if (fs.existsSync(docsPath)) {
-          let content = fs.readFileSync(docsPath, "utf8");
-          if (!content.includes('<base href="/docs/">')) {
-            content = content.replace('<head>', '<head>\n    <base href="/docs/">');
-          }
-          res.send(content);
-        } else {
-          res.status(500).json({
-            error: "Documentation generation completed but files not found.",
-            stdout: stdout,
-            stderr: stderr
+    exec(
+      "npm run docs",
+      { cwd: path.join(__dirname, "..") },
+      (error, stdout, stderr) => {
+        if (error) {
+          res.status(404).json({
+            error: "API documentation not found and could not be generated.",
+            message: "Run 'npm run docs' manually to generate documentation.",
+            details: error.message,
           });
+        } else {
+          // Check again if docs were created
+          if (fs.existsSync(docsPath)) {
+            let content = fs.readFileSync(docsPath, "utf8");
+            if (!content.includes('<base href="/docs/">')) {
+              content = content.replace(
+                "<head>",
+                '<head>\n    <base href="/docs/">'
+              );
+            }
+            res.send(content);
+          } else {
+            res.status(500).json({
+              error: "Documentation generation completed but files not found.",
+              stdout: stdout,
+              stderr: stderr,
+            });
+          }
         }
       }
-    });
+    );
   }
 });
 
@@ -181,15 +235,15 @@ app.use("/docs", express.static(path.join(__dirname, "..", "docs")));
 // Middleware to inject base href into HTML files in docs
 app.use("/docs", (req, res, next) => {
   // Only process HTML files
-  if (req.path.endsWith('.html')) {
+  if (req.path.endsWith(".html")) {
     const filePath = path.join(__dirname, "..", "docs", req.path);
-    
+
     if (fs.existsSync(filePath)) {
       let content = fs.readFileSync(filePath, "utf8");
       if (!content.includes('<base href="/docs/">')) {
-        content = content.replace('<head>', '<head>\n    <base href="/docs/">');
+        content = content.replace("<head>", '<head>\n    <base href="/docs/">');
       }
-      res.set('Content-Type', 'text/html');
+      res.set("Content-Type", "text/html");
       res.send(content);
       return;
     }
@@ -217,9 +271,9 @@ app.use((req, res) => {
 // Start server
 app.listen(port, () => {
   console.log(`Demo: http://localhost:${port}`);
-  console.log(`API Docs: http://localhost:${port}/docs`);
+  console.log(`JS Library Docs: http://localhost:${port}/docs`);
+  console.log(`Server API Docs: http://localhost:${port}/api-docs`);
   console.log(`CLI Docs: http://localhost:${port}/cli`);
-  console.log(`Test Bundle: http://localhost:${port}/test-bundle`);
 });
 
 module.exports = app;
