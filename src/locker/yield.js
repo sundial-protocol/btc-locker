@@ -14,13 +14,34 @@ import { BTCLockerCore, getECC } from "./core.js";
 export class YieldDistributor extends BTCLockerCore {
   /**
    * Distribute yield back to a timelock script
+   * @async
+   * @method distributeYield
    * @param {Object} params - Distribution parameters
-   * @param {Array} params.inputs - Input UTXOs from yield source
+   * @param {Array<Object>} params.inputs - Input UTXOs from yield source
+   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
+   * @param {number} params.inputs[].vout - Output index of the UTXO
+   * @param {number} params.inputs[].value - Value in satoshis
    * @param {string} params.timelockAddress - Timelock script address to send yield to
    * @param {number} params.amount - Amount to distribute in satoshis
-   * @param {string} params.privateKey - Private key for signing inputs
-   * @param {string} params.memo - Optional memo for the distribution
-   * @returns {Object} Signed distribution transaction
+   * @param {string} params.privateKey - Private key for signing inputs (hex format)
+   * @param {string} [params.memo] - Optional memo for the distribution
+   * @param {string} [params.changeAddress] - Change address (defaults to derived from private key)
+   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
+   * @returns {Promise<Object>} Signed distribution transaction object
+   * @returns {string} returns.hex - Signed transaction hex
+   * @returns {string} returns.txid - Transaction ID
+   * @returns {number} returns.fee - Transaction fee in satoshis
+   * @returns {string} [returns.memo] - Memo if provided
+   * @throws {Error} If insufficient funds or invalid parameters
+   * @example
+   * const yieldDistributor = new YieldDistributor();
+   * const tx = await yieldDistributor.distributeYield({
+   *   inputs: [{ txid: '...', vout: 0, value: 50000 }],
+   *   timelockAddress: '3...',
+   *   amount: 45000,
+   *   privateKey: '...',
+   *   memo: 'Quarterly yield distribution'
+   * });
    */
   async distributeYield(params) {
     await this.ensureInitialized();

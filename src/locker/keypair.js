@@ -41,8 +41,18 @@ export class KeyPairGenerator extends BTCLockerCore {
 
   /**
    * Generate key pair from existing private key
-   * @param {string} privateKeyHex - Private key in hex format
-   * @returns {Object} Key pair with address
+   * @async
+   * @method generateKeyPairFromPrivateKey
+   * @param {string} privateKeyHex - Private key in hex format (64 characters)
+   * @returns {Promise<Object>} Key pair object
+   * @returns {string} returns.privateKey - Private key in hex format
+   * @returns {string} returns.publicKey - Public key in hex format
+   * @returns {string} returns.address - Bitcoin address (P2WPKH)
+   * @throws {Error} If private key is invalid
+   * @example
+   * const generator = new KeyPairGenerator();
+   * const keyPair = await generator.generateKeyPairFromPrivateKey('1234567890abcdef...');
+   * console.log(keyPair.address);
    */
   async generateKeyPairFromPrivateKey(privateKeyHex) {
     await this.ensureInitialized();

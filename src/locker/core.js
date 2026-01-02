@@ -57,6 +57,14 @@ export async function initECC() {
 
 /**
  * Get the initialized ECC components
+ * @function getECC
+ * @returns {Object} Object containing initialized ECC components
+ * @returns {Object} returns.ecc - The ECC library instance
+ * @returns {Object} returns.bip32 - The BIP32 factory instance
+ * @returns {Object} returns.ECPair - The ECPair factory instance
+ * @throws {Error} If ECC components are not initialized
+ * @example
+ * const { ecc, bip32, ECPair } = getECC();
  */
 export function getECC() {
   if (!ecc || !bip32 || !ECPair) {
@@ -66,16 +74,33 @@ export function getECC() {
 }
 
 /**
- * Core BTCLocker class with common functionality
+ * Base class for all BTC Locker functionality
+ * @class BTCLockerCore
+ * @description Provides core initialization and network management for all BTC Locker components
  */
 export class BTCLockerCore {
+  /**
+   * Create a new BTCLockerCore instance
+   * @constructor
+   * @param {string|Object} [network=bitcoin.networks.bitcoin] - Bitcoin network object or 'mainnet'/'testnet'
+   * @example
+   * const core = new BTCLockerCore(bitcoin.networks.testnet);
+   * await core.init();
+   */
   constructor(network = bitcoin.networks.bitcoin) {
     this.network = network;
     this.initialized = false;
   }
 
   /**
-   * Initialize the ECC library (must be called before other methods)
+   * Initialize the BTCLocker with ECC library
+   * @async
+   * @method init
+   * @returns {Promise<void>} Promise that resolves when initialization is complete
+   * @throws {Error} If ECC initialization fails
+   * @example
+   * const locker = new BTCLockerCore();
+   * await locker.init();
    */
   async init() {
     if (!this.initialized) {
@@ -85,7 +110,12 @@ export class BTCLockerCore {
   }
 
   /**
-   * Ensure ECC is initialized
+   * Ensure the instance is initialized, throw error if not
+   * @async
+   * @method ensureInitialized
+   * @returns {Promise<void>} Promise that resolves if initialized
+   * @throws {Error} If not initialized
+   * @private
    */
   async ensureInitialized() {
     if (!this.initialized) {

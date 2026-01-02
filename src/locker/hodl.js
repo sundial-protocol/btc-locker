@@ -13,11 +13,29 @@ import { BTCLockerCore } from "./core.js";
  */
 export class HodlScriptCreator extends BTCLockerCore {
   /**
-   * Create a HODL script with emergency escape
-   * @param {number} locktime - Unix timestamp or block height
-   * @param {Buffer|string} ownerPubKey - Owner's public key
-   * @param {Buffer|string} penaltyPubKey - Penalty/Emergency public key
-   * @returns {Object} Script details
+   * Create a HODL script with emergency escape mechanism
+   * @async
+   * @method createHodlScript
+   * @param {number} locktime - Unix timestamp or block height for the HODL period
+   * @param {Buffer|string} ownerPubKey - Owner's public key (normal spending after locktime)
+   * @param {Buffer|string} penaltyPubKey - Emergency escape public key (immediate spending)
+   * @returns {Promise<Object>} Script details object
+   * @returns {Buffer} returns.script - The compiled HODL script with conditional logic
+   * @returns {string} returns.scriptHex - Script in hex format
+   * @returns {string} returns.address - P2SH address for the script
+   * @returns {string} returns.redeemScript - Redeem script in hex format
+   * @returns {number} returns.locktime - The locktime value
+   * @returns {string} returns.ownerPubKey - Owner public key in hex
+   * @returns {string} returns.penaltyPubKey - Penalty public key in hex
+   * @throws {Error} If parameters are invalid
+   * @example
+   * const hodl = new HodlScriptCreator();
+   * const script = await hodl.createHodlScript(
+   *   1640995200,    // locktime
+   *   ownerPubKey,   // normal spending key
+   *   escapePubKey   // emergency escape key
+   * );
+   * console.log(script.address);
    */
   async createHodlScript(locktime, ownerPubKey, penaltyPubKey) {
     await this.ensureInitialized();

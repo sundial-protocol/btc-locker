@@ -14,9 +14,21 @@ import { BTCLockerCore } from "./core.js";
 export class TimelockManager extends BTCLockerCore {
   /**
    * Create a simple timelock script (absolute time)
-   * @param {number} locktime - Unix timestamp or block height
-   * @param {Buffer|string} publicKey - Public key buffer or hex string
-   * @returns {Object} Script details
+   * @async
+   * @method createTimelockScript
+   * @param {number} locktime - Unix timestamp (for time-based) or block height (for height-based)
+   * @param {Buffer|string} publicKey - Public key as buffer or hex string
+   * @returns {Promise<Object>} Script details object
+   * @returns {Buffer} returns.script - The compiled timelock script
+   * @returns {string} returns.scriptHex - Script in hex format
+   * @returns {string} returns.address - P2SH address for the script
+   * @returns {string} returns.redeemScript - Redeem script in hex format
+   * @returns {number} returns.locktime - The locktime value
+   * @throws {Error} If locktime or publicKey is invalid
+   * @example
+   * const timelock = new TimelockManager();
+   * const script = await timelock.createTimelockScript(1640995200, publicKey);
+   * console.log(script.address);
    */
   async createTimelockScript(locktime, publicKey) {
     await this.ensureInitialized();
@@ -91,10 +103,22 @@ export class TimelockManager extends BTCLockerCore {
   }
 
   /**
-   * Create a relative timelock script
-   * @param {number} sequence - Relative locktime in blocks
-   * @param {Buffer|string} publicKey - Public key buffer or hex string
-   * @returns {Object} Script details
+   * Create a relative timelock script (CSV - CheckSequenceVerify)
+   * @async
+   * @method createRelativeTimelockScript
+   * @param {number} sequence - Relative timelock value (blocks or time units)
+   * @param {Buffer|string} publicKey - Public key as buffer or hex string
+   * @returns {Promise<Object>} Script details object
+   * @returns {Buffer} returns.script - The compiled timelock script
+   * @returns {string} returns.scriptHex - Script in hex format
+   * @returns {string} returns.address - P2SH address for the script
+   * @returns {string} returns.redeemScript - Redeem script in hex format
+   * @returns {number} returns.sequence - The sequence value
+   * @throws {Error} If sequence or publicKey is invalid
+   * @example
+   * const timelock = new TimelockManager();
+   * const script = await timelock.createRelativeTimelockScript(144, publicKey); // 1 day
+   * console.log(script.address);
    */
   async createRelativeTimelockScript(sequence, publicKey) {
     await this.ensureInitialized();

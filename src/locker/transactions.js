@@ -14,12 +14,32 @@ import { BTCLockerCore, getECC } from "./core.js";
 export class TransactionManager extends BTCLockerCore {
   /**
    * Create spending transaction for timelock scripts
+   * @async
+   * @method createSpendingTransaction
    * @param {Object} params - Transaction parameters
-   * @param {Array} params.inputs - Input UTXOs
-   * @param {Array} params.outputs - Output destinations
-   * @param {string} params.redeemScript - Redeem script (hex)
-   * @param {Array} params.privateKeys - Private keys for signing
-   * @returns {Object} Transaction details
+   * @param {Array<Object>} params.inputs - Input UTXOs array
+   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
+   * @param {number} params.inputs[].vout - Output index of the UTXO
+   * @param {number} params.inputs[].value - Value in satoshis
+   * @param {Array<Object>} params.outputs - Output destinations array
+   * @param {string} params.outputs[].address - Destination address
+   * @param {number} params.outputs[].value - Amount in satoshis
+   * @param {string} params.redeemScript - Redeem script in hex format
+   * @param {Array<string>} params.privateKeys - Private keys for signing (hex format)
+   * @param {number} [params.locktime] - Transaction locktime (optional)
+   * @returns {Promise<Object>} Transaction details object
+   * @returns {string} returns.hex - Signed transaction hex
+   * @returns {string} returns.txid - Transaction ID
+   * @returns {number} returns.size - Transaction size in bytes
+   * @throws {Error} If timelock hasn't expired or parameters are invalid
+   * @example
+   * const txManager = new TransactionManager();
+   * const tx = await txManager.createSpendingTransaction({
+   *   inputs: [{ txid: '...', vout: 0, value: 100000 }],
+   *   outputs: [{ address: '...', value: 95000 }],
+   *   redeemScript: '...',
+   *   privateKeys: ['...']
+   * });
    */
   async createSpendingTransaction(params) {
     await this.ensureInitialized();
@@ -139,11 +159,29 @@ export class TransactionManager extends BTCLockerCore {
 
   /**
    * Create a funding transaction to send Bitcoin to a timelock script
-   * @param {Object} params - Transaction parameters
-   * @param {Array} params.inputs - Input UTXOs
-   * @param {Array} params.outputs - Output destinations
-   * @param {string} params.privateKey - Private key for signing inputs
-   * @returns {Object} Signed transaction
+   * @async
+   * @method createFundingTransaction
+   * @param {Object} params - Funding transaction parameters
+   * @param {Array<Object>} params.inputs - Input UTXOs to spend from
+   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
+   * @param {number} params.inputs[].vout - Output index of the UTXO
+   * @param {number} params.inputs[].value - Value in satoshis
+   * @param {Array<Object>} params.outputs - Output destinations
+   * @param {string} params.outputs[].address - Destination address
+   * @param {number} params.outputs[].value - Amount in satoshis
+   * @param {string} params.privateKey - Private key for signing inputs (hex format)
+   * @returns {Promise<Object>} Signed transaction object
+   * @returns {string} returns.hex - Signed transaction hex
+   * @returns {string} returns.txid - Transaction ID
+   * @returns {number} returns.size - Transaction size in bytes
+   * @throws {Error} If insufficient funds or invalid parameters
+   * @example
+   * const txManager = new TransactionManager();
+   * const tx = await txManager.createFundingTransaction({
+   *   inputs: [{ txid: '...', vout: 0, value: 200000 }],
+   *   outputs: [{ address: '3...', value: 100000 }],
+   *   privateKey: '...'
+   * });
    */
   async createFundingTransaction(params) {
     await this.ensureInitialized();
