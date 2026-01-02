@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 
-const express = require("express");
-const path = require("path");
-const fs = require("fs");
-const swaggerUi = require("swagger-ui-express");
-const swaggerSpec = require("../swagger.config.js");
+import express from "express";
+import path from "path";
+import fs from "fs";
+import swaggerUi from "swagger-ui-express";
+import swaggerSpec from "../swagger.config.js";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+import { exec } from "child_process";
+import { createRequire } from "module";
+
+// ES module equivalents for __dirname and require
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -13,7 +22,7 @@ const port = process.env.PORT || 3000;
 app.use(express.json());
 
 // Import API routes
-const apiRoutes = require("./api-routes.js");
+import apiRoutes from "./api-routes.js";
 
 // Swagger UI setup
 app.use(
@@ -139,10 +148,13 @@ app.get("/api/bundle-info", (req, res) => {
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8")
+  );
   res.json({
     status: "healthy",
     timestamp: new Date().toISOString(),
-    version: require("../package.json").version,
+    version: packageJson.version,
   });
 });
 
@@ -189,7 +201,6 @@ app.get("/docs/", (req, res) => {
     res.send(content);
   } else {
     // Try to generate docs automatically
-    const { exec } = require("child_process");
     exec(
       "npm run docs",
       { cwd: path.join(__dirname, "..") },
@@ -276,4 +287,4 @@ app.listen(port, () => {
   console.log(`CLI Docs: http://localhost:${port}/cli`);
 });
 
-module.exports = app;
+export default app;

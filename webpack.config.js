@@ -1,6 +1,14 @@
-const path = require("path");
+import path from "path";
+import webpack from "webpack";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+import { createRequire } from "module";
 
-module.exports = {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
+
+export default {
   entry: ["./src/index.js"],
   output: {
     path: path.resolve(__dirname, "dist"),
@@ -13,8 +21,8 @@ module.exports = {
     globalObject: "this",
     chunkFormat: "array-push",
     publicPath: "",
-    assetModuleFilename: '[name][ext]',
-    webassemblyModuleFilename: 'btc-locker.wasm',
+    assetModuleFilename: "[name][ext]",
+    webassemblyModuleFilename: "btc-locker.wasm",
   },
   mode: "production",
   target: "web",
@@ -22,7 +30,7 @@ module.exports = {
     asyncWebAssembly: true,
   },
   optimization: {
-    moduleIds: 'deterministic',
+    moduleIds: "deterministic",
   },
   resolve: {
     fallback: {
@@ -50,7 +58,7 @@ module.exports = {
     ],
   },
   plugins: [
-    new (require("webpack").ProvidePlugin)({
+    new webpack.ProvidePlugin({
       Buffer: ["buffer", "Buffer"],
       process: "process/browser",
     }),

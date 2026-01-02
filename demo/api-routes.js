@@ -1,8 +1,11 @@
 /**
  * API Routes for BTC Locker with Swagger documentation
  */
-const express = require("express");
+import express from "express";
+import { createRequire } from "module";
+
 const router = express.Router();
+const require = createRequire(import.meta.url);
 
 // Import the BTC Locker library with proper fallback
 let BTCLocker;
@@ -431,11 +434,9 @@ router.post(
     } = req.body;
 
     if (!locktime || !ownerPubKey || !penaltyPubKey) {
-      return res
-        .status(400)
-        .json({
-          error: "Locktime, ownerPubKey, and penaltyPubKey are required",
-        });
+      return res.status(400).json({
+        error: "Locktime, ownerPubKey, and penaltyPubKey are required",
+      });
     }
 
     const bitcoin = require("bitcoinjs-lib");
@@ -465,4 +466,4 @@ router.use((error, req, res, next) => {
   });
 });
 
-module.exports = router;
+export default router;

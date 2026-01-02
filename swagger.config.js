@@ -1,8 +1,13 @@
 /**
  * Swagger configuration for BTC Locker API
  */
-const swaggerJsdoc = require("swagger-jsdoc");
-const path = require("path");
+import swaggerJsdoc from "swagger-jsdoc";
+import path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const options = {
   definition: {
@@ -243,4 +248,4 @@ const options = {
   ],
 };
 
-module.exports = swaggerJsdoc(options);
+export default swaggerJsdoc(options);
