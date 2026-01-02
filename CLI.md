@@ -66,7 +66,7 @@ Setup .npmrc to use the Sundial Protocol package registry:
 ```bash
 # Add these lines to ~/.npmrc (or %USERPROFILE%\.npmrc on Windows)
 @sundial-protocol:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=THEIR_GITHUB_TOKEN
+//npm.pkg.github.com/:_authToken=ghp_yourgithubtokenhere
 ```
 
 Install the CLI globally:

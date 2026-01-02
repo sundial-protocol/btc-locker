@@ -1,15 +1,13 @@
 {
   "source": {
-    "include": "./src/",
+    "include": ["./src/", "./src/locker/"],
     "includePattern": "\\.(js)$",
     "recursive": true
   },
   "opts": {
     "destination": "./docs/"
   },
-  "plugins": [
-    "plugins/markdown"
-  ],
+  "plugins": ["plugins/markdown"],
   "templates": {
     "cleverLinks": false,
     "monospaceLinks": false

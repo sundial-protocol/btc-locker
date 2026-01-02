@@ -3,7 +3,17 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import BTCLocker from "./btc-locker.js";
+// Import the modular BTCLocker implementation
+import BTCLocker from "./locker/index.js";
+import {
+  BTCLockerCore,
+  KeyPairGenerator,
+  TimelockManager,
+  MultisigTimelockManager,
+  HodlScriptCreator,
+  TransactionManager,
+  YieldDistributor,
+} from "./locker/index.js";
 import {
   TimeUtils,
   ScriptUtils,
@@ -39,7 +49,7 @@ async function createBTCLocker(network = "testnet") {
   } else {
     networkObj = network;
   }
-  
+
   const locker = new BTCLocker(networkObj);
   await locker.init();
   return locker;
@@ -47,6 +57,13 @@ async function createBTCLocker(network = "testnet") {
 
 export {
   BTCLocker,
+  BTCLockerCore,
+  KeyPairGenerator,
+  TimelockManager,
+  MultisigTimelockManager,
+  HodlScriptCreator,
+  TransactionManager,
+  YieldDistributor,
   createBTCLocker,
   TimeUtils,
   ScriptUtils,
@@ -59,6 +76,13 @@ export {
 // Default export
 export default {
   BTCLocker,
+  BTCLockerCore,
+  KeyPairGenerator,
+  TimelockManager,
+  MultisigTimelockManager,
+  HodlScriptCreator,
+  TransactionManager,
+  YieldDistributor,
   createBTCLocker,
   TimeUtils,
   ScriptUtils,
