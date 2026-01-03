@@ -8,8 +8,8 @@
   "scripts": {
     "build": "webpack --mode production",
     "build:dev": "webpack --mode development",
-    "test": "jest",
-    "test:watch": "jest --watch",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "lint": "eslint src/**/*.js",
     "lint:fix": "eslint src/**/*.js --fix",
     "docs": "jsdoc -c jsdoc.json",
@@ -87,6 +87,7 @@
     "node": ">=14.0.0"
   },
   "jest": {
+    "transform": {},
     "testEnvironment": "node",
     "collectCoverage": true,
     "coverageDirectory": "coverage",

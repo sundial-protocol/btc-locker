@@ -15,18 +15,27 @@ import { YieldDistributor } from "./yield.js";
  * @class BTCLocker
  * @description Main interface class that combines all BTC Locker functionality in a single class
  * while maintaining backward compatibility with the original monolithic implementation
+ * @param {string|Object} [network] - Bitcoin network ('bitcoin', 'testnet', 'regtest') or network object
+ * @example
+ * // Using string network name
+ * const locker = new BTCLocker('testnet');
+ * await locker.init();
+ *
+ * // Using network object
+ * const locker = new BTCLocker(bitcoin.networks.testnet);
+ * await locker.init();
  */
 export class BTCLocker extends BTCLockerCore {
   constructor(network) {
     super(network);
 
-    // Initialize component instances with the same network
-    this.keyPairGenerator = new KeyPairGenerator(network);
-    this.timelockCreator = new TimelockManager(network);
-    this.multisigCreator = new MultisigTimelockManager(network);
-    this.hodlCreator = new HodlScriptCreator(network);
-    this.transactionManager = new TransactionManager(network);
-    this.yieldDistributor = new YieldDistributor(network);
+    // Initialize component instances with the converted network object from parent
+    this.keyPairGenerator = new KeyPairGenerator(this.network);
+    this.timelockCreator = new TimelockManager(this.network);
+    this.multisigCreator = new MultisigTimelockManager(this.network);
+    this.hodlCreator = new HodlScriptCreator(this.network);
+    this.transactionManager = new TransactionManager(this.network);
+    this.yieldDistributor = new YieldDistributor(this.network);
   }
 
   /**

@@ -25,32 +25,17 @@ import {
 
 /**
  * Factory function to create an initialized BTCLocker instance
- * @param {string|Object} network - Network ('bitcoin', 'testnet', or network object)
+ * @param {string|Object} network - Network ('bitcoin', 'testnet', 'regtest', or network object)
  * @returns {Promise<BTCLocker>} Initialized BTCLocker instance
+ * @example
+ * // Using string network name
+ * const locker = await createBTCLocker('testnet');
+ *
+ * // Using network object
+ * const locker = await createBTCLocker(bitcoin.networks.testnet);
  */
 async function createBTCLocker(network = "testnet") {
-  // Convert string network names to network objects
-  let networkObj;
-  if (typeof network === "string") {
-    switch (network.toLowerCase()) {
-      case "bitcoin":
-      case "mainnet":
-        networkObj = bitcoin.networks.bitcoin;
-        break;
-      case "testnet":
-        networkObj = bitcoin.networks.testnet;
-        break;
-      case "regtest":
-        networkObj = bitcoin.networks.regtest;
-        break;
-      default:
-        throw new Error(`Unknown network: ${network}`);
-    }
-  } else {
-    networkObj = network;
-  }
-
-  const locker = new BTCLocker(networkObj);
+  const locker = new BTCLocker(network);
   await locker.init();
   return locker;
 }

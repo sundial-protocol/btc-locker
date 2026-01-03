@@ -99,23 +99,49 @@
 
     <script>
       // Extract the library from the bundle
-      const { BTCLocker, TimeUtils, ScriptUtils, TransactionUtils } =
-        window.BTCLocker;
+      const { BTCLocker } = window.BTCLocker || {};
 
-      function runBasicDemo() {
+      // Check if library loaded
+      if (!BTCLocker) {
+        document.addEventListener("DOMContentLoaded", function () {
+          document.querySelectorAll(".output").forEach((output) => {
+            output.textContent =
+              "Error: BTC Locker library not loaded. Make sure the bundle is built: npm run build";
+          });
+        });
+      }
+
+      // Check what's available in the global scope
+      console.log(
+        "Available in window:",
+        Object.keys(window).filter(
+          (k) =>
+            k.includes("bitcoin") || k.includes("Bitcoin") || k.includes("BTC")
+        )
+      );
+      console.log("BTCLocker available:", !!BTCLocker);
+      console.log("window.bitcoin available:", !!window.bitcoin);
+
+      // Define functions in global scope
+      window.runBasicDemo = async function () {
         const output = document.getElementById("basicOutput");
         output.textContent = "Generating basic timelock...";
 
         try {
-          // Use testnet for demonstration
-          const locker = new BTCLocker(/* testnet would need to be imported */);
+          if (!BTCLocker) {
+            throw new Error("BTC Locker library not loaded");
+          }
+
+          // Use testnet for demonstration - let BTCLocker handle the network internally
+          const locker = new BTCLocker("testnet");
+          await locker.init();
 
           // Generate a key pair
-          const keyPair = locker.generateKeyPair();
+          const keyPair = await locker.generateKeyPair();
 
-          // Create a timelock for 1 week from now
-          const locktime = TimeUtils.addDuration(TimeUtils.DURATIONS.WEEK);
-          const script = locker.createTimelockScript(
+          // Create a timelock for 1 week from now (Unix timestamp)
+          const locktime = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60; // 1 week
+          const script = await locker.createTimelockScript(
             locktime,
             keyPair.publicKey
           );
@@ -130,41 +156,49 @@ Generated Key Pair:
 Timelock Script:
 • Script Address: ${script.address}
 • Locktime: ${new Date(locktime * 1000).toISOString()}
-• Script Hash: ${script.scriptHash}
+• Redeem Script: ${script.redeemScript}
 
 To use:
-1. Send Bitcoin to the script address
-2. Wait until the locktime expires
-3. Spend using the private key
+1. Send Bitcoin to the script address: ${script.address}
+2. Wait until the locktime expires: ${new Date(
+            locktime * 1000
+          ).toLocaleString()}
+3. Spend using the private key and redeem script
 
-⚠️ Keep the private key secure!`;
+⚠️ Keep the private key and redeem script secure!`;
 
           output.textContent = result;
         } catch (error) {
           output.textContent = `Error: ${error.message}`;
+          console.error("Basic demo error:", error);
         }
-      }
+      };
 
-      function runMultisigDemo() {
+      window.runMultisigDemo = async function () {
         const output = document.getElementById("multisigOutput");
         output.textContent = "Generating 2-of-3 multisig timelock...";
 
         try {
-          const locker = new BTCLocker();
+          if (!BTCLocker) {
+            throw new Error("BTC Locker library not loaded");
+          }
+
+          const locker = new BTCLocker("testnet");
+          await locker.init();
 
           // Generate three key pairs
-          const keyPair1 = locker.generateKeyPair();
-          const keyPair2 = locker.generateKeyPair();
-          const keyPair3 = locker.generateKeyPair();
+          const keyPair1 = await locker.generateKeyPair();
+          const keyPair2 = await locker.generateKeyPair();
+          const keyPair3 = await locker.generateKeyPair();
 
-          // Create 2-of-3 multisig timelock (1 month)
-          const locktime = TimeUtils.addDuration(TimeUtils.DURATIONS.MONTH);
+          // Create 2-of-3 multisig timelock (1 month from now)
+          const locktime = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60; // 30 days
           const publicKeys = [
             keyPair1.publicKey,
             keyPair2.publicKey,
             keyPair3.publicKey,
           ];
-          const script = locker.createMultisigTimelockScript(
+          const script = await locker.createMultisigTimelockScript(
             locktime,
             2,
             publicKeys
@@ -174,39 +208,46 @@ To use:
 
 Key Pairs:
 • Key 1: ${keyPair1.address}
-• Key 2: ${keyPair2.address}
+• Key 2: ${keyPair2.address}  
 • Key 3: ${keyPair3.address}
 
 Multisig Script:
 • Script Address: ${script.address}
-• Required Signatures: ${script.m} of ${script.publicKeys.length}
+• Required Signatures: ${script.m} of ${script.n}
 • Locktime: ${new Date(locktime * 1000).toISOString()}
+• Redeem Script: ${script.redeemScript}
 
 To spend:
-• Wait until locktime expires
+• Wait until locktime expires: ${new Date(locktime * 1000).toLocaleString()}
 • Provide signatures from any 2 of the 3 keys
 • Include the redeem script`;
 
           output.textContent = result;
         } catch (error) {
           output.textContent = `Error: ${error.message}`;
+          console.error("Multisig demo error:", error);
         }
-      }
+      };
 
-      function runHodlDemo() {
+      window.runHodlDemo = async function () {
         const output = document.getElementById("hodlOutput");
         output.textContent = "Generating HODL script...";
 
         try {
-          const locker = new BTCLocker();
+          if (!BTCLocker) {
+            throw new Error("BTC Locker library not loaded");
+          }
+
+          const locker = new BTCLocker("testnet");
+          await locker.init();
 
           // Generate owner and emergency key pairs
-          const ownerKeyPair = locker.generateKeyPair();
-          const emergencyKeyPair = locker.generateKeyPair();
+          const ownerKeyPair = await locker.generateKeyPair();
+          const emergencyKeyPair = await locker.generateKeyPair();
 
           // Create HODL script (1 year lock)
-          const locktime = TimeUtils.addDuration(TimeUtils.DURATIONS.YEAR);
-          const script = locker.createHodlScript(
+          const locktime = Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60; // 1 year
+          const script = await locker.createHodlScript(
             locktime,
             ownerKeyPair.publicKey,
             emergencyKeyPair.publicKey
@@ -221,33 +262,43 @@ Key Pairs:
 HODL Script:
 • Script Address: ${script.address}
 • Normal Unlock: ${new Date(locktime * 1000).toISOString()}
-• Type: ${script.type}
+• Owner PubKey: ${script.ownerPubKey}
+• Emergency PubKey: ${script.penaltyPubKey}
 
 Spending Options:
-• Normal: Wait until locktime, spend with owner key only
-• Emergency: Anytime with both owner + emergency signatures
+• Normal: Wait until ${new Date(
+            locktime * 1000
+          ).toLocaleString()}, spend with owner key only
+• Emergency: Anytime with emergency key (but may incur penalty)
 
 This encourages long-term holding while providing a safety net.`;
 
           output.textContent = result;
         } catch (error) {
           output.textContent = `Error: ${error.message}`;
+          console.error("HODL demo error:", error);
         }
-      }
+      };
 
-      function runRelativeDemo() {
+      window.runRelativeDemo = async function () {
         const output = document.getElementById("relativeOutput");
         output.textContent = "Generating relative timelock...";
 
         try {
-          const locker = new BTCLocker();
+          if (!BTCLocker) {
+            throw new Error("BTC Locker library not loaded");
+          }
+
+          const locker = new BTCLocker("testnet");
+          await locker.init();
 
           // Generate a key pair
-          const keyPair = locker.generateKeyPair();
+          const keyPair = await locker.generateKeyPair();
 
           // Create relative timelock (144 blocks ≈ 1 day)
-          const script = locker.createRelativeTimelockScript(
-            144,
+          const sequence = 144;
+          const script = await locker.createRelativeTimelockScript(
+            sequence,
             keyPair.publicKey
           );
 
@@ -261,9 +312,10 @@ Key Pair:
 Relative Timelock Script:
 • Script Address: ${script.address}
 • Sequence: ${script.sequence} blocks
-• Approximate Duration: ${
-            TimeUtils.blocksToSeconds(script.sequence) / 3600
-          } hours
+• Approximate Duration: ${Math.round(
+            (script.sequence * 10) / 60
+          )} minutes (assuming 10min blocks)
+• Redeem Script: ${script.redeemScript}
 
 How it works:
 • Funds are locked for ${script.sequence} blocks after confirmation
@@ -273,15 +325,23 @@ How it works:
           output.textContent = result;
         } catch (error) {
           output.textContent = `Error: ${error.message}`;
+          console.error("Relative demo error:", error);
         }
-      }
+      };
 
       // Show initial message
       document.addEventListener("DOMContentLoaded", function () {
-        console.log("🔒 BTC Locker library loaded successfully!");
-        console.log(
-          "Click the buttons above to test different timelock types."
-        );
+        if (window.BTCLocker) {
+          console.log("🔒 BTC Locker library loaded successfully!");
+          console.log("Available exports:", Object.keys(window.BTCLocker));
+          console.log(
+            "Click the buttons above to test different timelock types."
+          );
+        } else {
+          console.error(
+            "❌ BTC Locker library not found. Make sure to build: npm run build"
+          );
+        }
       });
     </script>
   </body>

@@ -1,21 +1,53 @@
-const {
+import {
   BTCLocker,
   TimeUtils,
   ScriptUtils,
   TransactionUtils,
-} = require("../src/index");
-const bitcoin = require("bitcoinjs-lib");
+} from "../src/index.js";
+import * as bitcoin from "bitcoinjs-lib";
 
 describe("BTCLocker", () => {
   let locker;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     locker = new BTCLocker(bitcoin.networks.testnet);
+    await locker.init();
+  });
+
+  describe("Network Configuration", () => {
+    test("should accept string network names", async () => {
+      // Test testnet string
+      const testnetLocker = new BTCLocker("testnet");
+      await testnetLocker.init();
+      expect(testnetLocker.network).toBe(bitcoin.networks.testnet);
+
+      // Test mainnet string
+      const mainnetLocker = new BTCLocker("bitcoin");
+      await mainnetLocker.init();
+      expect(mainnetLocker.network).toBe(bitcoin.networks.bitcoin);
+
+      // Test regtest string
+      const regtestLocker = new BTCLocker("regtest");
+      await regtestLocker.init();
+      expect(regtestLocker.network).toBe(bitcoin.networks.regtest);
+    });
+
+    test("should accept network objects", async () => {
+      const objectLocker = new BTCLocker(bitcoin.networks.testnet);
+      await objectLocker.init();
+      expect(objectLocker.network).toBe(bitcoin.networks.testnet);
+    });
+
+    test("should throw error for invalid network string", () => {
+      expect(() => {
+        new BTCLocker("invalid");
+      }).toThrow("Unknown network: invalid");
+    });
   });
 
   describe("Key Generation", () => {
-    test("should generate valid key pair", () => {
-      const keyPair = locker.generateKeyPair();
+    test("should generate valid key pair", async () => {
+      const keyPair = await locker.generateKeyPair();
 
       expect(keyPair).toHaveProperty("privateKey");
       expect(keyPair).toHaveProperty("publicKey");
@@ -29,10 +61,13 @@ describe("BTCLocker", () => {
   });
 
   describe("Timelock Scripts", () => {
-    test("should create simple timelock script", () => {
-      const keyPair = locker.generateKeyPair();
+    test("should create simple timelock script", async () => {
+      const keyPair = await locker.generateKeyPair();
       const locktime = TimeUtils.addDuration(TimeUtils.DURATIONS.DAY);
-      const script = locker.createTimelockScript(locktime, keyPair.publicKey);
+      const script = await locker.createTimelockScript(
+        locktime,
+        keyPair.publicKey
+      );
 
       expect(script).toHaveProperty("redeemScript");
       expect(script).toHaveProperty("address");
@@ -43,10 +78,10 @@ describe("BTCLocker", () => {
       ).toBe(true);
     });
 
-    test("should create relative timelock script", () => {
-      const keyPair = locker.generateKeyPair();
+    test("should create relative timelock script", async () => {
+      const keyPair = await locker.generateKeyPair();
       const sequence = 144; // ~1 day
-      const script = locker.createRelativeTimelockScript(
+      const script = await locker.createRelativeTimelockScript(
         sequence,
         keyPair.publicKey
       );
@@ -57,10 +92,10 @@ describe("BTCLocker", () => {
       expect(script).toHaveProperty("type", "relative-timelock");
     });
 
-    test("should create multisig timelock script", () => {
-      const keyPair1 = locker.generateKeyPair();
-      const keyPair2 = locker.generateKeyPair();
-      const keyPair3 = locker.generateKeyPair();
+    test("should create multisig timelock script", async () => {
+      const keyPair1 = await locker.generateKeyPair();
+      const keyPair2 = await locker.generateKeyPair();
+      const keyPair3 = await locker.generateKeyPair();
       const publicKeys = [
         keyPair1.publicKey,
         keyPair2.publicKey,
@@ -68,7 +103,7 @@ describe("BTCLocker", () => {
       ];
       const locktime = TimeUtils.addDuration(TimeUtils.DURATIONS.WEEK);
 
-      const script = locker.createMultisigTimelockScript(
+      const script = await locker.createMultisigTimelockScript(
         locktime,
         2,
         publicKeys
@@ -82,12 +117,12 @@ describe("BTCLocker", () => {
       expect(script).toHaveProperty("type", "multisig-timelock");
     });
 
-    test("should create HODL script", () => {
-      const ownerKeyPair = locker.generateKeyPair();
-      const penaltyKeyPair = locker.generateKeyPair();
+    test("should create HODL script", async () => {
+      const ownerKeyPair = await locker.generateKeyPair();
+      const penaltyKeyPair = await locker.generateKeyPair();
       const locktime = TimeUtils.addDuration(TimeUtils.DURATIONS.YEAR);
 
-      const script = locker.createHodlScript(
+      const script = await locker.createHodlScript(
         locktime,
         ownerKeyPair.publicKey,
         penaltyKeyPair.publicKey

@@ -76,13 +76,38 @@ export class BTCLockerCore {
   /**
    * Create a new BTCLockerCore instance
    * @constructor
-   * @param {string|Object} [network=bitcoin.networks.bitcoin] - Bitcoin network object or 'mainnet'/'testnet'
+   * @param {string|Object} [network=bitcoin.networks.bitcoin] - Bitcoin network ('bitcoin', 'testnet', 'regtest') or network object
    * @example
+   * // Using string network name
+   * const core = new BTCLockerCore('testnet');
+   * await core.init();
+   *
+   * // Using network object
    * const core = new BTCLockerCore(bitcoin.networks.testnet);
    * await core.init();
    */
   constructor(network = bitcoin.networks.bitcoin) {
-    this.network = network;
+    // Convert string network names to network objects
+    if (typeof network === "string") {
+      switch (network.toLowerCase()) {
+        case "bitcoin":
+        case "mainnet":
+          this.network = bitcoin.networks.bitcoin;
+          break;
+        case "testnet":
+          this.network = bitcoin.networks.testnet;
+          break;
+        case "regtest":
+          this.network = bitcoin.networks.regtest;
+          break;
+        default:
+          throw new Error(
+            `Unknown network: ${network}. Use 'bitcoin', 'testnet', 'regtest', or a network object.`
+          );
+      }
+    } else {
+      this.network = network;
+    }
     this.initialized = false;
   }
 
