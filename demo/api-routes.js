@@ -466,4 +466,377 @@ router.use((error, req, res, next) => {
   });
 });
 
+/**
+ * @swagger
+ * /api/transactions/funding:
+ *   post:
+ *     summary: Create a funding transaction to send Bitcoin to a timelock script
+ *     tags: [Transactions]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - inputs
+ *               - timelockAddress
+ *               - amount
+ *               - changeAddress
+ *               - privateKeys
+ *             properties:
+ *               inputs:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     txid:
+ *                       type: string
+ *                       description: Transaction ID of the UTXO
+ *                     vout:
+ *                       type: integer
+ *                       description: Output index of the UTXO
+ *                     value:
+ *                       type: integer
+ *                       description: Value in satoshis
+ *               timelockAddress:
+ *                 type: string
+ *                 description: Address of the timelock script
+ *               amount:
+ *                 type: integer
+ *                 description: Amount to send to timelock (satoshis)
+ *               changeAddress:
+ *                 type: string
+ *                 description: Address for change output
+ *               privateKeys:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Private keys for signing inputs
+ *               feeRate:
+ *                 type: integer
+ *                 default: 10
+ *                 description: Fee rate in sat/byte
+ *               network:
+ *                 type: string
+ *                 enum: [mainnet, testnet]
+ *                 default: testnet
+ *     responses:
+ *       200:
+ *         description: Successfully created funding transaction
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Transaction'
+ *       400:
+ *         description: Invalid request parameters
+ *       500:
+ *         description: Server error
+ */
+router.post(
+  "/transactions/funding",
+  ensureBTCLockerReady,
+  asyncHandler(async (req, res) => {
+    const {
+      inputs,
+      timelockAddress,
+      amount,
+      changeAddress,
+      privateKeys,
+      feeRate = 10,
+      network = "testnet",
+    } = req.body;
+
+    if (
+      !inputs ||
+      !timelockAddress ||
+      !amount ||
+      !changeAddress ||
+      !privateKeys
+    ) {
+      return res.status(400).json({
+        error:
+          "Missing required parameters: inputs, timelockAddress, amount, changeAddress, privateKeys",
+      });
+    }
+
+    const bitcoin = require("bitcoinjs-lib");
+    const networkObj =
+      network === "mainnet"
+        ? bitcoin.networks.bitcoin
+        : bitcoin.networks.testnet;
+
+    try {
+      const locker = new BTCLocker(networkObj);
+      await locker.init();
+
+      const transaction = await locker.createFundingTransaction({
+        inputs,
+        timelockAddress,
+        amount,
+        changeAddress,
+        privateKeys,
+        feeRate,
+      });
+
+      res.json({
+        success: true,
+        data: transaction,
+        message: "Funding transaction created successfully",
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        code: "FUNDING_TRANSACTION_FAILED",
+      });
+    }
+  })
+);
+
+/**
+ * @swagger
+ * /api/transactions/spending:
+ *   post:
+ *     summary: Create spending transaction for timelock scripts
+ *     tags: [Transactions]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - inputs
+ *               - outputs
+ *               - redeemScript
+ *               - privateKeys
+ *             properties:
+ *               inputs:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     txid:
+ *                       type: string
+ *                     vout:
+ *                       type: integer
+ *                     value:
+ *                       type: integer
+ *               outputs:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     address:
+ *                       type: string
+ *                     value:
+ *                       type: integer
+ *               redeemScript:
+ *                 type: string
+ *                 description: Redeem script in hex format
+ *               privateKeys:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Private keys for signing (hex format)
+ *               locktime:
+ *                 type: integer
+ *                 description: Transaction locktime (optional)
+ *               network:
+ *                 type: string
+ *                 enum: [mainnet, testnet]
+ *                 default: testnet
+ *     responses:
+ *       200:
+ *         description: Successfully created spending transaction
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Transaction'
+ *       400:
+ *         description: Invalid parameters or timelock not expired
+ *       500:
+ *         description: Server error
+ */
+router.post(
+  "/transactions/spending",
+  ensureBTCLockerReady,
+  asyncHandler(async (req, res) => {
+    const {
+      inputs,
+      outputs,
+      redeemScript,
+      privateKeys,
+      locktime,
+      network = "testnet",
+    } = req.body;
+
+    if (!inputs || !outputs || !redeemScript || !privateKeys) {
+      return res.status(400).json({
+        error:
+          "Missing required parameters: inputs, outputs, redeemScript, privateKeys",
+      });
+    }
+
+    const bitcoin = require("bitcoinjs-lib");
+    const networkObj =
+      network === "mainnet"
+        ? bitcoin.networks.bitcoin
+        : bitcoin.networks.testnet;
+
+    try {
+      const locker = new BTCLocker(networkObj);
+      await locker.init();
+
+      const transaction = await locker.createSpendingTransaction({
+        inputs,
+        outputs,
+        redeemScript,
+        privateKeys,
+        locktime,
+      });
+
+      res.json({
+        success: true,
+        data: transaction,
+        message: "Spending transaction created successfully",
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        code: "SPENDING_TRANSACTION_FAILED",
+      });
+    }
+  })
+);
+
+/**
+ * @swagger
+ * /api/yield/distribute:
+ *   post:
+ *     summary: Distribute yield back to a timelock script
+ *     tags: [Yield]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - inputs
+ *               - timelockAddress
+ *               - amount
+ *               - privateKey
+ *             properties:
+ *               inputs:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     txid:
+ *                       type: string
+ *                       description: Transaction ID of the UTXO
+ *                     vout:
+ *                       type: integer
+ *                       description: Output index of the UTXO
+ *                     value:
+ *                       type: integer
+ *                       description: Value in satoshis
+ *               timelockAddress:
+ *                 type: string
+ *                 description: Timelock script address to send yield to
+ *               amount:
+ *                 type: integer
+ *                 description: Amount to distribute in satoshis
+ *               privateKey:
+ *                 type: string
+ *                 description: Private key for signing inputs (hex format)
+ *               memo:
+ *                 type: string
+ *                 description: Optional memo for the distribution
+ *               changeAddress:
+ *                 type: string
+ *                 description: Change address (defaults to derived from private key)
+ *               feeRate:
+ *                 type: integer
+ *                 default: 10
+ *                 description: Fee rate in sat/byte
+ *               network:
+ *                 type: string
+ *                 enum: [mainnet, testnet]
+ *                 default: testnet
+ *     responses:
+ *       200:
+ *         description: Successfully distributed yield
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Transaction'
+ *                 - type: object
+ *                   properties:
+ *                     memo:
+ *                       type: string
+ *                       description: Memo if provided
+ *       400:
+ *         description: Invalid request parameters
+ *       500:
+ *         description: Server error
+ */
+router.post(
+  "/yield/distribute",
+  ensureBTCLockerReady,
+  asyncHandler(async (req, res) => {
+    const {
+      inputs,
+      timelockAddress,
+      amount,
+      privateKey,
+      memo,
+      changeAddress,
+      feeRate = 10,
+      network = "testnet",
+    } = req.body;
+
+    if (!inputs || !timelockAddress || !amount || !privateKey) {
+      return res.status(400).json({
+        error:
+          "Missing required parameters: inputs, timelockAddress, amount, privateKey",
+      });
+    }
+
+    const bitcoin = require("bitcoinjs-lib");
+    const networkObj =
+      network === "mainnet"
+        ? bitcoin.networks.bitcoin
+        : bitcoin.networks.testnet;
+
+    try {
+      const locker = new BTCLocker(networkObj);
+      await locker.init();
+
+      const transaction = await locker.distributeYield({
+        inputs,
+        timelockAddress,
+        amount,
+        privateKey,
+        memo,
+        changeAddress,
+        feeRate,
+      });
+
+      res.json({
+        success: true,
+        data: transaction,
+        message: "Yield distributed successfully",
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        code: "YIELD_DISTRIBUTION_FAILED",
+      });
+    }
+  })
+);
+
 export default router;

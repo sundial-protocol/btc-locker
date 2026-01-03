@@ -1,226 +1,340 @@
 # BTC Locker Demo Server
 
-A comprehensive demo server for the BTC Locker Bitcoin timelock library, featuring a web-based UI that uses the browser bundle for all Bitcoin operations.
+A comprehensive demo server for the BTC Locker Bitcoin timelock library, featuring both interactive Swagger API documentation and traditional JSDoc documentation.
 
 ## Quick Start
 
 ### Option 1: Auto Setup (Recommended)
 
 ```bash
-node start-demo.js
+npm start
 ```
 
 This will automatically:
 
-- Install any missing dependencies (express)
-- Build the browser bundle if needed
 - Start the demo server on http://localhost:3000
+- Load all API endpoints with Swagger documentation
+- Serve JSDoc documentation for the library
+- Provide interactive API testing capabilities
 
-### Option 2: Manual Setup
-
-```bash
-# Install dependencies
-npm install express
-
-# Build the browser bundle
-npm run build
-
-# Start the demo server
-npm run demo
-```
-
-### Option 3: Development Mode
+### Option 2: Development Mode
 
 ```bash
-# Install nodemon for auto-restart
-npm install -g nodemon
-
-# Run in development mode
+# Run in development mode with auto-restart
 npm run demo:dev
 ```
 
 ## Demo Features
 
-### 🌐 Web Interface
+### 🌐 Main Interface
 
-- **Main Demo**: http://localhost:3000
-- Interactive Bitcoin timelock script testing using browser bundle
-- Client-side transaction creation and signing
-- Real-time blockchain interaction (testnet/mainnet)
-- **Browser Bundle**: http://localhost:3000/dist/btc-locker.bundle.js
+- **Home Page**: http://localhost:3000 - Comprehensive overview with links to all features
+- **Interactive Design**: Modern card-based layout with feature highlights
+- **Quick Navigation**: Direct access to all documentation and testing tools
 
-### 📚 Documentation
+### 📚 API Documentation
+
+#### Swagger/OpenAPI Documentation
+
+- **Interactive API Docs**: http://localhost:3000/api-docs
+- **OpenAPI Spec (JSON)**: http://localhost:3000/api-docs.json
+- **Live Testing**: Test all API endpoints directly in the browser
+- **Request/Response Examples**: Comprehensive examples for all operations
+- **Schema Validation**: Real-time validation of API requests
+
+#### Traditional JSDoc Documentation
+
+- **Library Documentation**: http://localhost:3000/docs
+- **Class Documentation**: Complete method and parameter documentation
+- **Code Examples**: Usage examples for all functions
+- **Inheritance Diagrams**: Clear class hierarchy and relationships
+
+### 🔧 API Endpoints
+
+The server provides a comprehensive REST API with the following endpoints:
+
+#### Key Pair Management
+
+- `POST /api/keypair/generate` - Generate new Bitcoin key pairs
+- `POST /api/keypair/from-private-key` - Generate from existing private key
+
+#### Timelock Scripts
+
+- `POST /api/timelock/create` - Create absolute timelock scripts
+- `POST /api/timelock/relative` - Create relative timelock scripts (CSV)
+
+#### Multisig Operations
+
+- `POST /api/multisig/create` - Create M-of-N multisig timelock scripts
+
+#### HODL Scripts
+
+- `POST /api/hodl/create` - Create HODL scripts with emergency escape
+
+#### Transaction Management
+
+- `POST /api/transactions/funding` - Create funding transactions
+- `POST /api/transactions/spending` - Create spending transactions
+
+#### Yield Distribution
+
+- `POST /api/yield/distribute` - Distribute yield to timelock addresses
+
+### 🛠️ Additional Features
+
+#### CLI Tools
 
 - **CLI Documentation**: http://localhost:3000/cli
-- **Example Scripts**: http://localhost:3000/examples/basic-usage.js
+- **Command Examples**: Complete CLI usage examples
+
+#### Testing & Development
+
+- **Test Bundle**: http://localhost:3000/test-bundle
+- **Health Check**: http://localhost:3000/api/health
 - **Bundle Info**: http://localhost:3000/api/bundle-info
 
-## Browser Bundle Usage
+## API Usage Examples
 
-The demo uses the BTC Locker browser bundle which exposes the following APIs:
+### Using Swagger Interactive Documentation
+
+1. Visit http://localhost:3000/api-docs
+2. Browse available endpoints organized by category
+3. Click "Try it out" on any endpoint
+4. Fill in request parameters and body
+5. Execute the request and see live results
+6. Copy generated code snippets for your application
+
+### Direct API Calls
+
+All endpoints accept JSON and return structured responses:
 
 ```javascript
-// Load the bundle
-<script src="/dist/btc-locker.bundle.js"></script>;
+// Generate a new key pair
+const response = await fetch("http://localhost:3000/api/keypair/generate", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ network: "testnet" }),
+});
+const keyPair = await response.json();
 
-// Access the library
-const { BTCLocker, TimeUtils, ScriptUtils, TransactionUtils } =
-  window.BTCLocker;
-
-// Create timelock scripts
-const locker = new BTCLocker("testnet");
-const script = locker.createTimelockScript(publicKey, locktime);
-
-// Generate key pairs
-const keyPair = locker.generateKeyPair();
-
-// Create spending transactions
-const tx = locker.createSpendingTransaction(
-  privateKey,
-  redeemScript,
-  utxos,
-  destinationAddress,
-  amount,
-  locktime
+// Create a timelock script
+const timelockResponse = await fetch(
+  "http://localhost:3000/api/timelock/create",
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      locktime: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
+      publicKey: keyPair.data.publicKey,
+      network: "testnet",
+    }),
+  }
 );
+const script = await timelockResponse.json();
 
-// Distribute yield
-const result = await locker.distributeYield(
-  fromPrivateKey,
-  fromAddress,
-  timelockAddress,
-  yieldAmount,
-  memo
+// Create a spending transaction
+const txResponse = await fetch(
+  "http://localhost:3000/api/transactions/spending",
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      inputs: [{ txid: "abcd...", vout: 0, value: 100000 }],
+      outputs: [{ address: "tb1...", value: 95000 }],
+      redeemScript: script.data.redeemScript,
+      privateKeys: [keyPair.data.privateKey],
+      network: "testnet",
+    }),
+  }
 );
+const transaction = await txResponse.json();
 ```
 
 ## Demo Scenarios
 
-### 1. Basic Timelock Creation
+### 1. Interactive API Testing
 
-1. Visit http://localhost:3000
-2. Use the browser interface to generate key pairs
-3. Create timelock scripts with future timestamps
-4. All operations happen client-side using the browser bundle
+1. Visit the Swagger documentation at http://localhost:3000/api-docs
+2. Explore the available endpoints and their parameters
+3. Use the "Try it out" feature to test endpoints live
+4. Generate key pairs, create scripts, and build transactions
+5. View detailed request/response examples
 
-### 2. Advanced Timelock Testing
+### 2. Traditional Documentation Browse
 
-1. Test different locktime formats (UNIX timestamps, relative times)
-2. Generate and verify redeem scripts
-3. Export timelock addresses for funding
+1. Access JSDoc documentation at http://localhost:3000/docs
+2. Browse class documentation and method signatures
+3. Review code examples and parameter descriptions
+4. Understand the library architecture and inheritance
 
-### 3. Transaction Creation
+### 3. CLI Integration
 
-1. Create spending transactions after locktime expiry
-2. Sign transactions client-side
-3. Export transaction hex for broadcasting
+1. Review CLI documentation at http://localhost:3000/cli
+2. Test command-line operations
+3. Compare CLI and API approaches
 
-## Browser Bundle Architecture
+## Server Architecture
 
-The demo leverages the BTC Locker browser bundle which:
+The demo server provides a comprehensive API and documentation platform:
 
-- Runs entirely in the browser (no server-side Bitcoin operations)
-- Includes all necessary Bitcoin libraries (bitcoinjs-lib, etc.)
-- Provides the same API as the Node.js version
-- Supports both testnet and mainnet
-- Handles all cryptographic operations client-side
+### Express.js Backend
+
+- **RESTful API**: Complete REST API with all BTC Locker functionality
+- **Swagger Integration**: Interactive API documentation with live testing
+- **Static File Serving**: Serves JSDoc documentation and assets
+- **Error Handling**: Comprehensive error responses with proper HTTP codes
+- **CORS Support**: Cross-origin requests for browser testing
+
+### Documentation System
+
+- **Dual Documentation**: Both interactive Swagger and traditional JSDoc
+- **Live Examples**: Working code examples with real responses
+- **Schema Validation**: Request/response validation with detailed schemas
+- **Export Capabilities**: Download OpenAPI specs and code snippets
 
 ## Environment Configuration
-
-The demo server supports the following environment variables:
 
 ```bash
 # Server configuration
 PORT=3000                    # Server port (default: 3000)
-NODE_ENV=demo               # Environment mode
+NODE_ENV=production         # Environment mode
+
+# API configuration
+BITCOIN_NETWORK=testnet     # Default Bitcoin network
 ```
 
 ## Development
 
-The demo server is built with:
-
-- **Express.js** - Web framework for serving static files
-- **BTC Locker Bundle** - Client-side Bitcoin functionality
-- **Static File Serving** - For demo.html and bundle assets
-- **CORS Support** - For browser-based testing
-
 ### File Structure
 
 ```
-├── demo-server.js          # Simple static file server
-├── start-demo.js           # Auto-setup script
-├── demo.html               # Web interface using bundle
-├── dist/                   # Browser bundle
-│   └── btc-locker.bundle.js
-├── src/                    # Source library
+├── demo-server.js          # Express server with API routes
+├── api-routes.js           # REST API endpoint definitions
+├── home.html              # Landing page with feature overview
+├── swagger.config.js       # OpenAPI/Swagger configuration
+├── docs/                   # Generated JSDoc documentation
+├── dist/                   # Built library bundle
 └── examples/               # Usage examples
+```
+
+### API Response Format
+
+All API endpoints return standardized responses:
+
+```javascript
+// Success response
+{
+  "success": true,
+  "data": { /* endpoint-specific data */ },
+  "message": "Operation completed successfully"
+}
+
+// Error response
+{
+  "success": false,
+  "error": "Error description",
+  "code": "ERROR_CODE",
+  "details": { /* additional error context */ }
+}
 ```
 
 ## Security Notes
 
-✅ **Enhanced Security with Browser Bundle**
+✅ **Enhanced Security with Server API**
 
-- All private key operations happen client-side
-- No server-side private key handling
-- Transactions are created and signed in the browser
-- Server only serves static files
+- Server-side validation of all requests
+- Secure private key handling with validation
+- Comprehensive input sanitization
+- Proper error handling without information leakage
+- Rate limiting and request validation
 
 ⚠️ **Testing Guidelines**
 
 - Always use testnet for development and testing
 - Never use real mainnet private keys in demos
-- Browser console may contain sensitive information during development
+- API requests are logged for debugging (avoid sensitive data)
+- Use HTTPS in production environments
 
 ## Troubleshooting
 
 ### Common Issues
 
-**Bundle not found:**
+**Server won't start:**
 
 ```bash
-npm run build
+# Check if port is in use
+netstat -ano | findstr :3000
+# Use different port
+PORT=3001 npm start
 ```
 
-**Port already in use:**
+**Swagger documentation not loading:**
 
 ```bash
-PORT=3001 node start-demo.js
+# Regenerate documentation
+npm run docs
+# Check swagger configuration
+curl http://localhost:3000/api-docs.json
 ```
 
-**Bundle outdated:**
+**API endpoints returning errors:**
 
 ```bash
-npm run build:dev
+# Check server health
+curl http://localhost:3000/api/health
+# View detailed error logs in server console
 ```
 
-### Bundle Information
+### API Testing
 
-Check bundle status:
+Test endpoints with curl:
 
 ```bash
-curl http://localhost:3000/api/bundle-info
+# Health check
+curl http://localhost:3000/api/health
+
+# Generate key pair
+curl -X POST http://localhost:3000/api/keypair/generate \
+  -H "Content-Type: application/json" \
+  -d '{"network":"testnet"}'
+
+# Get OpenAPI specification
+curl http://localhost:3000/api-docs.json
 ```
 
 ### Getting Help
 
-- Check browser console for detailed error messages
-- Visit http://localhost:3000/api/bundle-info for bundle status
-- Review the CLI documentation at http://localhost:3000/cli
-- Inspect the browser bundle at http://localhost:3000/dist/btc-locker.bundle.js
+- **Interactive Docs**: Use Swagger UI at http://localhost:3000/api-docs for live testing
+- **Server Logs**: Check console output for detailed error messages
+- **API Health**: Visit http://localhost:3000/api/health for server status
+- **Documentation**: Browse http://localhost:3000/docs for library documentation
+- **GitHub**: Visit https://github.com/sundial-protocol/btc-locker for issues and updates
 
-## Browser Testing
+## Production Deployment
 
-The bundle can be tested directly in browser console:
+### Environment Setup
 
-```javascript
-// After loading the demo page
-const { BTCLocker } = window.BTCLocker;
-const locker = new BTCLocker("testnet");
-const keyPair = locker.generateKeyPair();
-console.log("Generated key pair:", keyPair);
-
-// Create a timelock for 1 hour from now
-const locktime = Math.floor(Date.now() / 1000) + 3600;
-const script = locker.createTimelockScript(keyPair.publicKey, locktime);
-console.log("Timelock script:", script);
+```bash
+# Production environment
+NODE_ENV=production
+PORT=443
+HTTPS_CERT_PATH=/path/to/cert.pem
+HTTPS_KEY_PATH=/path/to/key.pem
 ```
+
+### Security Considerations
+
+- Enable HTTPS in production
+- Implement rate limiting
+- Add authentication for sensitive endpoints
+- Use environment variables for configuration
+- Monitor API usage and errors
+- Regular security updates
+
+### Scaling
+
+- Use process managers (PM2, forever)
+- Implement load balancing
+- Add monitoring and logging
+- Cache static assets
+- Database integration for persistence

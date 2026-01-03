@@ -18,7 +18,7 @@
     "example": "node examples/basic-usage.js",
     "cli": "node bin/btc-locker",
     "demo": "node demo/demo-server.js",
-    "demo:dev": "nodemon demo/demo-server.js",
+    "demo:dev": "node --watch demo/demo-server.js",
     "start": "node demo/demo-server.js"
   },
   "keywords": [
