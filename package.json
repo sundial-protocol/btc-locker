@@ -1,6 +1,6 @@
 {
   "name": "@sundial-protocol/btc-locker",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "A comprehensive Bitcoin timelock script library for creating and managing time-locked transactions",
   "main": "src/index.js",
   "types": "types/index.d.ts",
