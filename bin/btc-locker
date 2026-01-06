@@ -36,6 +36,46 @@ program
   .description("CLI for Bitcoin timelock script management")
   .version(packageJson.version);
 
+// Custom help with ASCII art
+program.configureHelp({
+  sortSubcommands: true,
+});
+
+// Simple ASCII art display function
+function showAsciiArt() {
+  const asciiArt =
+    chalk.yellow(`
+   _____                 ___       __
+  / ___/__  ______  ____/ (_)___ _/ /
+  \\__ \\/ / / / __ \\/ __  / / __ \`/ / 
+ ___/ / /_/ / / / / /_/ / / /_/ / /  
+/____/\\__,_/_/ /_/\\__,_/_/\\__,_/_/   
+                                     
+`) + chalk.hex("#f7931a")("|₿| Bitcoin Staking & Yield CLI |₿|\n");
+  console.log(asciiArt);
+}
+
+// Override the help command to show ASCII art
+program.addHelpCommand(false); // Disable default help command
+
+program
+  .command("help [command]")
+  .description("display help for command")
+  .action((cmd) => {
+    if (cmd) {
+      const command = program.commands.find((c) => c.name() === cmd);
+      if (command) {
+        showAsciiArt();
+        command.help();
+      } else {
+        console.error(`Unknown command: ${cmd}`);
+      }
+    } else {
+      showAsciiArt();
+      program.outputHelp();
+    }
+  });
+
 // Global options
 program
   .option(
@@ -1432,15 +1472,20 @@ utilsCommand
   });
 
 // Error handling
-program.configureHelp({
-  sortSubcommands: true,
-});
-
 program.on("command:*", function (operands) {
   console.error(chalk.red(`Unknown command: ${operands[0]}`));
   console.log(chalk.yellow('Run "btc-locker --help" for available commands'));
   process.exit(1);
 });
+
+// Check if help should be shown and show ASCII art first
+if (
+  !process.argv.slice(2).length ||
+  process.argv.includes("--help") ||
+  process.argv.includes("-h")
+) {
+  showAsciiArt();
+}
 
 // Parse arguments
 program.parse(process.argv);
@@ -1448,4 +1493,5 @@ program.parse(process.argv);
 // Show help if no command provided
 if (!process.argv.slice(2).length) {
   program.outputHelp();
+  process.exit(0);
 }
