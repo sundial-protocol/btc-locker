@@ -60,7 +60,7 @@ program.addHelpCommand(false); // Disable default help command
 
 program
   .command("help [command]")
-  .description("display help for command")
+  .description("List command parameters or show general help")
   .action((cmd) => {
     if (cmd) {
       const command = program.commands.find((c) => c.name() === cmd);
@@ -215,9 +215,14 @@ program
   });
 
 /**
+ * Scripts command group for constructing various locking scripts
+ */
+const scriptsCommand = program.command("scripts").description("Build locking scripts");
+
+/**
  * Create timelock script command
  */
-program
+scriptsCommand
   .command("timelock")
   .description("Create a timelock script")
   .option(
@@ -308,7 +313,7 @@ program
 /**
  * Create multisig timelock script command
  */
-program
+scriptsCommand
   .command("multisig")
   .description("Create a multisig timelock script")
   .option("-t, --time <time>", "Lock time (Unix timestamp or human readable)")
@@ -393,7 +398,7 @@ program
 /**
  * Create HODL script command
  */
-program
+scriptsCommand
   .command("hodl")
   .description("Create a HODL script with emergency escape")
   .option("-t, --time <time>", "Lock time")
@@ -490,10 +495,12 @@ program
     }
   });
 
+const txCommand = program.command("tx").description("Quick transaction submission tools");
+
 /**
  * Lock funds in timelock script command
  */
-program
+txCommand
   .command("lock")
   .description("Send Bitcoin to a timelock script address")
   .option("-f, --from-key <key>", "Private key to send from (hex)")
@@ -726,7 +733,7 @@ program
 /**
  * Distribute yield back to timelock script command
  */
-program
+txCommand
   .command("distribute")
   .description("Distribute yield or earnings back to a timelock script")
   .option("-f, --from-key <key>", "Private key to send from (hex)")
@@ -963,7 +970,7 @@ program
 /**
  * Spend from timelock script command
  */
-program
+txCommand
   .command("spend")
   .description("Create and broadcast spending transaction from timelock script")
   .option("-a, --address <address>", "Timelock script address to spend from")
@@ -1478,11 +1485,13 @@ program
     }
   });
 
+const inspectCommand = program.command("inspect").description("Inspection utilities");
+
 /**
  * Check if timelock has expired
  */
-program
-  .command("check")
+inspectCommand
+  .command("time")
   .description("Check if a timelock has expired")
   .option("-t, --time <timestamp>", "Timelock timestamp to check")
   .action(async (cmdOptions) => {
@@ -1534,11 +1543,13 @@ program
     }
   });
 
+
+
 /**
  * Inspect address command
  */
-program
-  .command("inspect")
+inspectCommand
+  .command("address")
   .description("Check address balance and UTXOs")
   .option("-a, --address <address>", "Bitcoin address to check")
   .option(
@@ -1640,50 +1651,59 @@ program
 /**
  * Interactive mode
  */
-program
-  .command("interactive")
-  .alias("i")
-  .description("Interactive mode for creating scripts")
-  .action(async () => {
-    const parentOptions = program.opts();
+//program
+//  .command("interactive")
+//  .alias("i")
+//  .description("Interactive mode for creating scripts")
+//  .action(async () => {
+//    const parentOptions = program.opts();
 
-    console.log(chalk.blue("🔒 BTC Locker Interactive Mode"));
-    console.log(chalk.yellow(`Network: ${parentOptions.network}`));
-    console.log("");
+//    console.log(chalk.blue("🔒 BTC Locker Interactive Mode"));
+//    console.log(chalk.yellow(`Network: ${parentOptions.network}`));
+//    console.log("");
 
-    const { action } = await inquirer.prompt([
-      {
-        type: "list",
-        name: "action",
-        message: "What would you like to do?",
-        choices: [
-          { name: "Generate new key pair", value: "keygen" },
-          { name: "Create timelock script", value: "timelock" },
-          { name: "Create multisig timelock script", value: "multisig" },
-          { name: "Create HODL script", value: "hodl" },
-          { name: "Lock funds in timelock script", value: "lock" },
-          { name: "Distribute yield to timelock script", value: "distribute" },
-          { name: "Check timelock status", value: "check" },
-          { name: "Check address balance & UTXOs", value: "inspect" },
-          { name: "Spend from timelock script", value: "spend" },
-          { name: "Sign transaction with private keys", value: "sign" },
-          { name: "Submit/broadcast transaction to network", value: "submit" },
-          { name: "Exit", value: "exit" },
-        ],
-      },
-    ]);
+//    const { action } = await inquirer.prompt([
+//      {
+//        type: "list",
+//        name: "action",
+//        message: "What would you like to do?",
+//        choices: [
+//          { name: "Generate new key pair", value: "keygen" },
+//          { name: "Create timelock script", value: "scripts:timelock" },
+//          { name: "Create multisig timelock script", value: "scripts:multisig" },
+//          { name: "Create HODL script", value: "scripts:hodl" },
+//          { name: "Lock funds in timelock script", value: "lock" },
+//          { name: "Distribute yield to timelock script", value: "distribute" },
+//          { name: "Check timelock status", value: "check" },
+//          { name: "Check address balance & UTXOs", value: "inspect" },
+//          { name: "Spend from timelock script", value: "spend" },
+//          { name: "Sign transaction with private keys", value: "sign" },
+//          { name: "Submit/broadcast transaction to network", value: "submit" },
+//          { name: "Exit", value: "exit" },
+//        ],
+//      },
+//    ]);
 
-    if (action === "exit") {
-      console.log(chalk.blue("Goodbye! 👋"));
-      return;
-    }
+//    if (action === "exit") {
+//      console.log(chalk.blue("Goodbye! 👋"));
+//      return;
+//    }
 
-    // Execute the chosen action
-    const command = program.commands.find((cmd) => cmd.name() === action);
-    if (command) {
-      await command.action({});
-    }
-  });
+//    // Execute the chosen action
+//    if (action.startsWith('scripts:')) {
+//      const subAction = action.split(':')[1];
+//      const scriptsCmd = program.commands.find((cmd) => cmd.name() === 'scripts');
+//      const subCommand = scriptsCmd?.commands?.find((cmd) => cmd.name() === subAction);
+//      if (subCommand) {
+//        await subCommand.action({});
+//      }
+//    } else {
+//      const command = program.commands.find((cmd) => cmd.name() === action);
+//      if (command) {
+//        await command.action({});
+//      }
+//    }
+//  });
 
 /**
  * Utilities command group
