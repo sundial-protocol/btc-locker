@@ -48,11 +48,25 @@
         grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
         gap: 20px;
       }
-    </style>
+      .title {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      </style>
   </head>
   <body>
     <div class="header">
-      <h1>🔐 BTC Locker</h1>
+      <div class="title">
+        <img
+          src="./logo_rd.png"
+          alt="BTC Locker Logo"
+          width="50"
+        />
+        <h1>BTC Locker</h1>
+      </div>
+
       <p>
         A comprehensive Bitcoin timelock script library for creating and
         managing time-locked transactions
