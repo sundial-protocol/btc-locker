@@ -9,6 +9,7 @@ import { MultisigTimelockManager } from "./multisig.js";
 import { HodlScriptCreator } from "./hodl.js";
 import { TransactionManager } from "./transactions.js";
 import { YieldDistributor } from "./yield.js";
+import { EscrowManager } from "./escrow.js";
 
 /**
  * Combined BTCLocker class that includes all functionality
@@ -36,6 +37,7 @@ export class BTCLocker extends BTCLockerCore {
     this.hodlCreator = new HodlScriptCreator(this.network);
     this.transactionManager = new TransactionManager(this.network);
     this.yieldDistributor = new YieldDistributor(this.network);
+    this.escrowManager = new EscrowManager(this.network);
   }
 
   /**
@@ -57,6 +59,7 @@ export class BTCLocker extends BTCLockerCore {
       this.hodlCreator.init(),
       this.transactionManager.init(),
       this.yieldDistributor.init(),
+      this.escrowManager.init(),
     ]);
   }
 
@@ -271,6 +274,84 @@ export class BTCLocker extends BTCLockerCore {
   }
 
   /**
+   * Create a time-based escrow script
+   * @async
+   * @param {number} deadline - Unix timestamp deadline
+   * @param {Buffer|string} beforePublicKey - Public key of user who can withdraw before deadline
+   * @param {Buffer|string} afterPublicKey - Public key of user who can withdraw after deadline
+   * @returns {Promise<Object>} Script details object
+   * @returns {string} returns.redeemScript - Redeem script in hex format
+   * @returns {string} returns.scriptHash - Script hash in hex format
+   * @returns {string} returns.address - P2SH address for the script
+   * @returns {number} returns.deadline - The deadline timestamp
+   * @returns {string} returns.beforePublicKey - Public key for before-deadline withdrawals
+   * @returns {string} returns.afterPublicKey - Public key for after-deadline withdrawals
+   * @returns {string} returns.type - Script type identifier
+   * @throws {Error} If deadline or public keys are invalid
+   * @example
+   * const locker = new BTCLocker();
+   * const script = await locker.createEscrowScript(
+   *   1640995200,
+   *   userAPublicKey,
+   *   userBPublicKey
+   * );
+   * console.log(script.address);
+   */
+  async createEscrowScript(deadline, beforePublicKey, afterPublicKey) {
+    return this.escrowManager.createEscrowScript(deadline, beforePublicKey, afterPublicKey);
+  }
+
+  /**
+   * Create a spending transaction for the escrow script
+   * @async
+   * @param {Object} scriptData - Script data returned from createEscrowScript
+   * @param {string} utxoTxId - Transaction ID of the UTXO to spend
+   * @param {number} utxoIndex - Output index of the UTXO to spend
+   * @param {number} amount - Amount in satoshis to spend
+   * @param {string} outputAddress - Address to send funds to
+   * @param {boolean} spendAfterDeadline - Whether to spend after deadline (true) or before (false)
+   * @param {Buffer|string} privateKey - Private key corresponding to the appropriate public key
+   * @param {number} [currentTime] - Current time for validation (defaults to Date.now())
+   * @returns {Promise<Object>} Transaction details
+   * @returns {string} returns.txHex - Raw transaction in hex format
+   * @returns {string} returns.txId - Transaction ID
+   * @throws {Error} If spending conditions are not met or transaction creation fails
+   * @example
+   * const locker = new BTCLocker();
+   * // Spend before deadline
+   * const tx = await locker.createEscrowSpendingTransaction(
+   *   scriptData,
+   *   utxoTxId,
+   *   0,
+   *   100000,
+   *   "tb1qaddr...",
+   *   false,
+   *   beforeUserPrivateKey
+   * );
+   */
+  async createEscrowSpendingTransaction(
+    scriptData,
+    utxoTxId,
+    utxoIndex,
+    amount,
+    outputAddress,
+    spendAfterDeadline,
+    privateKey,
+    currentTime
+  ) {
+    return this.escrowManager.createEscrowSpendingTransaction(
+      scriptData,
+      utxoTxId,
+      utxoIndex,
+      amount,
+      outputAddress,
+      spendAfterDeadline,
+      privateKey,
+      currentTime
+    );
+  }
+
+  /**
    * Distribute yield back to a timelock script
    * @async
    * @param {Object} params - Distribution parameters
@@ -313,5 +394,6 @@ export { MultisigTimelockManager } from "./multisig.js";
 export { HodlScriptCreator } from "./hodl.js";
 export { TransactionManager } from "./transactions.js";
 export { YieldDistributor } from "./yield.js";
+export { EscrowManager } from "./escrow.js";
 
 export default BTCLocker;

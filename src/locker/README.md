@@ -1,7 +1,5 @@
 # BTCLocker Modular Architecture
 
-The BTCLocker library has been refactored into a modular architecture for better organization, maintainability, and flexibility. Each major functionality is now in its own dedicated file.
-
 ## File Structure
 
 ```
@@ -10,6 +8,7 @@ src/locker/
 ├── keypair.js        # Key pair generation functionality
 ├── timelock.js       # Simple and relative timelock script creation
 ├── multisig.js       # Multisig timelock script creation
+├── escrow.js         # Time-based escrow scripts (dual-party withdrawals)
 ├── hodl.js           # HODL script with emergency escape
 ├── transactions.js   # Transaction creation and spending
 ├── yield.js          # Yield distribution functionality
@@ -43,20 +42,27 @@ src/locker/
 - Public key management
 - Multisig script compilation
 
-### 5. HodlScriptCreator (`hodl.js`)
+### 5. EscrowManager (`escrow.js`)
+
+- Time-based escrow scripts with dual-party access
+- Before-deadline withdrawals by first party
+- After-deadline withdrawals by second party
+- Conditional script execution
+
+### 6. HodlScriptCreator (`hodl.js`)
 
 - HODL scripts with emergency escape
 - Conditional script paths
 - Owner and penalty key management
 
-### 6. TransactionManager (`transactions.js`)
+### 7. TransactionManager (`transactions.js`)
 
 - Spending transaction creation
 - Funding transaction creation
 - PSBT and raw transaction handling
 - Timelock expiry validation
 
-### 7. YieldDistributor (`yield.js`)
+### 8. YieldDistributor (`yield.js`)
 
 - Yield distribution to timelock addresses
 - Change calculation and dust handling
@@ -72,6 +78,7 @@ import { createBTCLocker } from "./src/index.js";
 const locker = await createBTCLocker("testnet");
 await locker.generateKeyPair();
 await locker.createTimelockScript(locktime, publicKey);
+await locker.createEscrowScript(deadline, beforePubKey, afterPubKey);
 await locker.distributeYield(params);
 ```
 
@@ -81,6 +88,7 @@ await locker.distributeYield(params);
 import {
   KeyPairGenerator,
   TimelockScriptCreator,
+  EscrowManager,
   YieldDistributor,
 } from "./src/locker/index.js";
 
@@ -91,6 +99,10 @@ const keyPair = await keyGen.generateKeyPair();
 const timelockCreator = new TimelockScriptCreator(network);
 await timelockCreator.init();
 const script = await timelockCreator.createTimelockScript(locktime, publicKey);
+
+const escrowManager = new EscrowManager(network);
+await escrowManager.init();
+const escrowScript = await escrowManager.createEscrowScript(deadline, beforePubKey, afterPubKey);
 ```
 
 ## Benefits
