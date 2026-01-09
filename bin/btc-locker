@@ -31,7 +31,6 @@ const program = new Command();
 // Configure CLI
 program
   .name("btc-locker")
-  .description("CLI for Bitcoin timelock script management")
   .version(packageJson.version);
 
 // Custom help with ASCII art
@@ -42,22 +41,23 @@ program.configureHelp({
 // Simple ASCII art display function
 export function showAsciiArt() {
   const asciiArt =
-    chalk.yellow(`                                                                                                    
-                    +=                                         
-                   *@+                                         
-                 =%@@+                                         
-                *@@@@+                                         
-             =#@@@@@@+                                         
-            +@@@@@@@@+                                         
-         =@@@@@@@@@@@+      _____                 ___       __              
-        #@@@@@@@@@@@@+     / ___/__  ______  ____/ (_)___ _/ /                                         
-      =%@@@@@@@@@@@@@+     \\__ \\/ / / / __ \\/ __  / / __ \`/ /                                         
-     *@@@@@@@@@@@@@@@+    ___/ / /_/ / / / / /_/ / / /_/ / /                                        
-   =#@@@@@@@@@@@@@@@@+   /____/\\__,_/_/ /_/\\__,_/_/\\__,_/_/                                        
-        =++**********+=                                        
-               ==++****++                                     
-                      ===++                                                                                                                                                                                                                                
-`) + chalk.hex("#f7931a")("|₿| BTC Locker: Bitcoin Staking & Yield CLI |₿|\n");
+    chalk.hex("#FFB70A")(`
+      
+              *@                      
+            =@@@                      
+           +@@@@                      
+          %@@@@@                      
+        =@@@@@@@      _____                 ___       __                       
+       %@@@@@@@@     / ___/__  ______  ____/ (_)___ _/ /
+     =@@@@@@@@@@     \\__ \\/ / / / __ \\/ __  / / __ \`/ /   
+    #@@@@@@@@@@@    ___/ / /_/ / / / / /_/ / / /_/ / / 
+  =@@@@@@@@@@@@@   /____/\\__,_/_/ /_/\\__,_/_/\\__,_/_/`) +
+  chalk.hex("#704f00")(`
+  +*************=                     
+        ==+******+                   
+                =++*=                
+                    +=                                                                                                                                                                                                                                                                    
+`) + chalk.hex("#FFB70A")(" |₿| Sundial BTC Locker: Bitcoin Staking & Yield CLI |₿|\n");
   console.log(asciiArt);
 }
 
@@ -86,7 +86,7 @@ program
 program
   .option(
     "-n, --network <network>",
-    "Bitcoin network (mainnet|testnet)",
+    "Bitcoin network",
     "testnet"
   )
   .option("-v, --verbose", "Enable verbose logging")
