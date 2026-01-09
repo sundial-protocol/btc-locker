@@ -5,7 +5,8 @@
 import inquirer from "inquirer";
 import chalk from "chalk";
 import { initLocker, displayResult } from "./shared.js";
-import { TimeUtils, ScriptUtils } from "../../src/index.js";
+import { ScriptUtils } from "../../src/index.js";
+import { validateLocktime, parseLocktime } from "../locktime.js";
 
 /**
  * Setup scripts commands
@@ -40,12 +41,7 @@ export function setupScriptsCommands(program) {
             message:
               'Enter locktime (Unix timestamp or duration like "1 week", "30 days"):',
             when: () => !locktime,
-            validate: (input) => {
-              if (input.match(/^\\d+$/)) return true;
-              if (input.match(/^\\d+\\s*(minute|hour|day|week|month|year)s?$/i))
-                return true;
-              return 'Please enter a Unix timestamp or duration like "1 week"';
-            },
+            validate: validateLocktime
           },
           {
             type: "input",
@@ -62,30 +58,7 @@ export function setupScriptsCommands(program) {
       }
 
       // Parse human-readable time
-      if (!locktime.match(/^\\d+$/)) {
-        const match = locktime.match(
-          /^(\\d+)\\s*(minute|hour|day|week|month|year)s?$/i
-        );
-        if (match) {
-          const amount = parseInt(match[1]);
-          const unit = match[2].toLowerCase();
-          const unitMap = {
-            minute: TimeUtils.DURATIONS.MINUTE,
-            hour: TimeUtils.DURATIONS.HOUR,
-            day: TimeUtils.DURATIONS.DAY,
-            week: TimeUtils.DURATIONS.WEEK,
-            month: TimeUtils.DURATIONS.MONTH,
-            year: TimeUtils.DURATIONS.YEAR,
-          };
-          const duration = amount * unitMap[unit];
-          locktime = TimeUtils.addDuration(duration);
-        } else {
-          console.error(chalk.red("Invalid time format"));
-          return;
-        }
-      } else {
-        locktime = parseInt(locktime);
-      }
+      locktime = parseLocktime(locktime);
 
       try {
         const script = await locker.createTimelockScript(locktime, publicKey);
@@ -149,27 +122,8 @@ export function setupScriptsCommands(program) {
       // Parse inputs
       const publicKeys = pubkeys.split(",").map((k) => k.trim());
 
-      if (!locktime.match(/^\\d+$/)) {
-        const match = locktime.match(
-          /^(\\d+)\\s*(minute|hour|day|week|month|year)s?$/i
-        );
-        if (match) {
-          const amount = parseInt(match[1]);
-          const unit = match[2].toLowerCase();
-          const unitMap = {
-            minute: TimeUtils.DURATIONS.MINUTE,
-            hour: TimeUtils.DURATIONS.HOUR,
-            day: TimeUtils.DURATIONS.DAY,
-            week: TimeUtils.DURATIONS.WEEK,
-            month: TimeUtils.DURATIONS.MONTH,
-            year: TimeUtils.DURATIONS.YEAR,
-          };
-          const duration = amount * unitMap[unit];
-          locktime = TimeUtils.addDuration(duration);
-        }
-      } else {
-        locktime = parseInt(locktime);
-      }
+      // Parse locktime
+      locktime = parseLocktime(locktime);
 
       try {
         const script = locker.createMultisigTimelockScript(
@@ -239,27 +193,7 @@ export function setupScriptsCommands(program) {
       }
 
       // Parse time
-      if (!locktime.match(/^\\d+$/)) {
-        const match = locktime.match(
-          /^(\\d+)\\s*(minute|hour|day|week|month|year)s?$/i
-        );
-        if (match) {
-          const amount = parseInt(match[1]);
-          const unit = match[2].toLowerCase();
-          const unitMap = {
-            minute: TimeUtils.DURATIONS.MINUTE,
-            hour: TimeUtils.DURATIONS.HOUR,
-            day: TimeUtils.DURATIONS.DAY,
-            week: TimeUtils.DURATIONS.WEEK,
-            month: TimeUtils.DURATIONS.MONTH,
-            year: TimeUtils.DURATIONS.YEAR,
-          };
-          const duration = amount * unitMap[unit];
-          locktime = TimeUtils.addDuration(duration);
-        }
-      } else {
-        locktime = parseInt(locktime);
-      }
+      locktime = parseLocktime(locktime);
 
       try {
         const script = locker.createHodlScript(

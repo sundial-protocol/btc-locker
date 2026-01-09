@@ -4,11 +4,9 @@
 
 import inquirer from "inquirer";
 import chalk from "chalk";
-import fs from "fs";
-import * as bitcoin from "bitcoinjs-lib";
-import { displayResult } from "./shared.js";
 import { ScriptUtils, TransactionUtils } from "../../src/index.js";
 import BitcoinAPI from "../../src/bitcoin-api.js";
+import { initLocker, displayResult } from "./shared.js";
 
 /**
  * Setup transaction commands
@@ -66,18 +64,659 @@ export function setupTransactionCommands(program) {
     });
 }
 
-// Handler functions would go here - for brevity I'm showing the structure
 async function handleLockCommand(cmdOptions, parentOptions) {
-  // Implementation from original file
-  console.log("Lock command implementation would go here");
+  const locker = await initLocker(parentOptions);
+  const api = new BitcoinAPI(parentOptions.network);
+
+  let fromPrivateKey = cmdOptions.fromKey;
+  let toAddress = cmdOptions.to;
+  let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
+  let feeAmount = parseInt(cmdOptions.fee);
+
+  // Interactive prompts if options not provided
+  if (!fromPrivateKey || !toAddress || !amount) {
+    const answers = await inquirer.prompt([
+      {
+        type: "input",
+        name: "fromPrivateKey",
+        message: "Enter private key to send from (hex):",
+        when: () => !fromPrivateKey,
+        validate: (input) =>
+          ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
+      },
+      {
+        type: "input",
+        name: "toAddress",
+        message: "Enter timelock script address to send to:",
+        when: () => !toAddress,
+        validate: (input) =>
+          ScriptUtils.isValidAddress(input) || "Invalid address",
+      },
+      {
+        type: "input",
+        name: "amount",
+        message: "Enter amount to send (in satoshis):",
+        when: () => !amount,
+        validate: (input) => {
+          const num = parseInt(input);
+          return (num > 0 && num < 21000000 * 100000000) || "Invalid amount";
+        },
+      },
+    ]);
+
+    fromPrivateKey = fromPrivateKey || answers.fromPrivateKey;
+    toAddress = toAddress || answers.toAddress;
+    amount = amount || parseInt(answers.amount);
+  }
+
+  try {
+    // Generate address from private key to check balance
+    const keyPair = await locker.generateKeyPairFromPrivateKey(
+      fromPrivateKey
+    );
+    const fromAddress = keyPair.address;
+
+    console.log(chalk.blue(`Checking balance for ${fromAddress}...`));
+
+    // Get UTXOs for the source address
+    const utxos = await api.getAddressUtxos(fromAddress);
+    const confirmedUtxos = utxos.filter((u) => u.status.confirmed);
+
+    if (confirmedUtxos.length === 0) {
+      console.log(
+        chalk.yellow("⚠️  No confirmed UTXOs found at source address")
+      );
+      if (parentOptions.network === "testnet") {
+        console.log(
+          chalk.blue(
+            "Get testnet coins from: https://coinfaucet.eu/en/btc-testnet/"
+          )
+        );
+      }
+      return;
+    }
+
+    // Calculate total available
+    const totalInputValue = confirmedUtxos.reduce(
+      (sum, utxo) => sum + utxo.value,
+      0
+    );
+    const totalRequired = amount + feeAmount;
+
+    if (totalInputValue < totalRequired) {
+      console.log(
+        chalk.red(
+          `❌ Insufficient funds. Have ${totalInputValue} sat, need ${totalRequired} sat`
+        )
+      );
+      return;
+    }
+
+    // Calculate change
+    const changeAmount = totalInputValue - totalRequired;
+
+    console.log(chalk.blue("Creating locking transaction..."));
+
+    // Create the locking transaction
+    const txInputs = confirmedUtxos.map((utxo) => ({
+      txid: utxo.txid,
+      vout: utxo.vout,
+      value: utxo.value,
+      address: fromAddress,
+    }));
+
+    const outputs = [
+      {
+        address: toAddress,
+        value: amount,
+      },
+    ];
+
+    // Add change output if needed
+    if (changeAmount > 546) {
+      // Dust threshold
+      outputs.push({
+        address: fromAddress,
+        value: changeAmount,
+      });
+    } else if (changeAmount > 0) {
+      // Add dust to fee
+      feeAmount += changeAmount;
+      console.log(
+        chalk.yellow(
+          `Adding ${changeAmount} sat dust to fee (total fee: ${feeAmount} sat)`
+        )
+      );
+    }
+
+    const lockingTx = locker.createFundingTransaction({
+      inputs: txInputs,
+      outputs: outputs,
+      privateKey: fromPrivateKey,
+    });
+
+    const result = {
+      transaction: {
+        hex: lockingTx.toHex(),
+        txid: lockingTx.getId(),
+        size: lockingTx.byteLength(),
+        fee: feeAmount,
+        fee_rate: (feeAmount / lockingTx.byteLength()).toFixed(2),
+      },
+      inputs: {
+        count: confirmedUtxos.length,
+        total_value: totalInputValue,
+        total_btc: TransactionUtils.satoshisToBTC(totalInputValue),
+      },
+      outputs: {
+        timelock_address: toAddress,
+        locked_amount: amount,
+        locked_btc: TransactionUtils.satoshisToBTC(amount),
+        change_amount: changeAmount > 546 ? changeAmount : 0,
+        change_btc:
+          changeAmount > 546
+            ? TransactionUtils.satoshisToBTC(changeAmount)
+            : 0,
+      },
+    };
+
+    displayResult(result, parentOptions, "Locking Transaction Created");
+
+    if (cmdOptions.dryRun) {
+      console.log(chalk.yellow("🔍 Dry run - transaction not broadcasted"));
+      console.log(chalk.blue(`Transaction hex: ${lockingTx.toHex()}`));
+      return;
+    }
+
+    // Ask for confirmation before broadcasting
+    const { confirm } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "confirm",
+        message: `Lock ${TransactionUtils.satoshisToBTC(
+          amount
+        )} BTC in timelock script with ${feeAmount} sat fee?`,
+        default: false,
+      },
+    ]);
+
+    if (!confirm) {
+      console.log(chalk.yellow("⏹️  Transaction cancelled"));
+      return;
+    }
+
+    console.log(chalk.blue("Broadcasting transaction..."));
+
+    // Broadcast the transaction
+    const broadcastResult = await api.broadcastTransaction(lockingTx.toHex());
+
+    console.log(chalk.green("✅ Funds locked successfully!"));
+    console.log(
+      chalk.blue(
+        `Transaction ID: ${broadcastResult.txid || lockingTx.getId()}`
+      )
+    );
+    console.log(
+      chalk.yellow(
+        `Locked ${TransactionUtils.satoshisToBTC(
+          amount
+        )} BTC in: ${toAddress}`
+      )
+    );
+
+    if (parentOptions.network === "testnet") {
+      console.log(
+        chalk.blue(
+          `View on explorer: https://mempool.space/testnet/tx/${lockingTx.getId()}`
+        )
+      );
+    } else {
+      console.log(
+        chalk.blue(
+          `View on explorer: https://mempool.space/tx/${lockingTx.getId()}`
+        )
+      );
+    }
+  } catch (error) {
+    console.error(chalk.red(`Error: ${error.message}`));
+    if (parentOptions.verbose) {
+      console.error(error.stack);
+    }
+  }
 }
 
 async function handleDistributeCommand(cmdOptions, parentOptions) {
-  // Implementation from original file
-  console.log("Distribute command implementation would go here");
+    const locker = await initLocker(parentOptions);
+    const api = new BitcoinAPI(parentOptions.network);
+
+    let fromPrivateKey = cmdOptions.fromKey;
+    let toAddress = cmdOptions.to;
+    let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
+    let memo = cmdOptions.memo;
+
+    // Interactive prompts if options not provided
+    if (!fromPrivateKey || !toAddress || !amount) {
+      const answers = await inquirer.prompt([
+        {
+          type: "input",
+          name: "fromPrivateKey",
+          message: "Enter private key to send yield from (hex):",
+          when: () => !fromPrivateKey,
+          validate: (input) =>
+            ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
+        },
+        {
+          type: "input",
+          name: "toAddress",
+          message: "Enter timelock script address to distribute yield to:",
+          when: () => !toAddress,
+          validate: (input) =>
+            ScriptUtils.isValidAddress(input) || "Invalid address",
+        },
+        {
+          type: "input",
+          name: "amount",
+          message: "Enter amount to distribute (in satoshis):",
+          when: () => !amount,
+          validate: (input) => {
+            const num = parseInt(input);
+            return (num > 0 && num < 21000000 * 100000000) || "Invalid amount";
+          },
+        },
+        {
+          type: "input",
+          name: "memo",
+          message: "Enter optional memo for this distribution:",
+          when: () => !memo,
+        },
+      ]);
+
+      fromPrivateKey = fromPrivateKey || answers.fromPrivateKey;
+      toAddress = toAddress || answers.toAddress;
+      amount = amount || parseInt(answers.amount);
+      memo = memo || answers.memo;
+    }
+
+    try {
+      // Generate address from private key to check balance
+      const keyPair = await locker.generateKeyPairFromPrivateKey(
+        fromPrivateKey
+      );
+      const fromAddress = keyPair.address;
+
+      console.log(chalk.blue(`Checking balance for ${fromAddress}...`));
+
+      // Get UTXOs for the source address
+      const utxos = await api.getAddressUtxos(fromAddress);
+      const confirmedUtxos = utxos.filter((u) => u.status.confirmed);
+
+      if (confirmedUtxos.length === 0) {
+        console.log(
+          chalk.yellow("⚠️  No confirmed UTXOs found at source address")
+        );
+        if (parentOptions.network === "testnet") {
+          console.log(
+            chalk.blue(
+              "Get testnet coins from: https://coinfaucet.eu/en/btc-testnet/"
+            )
+          );
+        }
+        return;
+      }
+
+      // Calculate total available
+      const totalInputValue = confirmedUtxos.reduce(
+        (sum, utxo) => sum + utxo.value,
+        0
+      );
+      const totalRequired = amount + 1000; // Use default fee for validation
+
+      if (totalInputValue < totalRequired) {
+        console.log(
+          chalk.red(
+            `❌ Insufficient funds. Have ${totalInputValue} sat, need ${totalRequired} sat`
+          )
+        );
+        return;
+      }
+
+      console.log(chalk.blue("Creating yield distribution transaction..."));
+
+      // Create the distribution transaction using the distributeYield method
+      const txInputs = confirmedUtxos.map((utxo) => ({
+        txid: utxo.txid,
+        vout: utxo.vout,
+        value: utxo.value,
+      }));
+
+      const distributionResult = locker.distributeYield({
+        inputs: txInputs,
+        timelockAddress: toAddress,
+        amount: amount,
+        privateKey: fromPrivateKey,
+        memo: memo,
+      });
+
+      const result = {
+        transaction: {
+          hex: distributionResult.hex,
+          txid: distributionResult.txid,
+          size: distributionResult.size,
+          fee: distributionResult.fee,
+          fee_rate: (distributionResult.fee / distributionResult.size).toFixed(
+            2
+          ),
+        },
+        inputs: {
+          count: confirmedUtxos.length,
+          total_value: totalInputValue,
+          total_btc: TransactionUtils.satoshisToBTC(totalInputValue),
+        },
+        outputs: {
+          timelock_address: toAddress,
+          distributed_amount: distributionResult.distribution.amount,
+          distributed_btc: TransactionUtils.satoshisToBTC(
+            distributionResult.distribution.amount
+          ),
+          change_amount: distributionResult.distribution.change,
+          change_btc: TransactionUtils.satoshisToBTC(
+            distributionResult.distribution.change
+          ),
+        },
+        memo: distributionResult.memo,
+      };
+
+      displayResult(
+        result,
+        parentOptions,
+        "Yield Distribution Transaction Created"
+      );
+
+      if (cmdOptions.dryRun) {
+        console.log(chalk.yellow("🔍 Dry run - transaction not broadcasted"));
+        console.log(chalk.blue(`Transaction hex: ${distributionResult.hex}`));
+        return;
+      }
+
+      // Ask for confirmation before broadcasting
+      const confirmationMessage = memo
+        ? `Distribute ${TransactionUtils.satoshisToBTC(
+            distributionResult.distribution.amount
+          )} BTC yield to timelock with ${
+            distributionResult.fee
+          } sat fee?\nMemo: ${memo}`
+        : `Distribute ${TransactionUtils.satoshisToBTC(
+            distributionResult.distribution.amount
+          )} BTC yield to timelock with ${distributionResult.fee} sat fee?`;
+
+      const { confirm } = await inquirer.prompt([
+        {
+          type: "confirm",
+          name: "confirm",
+          message: confirmationMessage,
+          default: false,
+        },
+      ]);
+
+      if (!confirm) {
+        console.log(chalk.yellow("⏹️  Distribution cancelled"));
+        return;
+      }
+
+      console.log(chalk.blue("Broadcasting distribution transaction..."));
+
+      // Broadcast the transaction
+      const broadcastResult = await api.broadcastTransaction(
+        distributionResult.hex
+      );
+
+      console.log(chalk.green("✅ Yield distributed successfully!"));
+      console.log(
+        chalk.blue(
+          `Transaction ID: ${broadcastResult.txid || distributionResult.txid}`
+        )
+      );
+      console.log(
+        chalk.yellow(
+          `Distributed ${TransactionUtils.satoshisToBTC(
+            distributionResult.distribution.amount
+          )} BTC yield to: ${toAddress}`
+        )
+      );
+
+      if (memo) {
+        console.log(chalk.cyan(`📝 Memo: ${memo}`));
+      }
+
+      if (parentOptions.network === "testnet") {
+        console.log(
+          chalk.blue(
+            `View on explorer: https://mempool.space/testnet/tx/${distributionResult.txid}`
+          )
+        );
+      } else {
+        console.log(
+          chalk.blue(
+            `View on explorer: https://mempool.space/tx/${distributionResult.txid}`
+          )
+        );
+      }
+    } catch (error) {
+      console.error(chalk.red(`Error: ${error.message}`));
+      if (parentOptions.verbose) {
+        console.error(error.stack);
+      }
+    }
 }
 
 async function handleSpendCommand(cmdOptions, parentOptions) {
-  // Implementation from original file  
-  console.log("Spend command implementation would go here");
+  const locker = await initLocker(parentOptions);
+  const api = new BitcoinAPI(parentOptions.network);
+
+  let scriptAddress = cmdOptions.address;
+  let redeemScript = cmdOptions.script;
+  let privateKey = cmdOptions.key;
+  let destinationAddress = cmdOptions.to;
+  let feeAmount = parseInt(cmdOptions.fee);
+  let emergencyKey = cmdOptions.emergencyKey;
+
+  // Interactive prompts if options not provided
+  if (!scriptAddress || !redeemScript || !privateKey || !destinationAddress) {
+    const answers = await inquirer.prompt([
+      {
+        type: "input",
+        name: "scriptAddress",
+        message: "Enter timelock script address to spend from:",
+        when: () => !scriptAddress,
+        validate: (input) =>
+          ScriptUtils.isValidAddress(input) || "Invalid address",
+      },
+      {
+        type: "input",
+        name: "redeemScript",
+        message: "Enter redeem script (hex):",
+        when: () => !redeemScript,
+        validate: (input) => input.length > 0 || "Redeem script required",
+      },
+      {
+        type: "input",
+        name: "privateKey",
+        message: "Enter private key (hex):",
+        when: () => !privateKey,
+        validate: (input) =>
+          ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
+      },
+      {
+        type: "input",
+        name: "destinationAddress",
+        message: "Enter destination address:",
+        when: () => !destinationAddress,
+        validate: (input) =>
+          ScriptUtils.isValidAddress(input) || "Invalid address",
+      },
+      {
+        type: "confirm",
+        name: "needEmergencyKey",
+        message: "Is this a HODL script requiring emergency key?",
+        when: () => !emergencyKey,
+      },
+      {
+        type: "input",
+        name: "emergencyKey",
+        message: "Enter emergency private key (hex):",
+        when: (answers) => answers.needEmergencyKey && !emergencyKey,
+        validate: (input) =>
+          ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
+      },
+    ]);
+
+    scriptAddress = scriptAddress || answers.scriptAddress;
+    redeemScript = redeemScript || answers.redeemScript;
+    privateKey = privateKey || answers.privateKey;
+    destinationAddress = destinationAddress || answers.destinationAddress;
+    emergencyKey = emergencyKey || answers.emergencyKey;
+  }
+
+  try {
+    console.log(chalk.blue(`Checking UTXOs for ${scriptAddress}...`));
+
+    // Get UTXOs for the script address
+    let utxos;
+    try {
+      utxos = await api.getAddressUtxos(scriptAddress);
+    } catch (apiError) {
+      console.error(chalk.red(`Failed to get UTXOs: ${apiError.message}`));
+      return;
+    }
+
+    if (!utxos || !Array.isArray(utxos)) {
+      console.error(chalk.red("Invalid UTXO response from API"));
+      return;
+    }
+
+    const confirmedUtxos = utxos.filter(
+      (u) => u.status && u.status.confirmed
+    );
+
+    if (confirmedUtxos.length === 0) {
+      console.log(
+        chalk.yellow("⚠️  No confirmed UTXOs found at this address")
+      );
+      return;
+    }
+
+    // Calculate total available and output amount
+    const totalInputValue = confirmedUtxos.reduce(
+      (sum, utxo) => sum + utxo.value,
+      0
+    );
+    const outputValue = totalInputValue - feeAmount;
+
+    if (outputValue <= 0) {
+      console.log(chalk.red("❌ Fee amount exceeds available balance"));
+      return;
+    }
+
+    console.log(chalk.blue("Creating spending transaction..."));
+
+    // Create the spending transaction
+    const txInputs = confirmedUtxos.map((utxo) => ({
+      txid: utxo.txid,
+      vout: utxo.vout,
+      value: utxo.value,
+      scriptPubKey: null, // Will be set by the library
+    }));
+
+    const txParams = {
+      inputs: txInputs,
+      outputs: [
+        {
+          address: destinationAddress,
+          value: outputValue,
+        },
+      ],
+      redeemScript,
+      privateKeys: emergencyKey ? [privateKey, emergencyKey] : [privateKey],
+    };
+
+    const spendingTx = locker.createSpendingTransaction(txParams);
+
+    const result = {
+      transaction: {
+        hex: spendingTx.toHex(),
+        txid: spendingTx.getId(),
+        size: spendingTx.byteLength(),
+        fee: feeAmount,
+        fee_rate: (feeAmount / spendingTx.byteLength()).toFixed(2),
+      },
+      inputs: {
+        count: confirmedUtxos.length,
+        total_value: totalInputValue,
+        total_btc: TransactionUtils.satoshisToBTC(totalInputValue),
+      },
+      outputs: {
+        destination: destinationAddress,
+        value: outputValue,
+        value_btc: TransactionUtils.satoshisToBTC(outputValue),
+      },
+    };
+
+    displayResult(result, parentOptions, "Spending Transaction Created");
+
+    if (cmdOptions.dryRun) {
+      console.log(chalk.yellow("🔍 Dry run - transaction not broadcasted"));
+      console.log(chalk.blue(`Transaction hex: ${spendingTx.toHex()}`));
+      return;
+    }
+
+    // Ask for confirmation before broadcasting
+    const { confirm } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "confirm",
+        message: `Broadcast transaction spending ${TransactionUtils.satoshisToBTC(
+          totalInputValue
+        )} BTC with ${feeAmount} sat fee?`,
+        default: false,
+      },
+    ]);
+
+    if (!confirm) {
+      console.log(chalk.yellow("⏹️  Transaction cancelled"));
+      return;
+    }
+
+    console.log(chalk.blue("Broadcasting transaction..."));
+
+    // Broadcast the transaction
+    const broadcastResult = await api.broadcastTransaction(
+      spendingTx.toHex()
+    );
+
+    console.log(chalk.green("✅ Transaction broadcasted successfully!"));
+    console.log(
+      chalk.blue(
+        `Transaction ID: ${broadcastResult.txid || spendingTx.getId()}`
+      )
+    );
+
+    if (parentOptions.network === "testnet") {
+      console.log(
+        chalk.blue(
+          `View on explorer: https://mempool.space/testnet/tx/${spendingTx.getId()}`
+        )
+      );
+    } else {
+      console.log(
+        chalk.blue(
+          `View on explorer: https://mempool.space/tx/${spendingTx.getId()}`
+        )
+      );
+    }
+  } catch (error) {
+    console.error(chalk.red(`Error: ${error.message}`));
+    if (parentOptions.verbose) {
+      console.error(error.stack);
+    }
+  }
 }
