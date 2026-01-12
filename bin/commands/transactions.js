@@ -62,6 +62,25 @@ export function setupTransactionCommands(program) {
       const parentOptions = program.opts();
       await handleSpendCommand(cmdOptions, parentOptions);
     });
+
+  /**
+   * Dawn Protocol staking command
+   */
+  txCommand
+    .command("dawn-stake")
+    .description("Create Dawn Protocol staking transaction")
+    .option("-f, --from-key <key>", "Private key to send from (hex)")
+    .option("-e, --escrow-address <address>", "Escrow script address")
+    .option("--escrow-amount <satoshis>", "Amount to send to escrow (satoshis)")
+    .option("-t, --timelock-address <address>", "Timelock script address")
+    .option("--timelock-amount <satoshis>", "Amount to send to timelock (satoshis)")
+    .option("-c, --change-address <address>", "Change address (optional)")
+    .option("--fee-rate <rate>", "Fee rate in sat/byte", "10")
+    .option("--dry-run", "Create transaction but don't broadcast")
+    .action(async (cmdOptions) => {
+      const parentOptions = program.opts();
+      await handleDawnStakeCommand(cmdOptions, parentOptions);
+    });
 }
 
 async function handleLockCommand(cmdOptions, parentOptions) {
@@ -713,6 +732,240 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
         )
       );
     }
+  } catch (error) {
+    console.error(chalk.red(`Error: ${error.message}`));
+    if (parentOptions.verbose) {
+      console.error(error.stack);
+    }
+  }
+}
+
+async function handleDawnStakeCommand(cmdOptions, parentOptions) {
+  const locker = await initLocker(parentOptions);
+  const api = new BitcoinAPI(parentOptions.network);
+
+  let fromPrivateKey = cmdOptions.fromKey;
+  let escrowAddress = cmdOptions.escrowAddress;
+  let escrowAmount = cmdOptions.escrowAmount ? parseInt(cmdOptions.escrowAmount) : null;
+  let timelockAddress = cmdOptions.timelockAddress;
+  let timelockAmount = cmdOptions.timelockAmount ? parseInt(cmdOptions.timelockAmount) : null;
+  let changeAddress = cmdOptions.changeAddress;
+  let feeRate = parseInt(cmdOptions.feeRate);
+
+  try {
+    // Interactive prompts if options not provided
+    if (!fromPrivateKey || !escrowAddress || !escrowAmount || !timelockAddress || !timelockAmount) {
+      const answers = await inquirer.prompt([
+        {
+          type: "input",
+          name: "fromPrivateKey",
+          message: "Enter private key to send from (hex):",
+          when: () => !fromPrivateKey,
+          validate: (input) =>
+            ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
+        },
+        {
+          type: "input",
+          name: "escrowAddress",
+          message: "Enter escrow script address:",
+          when: () => !escrowAddress,
+          validate: (input) =>
+            ScriptUtils.isValidAddress(input) || "Invalid address",
+        },
+        {
+          type: "input",
+          name: "escrowAmount",
+          message: "Enter amount to send to escrow (satoshis):",
+          when: () => !escrowAmount,
+          validate: (input) => {
+            const amount = parseInt(input);
+            return (!isNaN(amount) && amount > 0) || "Amount must be a positive integer";
+          },
+        },
+        {
+          type: "input",
+          name: "timelockAddress",
+          message: "Enter timelock script address:",
+          when: () => !timelockAddress,
+          validate: (input) =>
+            ScriptUtils.isValidAddress(input) || "Invalid address",
+        },
+        {
+          type: "input",
+          name: "timelockAmount",
+          message: "Enter amount to send to timelock (satoshis):",
+          when: () => !timelockAmount,
+          validate: (input) => {
+            const amount = parseInt(input);
+            return (!isNaN(amount) && amount > 0) || "Amount must be a positive integer";
+          },
+        },
+        {
+          type: "input",
+          name: "changeAddress",
+          message: "Enter change address (optional, press enter to skip):",
+          when: () => !changeAddress,
+          validate: (input) =>
+            !input || ScriptUtils.isValidAddress(input) || "Invalid address",
+        },
+      ]);
+
+      fromPrivateKey = fromPrivateKey || answers.fromPrivateKey;
+      escrowAddress = escrowAddress || answers.escrowAddress;
+      escrowAmount = escrowAmount || parseInt(answers.escrowAmount);
+      timelockAddress = timelockAddress || answers.timelockAddress;
+      timelockAmount = timelockAmount || parseInt(answers.timelockAmount);
+      changeAddress = changeAddress || answers.changeAddress || undefined;
+    }
+
+    // Generate key pair from private key
+    const fromKeyPair = await locker.generateKeyPairFromPrivateKey(fromPrivateKey);
+    console.log(chalk.yellow(`Sending from address: ${fromKeyPair.address}`));
+
+    // Get UTXOs for the from address
+    console.log(chalk.cyan("Fetching UTXOs..."));
+    const utxos = await api.getUTXOs(fromKeyPair.address);
+    
+    if (!utxos || utxos.length === 0) {
+      throw new Error(`No UTXOs found for address ${fromKeyPair.address}`);
+    }
+
+    // Filter confirmed UTXOs
+    const confirmedUtxos = utxos.filter(utxo => utxo.status?.confirmed);
+    if (confirmedUtxos.length === 0) {
+      throw new Error("No confirmed UTXOs available");
+    }
+
+    console.log(chalk.green(`Found ${confirmedUtxos.length} confirmed UTXOs`));
+
+    // Convert UTXOs to the expected format
+    const txInputs = confirmedUtxos.map(utxo => ({
+      txid: utxo.txid,
+      vout: utxo.vout,
+      value: utxo.value
+    }));
+
+    const totalInputValue = txInputs.reduce((sum, input) => sum + input.value, 0);
+
+    // Check if we have sufficient funds
+    const totalRequired = escrowAmount + timelockAmount;
+    const estimatedFee = (10 + txInputs.length * 148 + (changeAddress ? 3 : 2) * 34 + 20) * feeRate;
+
+    if (totalInputValue < totalRequired + estimatedFee) {
+      throw new Error(
+        `Insufficient funds. Have: ${totalInputValue} sats, Need: ${totalRequired + estimatedFee} sats (${totalRequired} + ${estimatedFee} fee)`
+      );
+    }
+
+    console.log(chalk.cyan("Creating Dawn staking transaction..."));
+
+    // Calculate optimal amounts
+    const calculation = await locker.calculateDawnStakingAmounts({
+      inputs: txInputs,
+      desiredEscrowAmount: escrowAmount,
+      desiredTimelockAmount: timelockAmount,
+      includeChange: !!changeAddress,
+      feeRate
+    });
+
+    if (!calculation.feasible) {
+      throw new Error(`Transaction not feasible: ${calculation.recommendation}`);
+    }
+
+    console.log(chalk.gray("Transaction calculation:"));
+    console.log(chalk.gray(`  Total input: ${calculation.totalInputValue} sats`));
+    console.log(chalk.gray(`  Escrow amount: ${escrowAmount} sats`));
+    console.log(chalk.gray(`  Timelock amount: ${timelockAmount} sats`));
+    console.log(chalk.gray(`  Estimated fee: ${calculation.estimatedFee} sats`));
+    console.log(chalk.gray(`  Change: ${calculation.changeAmount} sats`));
+
+    // Create the Dawn staking transaction
+    const stakingTx = await locker.createDawnStakingTransaction({
+      inputs: txInputs,
+      escrowAddress,
+      escrowAmount,
+      timelockAddress,
+      timelockAmount,
+      changeAddress: changeAddress && calculation.changeAmount >= 546 ? changeAddress : undefined,
+      privateKey: fromPrivateKey,
+      feeRate
+    });
+
+    // Display transaction details
+    const result = {
+      transaction: {
+        hex: stakingTx.hex,
+        txid: stakingTx.txid,
+        size: stakingTx.size,
+        fee: stakingTx.fee,
+        fee_rate: (stakingTx.fee / stakingTx.size).toFixed(2),
+      },
+      inputs: {
+        count: txInputs.length,
+        total_value: totalInputValue,
+        total_btc: TransactionUtils.satoshisToBTC(totalInputValue),
+      },
+      outputs: {
+        escrow: {
+          address: escrowAddress,
+          amount: stakingTx.outputs.escrowAmount,
+          btc: TransactionUtils.satoshisToBTC(stakingTx.outputs.escrowAmount),
+        },
+        timelock: {
+          address: timelockAddress,
+          amount: stakingTx.outputs.timelockAmount,
+          btc: TransactionUtils.satoshisToBTC(stakingTx.outputs.timelockAmount),
+        },
+      },
+    };
+
+    if (stakingTx.outputs.changeAmount > 0) {
+      result.outputs.change = {
+        address: changeAddress,
+        amount: stakingTx.outputs.changeAmount,
+        btc: TransactionUtils.satoshisToBTC(stakingTx.outputs.changeAmount),
+      };
+    }
+
+    displayResult(result, parentOptions, "Dawn Staking Transaction Created");
+
+    if (!parentOptions.json) {
+      console.log();
+      console.log(chalk.yellow("Output Summary:"));
+      console.log(chalk.green(`  → Escrow: ${TransactionUtils.satoshisToBTC(stakingTx.outputs.escrowAmount)} BTC to ${escrowAddress}`));
+      console.log(chalk.green(`  → Timelock: ${TransactionUtils.satoshisToBTC(stakingTx.outputs.timelockAmount)} BTC to ${timelockAddress}`));
+      
+      if (stakingTx.outputs.changeAmount > 0) {
+        console.log(chalk.green(`  → Change: ${TransactionUtils.satoshisToBTC(stakingTx.outputs.changeAmount)} BTC to ${changeAddress}`));
+      }
+
+      console.log(chalk.cyan(`Total Fee: ${TransactionUtils.satoshisToBTC(stakingTx.fee)} BTC (${(stakingTx.fee / stakingTx.size).toFixed(2)} sat/byte)`));
+    }
+
+    if (!cmdOptions.dryRun) {
+      console.log(chalk.cyan("\nBroadcasting transaction..."));
+      const txid = await api.broadcastTransaction(stakingTx.hex);
+      console.log(chalk.green(`✓ Transaction broadcasted successfully!`));
+      console.log(chalk.blue(`Transaction ID: ${txid}`));
+
+      if (parentOptions.network === "testnet") {
+        console.log(
+          chalk.blue(
+            `View on explorer: https://mempool.space/testnet/tx/${txid}`
+          )
+        );
+      } else {
+        console.log(
+          chalk.blue(
+            `View on explorer: https://mempool.space/tx/${txid}`
+          )
+        );
+      }
+    } else {
+      console.log(chalk.yellow("\n⚠️  DRY RUN: Transaction not broadcasted"));
+      console.log(chalk.gray("Use without --dry-run flag to actually send the transaction"));
+    }
+
   } catch (error) {
     console.error(chalk.red(`Error: ${error.message}`));
     if (parentOptions.verbose) {

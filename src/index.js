@@ -13,6 +13,7 @@ import {
   HodlScriptCreator,
   TransactionManager,
   YieldDistributor,
+  DawnStakingManager,
 } from "./locker/index.js";
 import {
   TimeUtils,
@@ -68,6 +69,7 @@ export default {
   HodlScriptCreator,
   TransactionManager,
   YieldDistributor,
+  DawnStakingManager,
   createBTCLocker,
   TimeUtils,
   ScriptUtils,

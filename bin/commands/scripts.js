@@ -222,4 +222,93 @@ export function setupScriptsCommands(program) {
         console.error(chalk.red(`Error: ${error.message}`));
       }
     });
+
+  /**
+   * Create escrow script command
+   */
+  scriptsCommand
+    .command("escrow")
+    .description("Create a time-based escrow script")
+    .option("-d, --deadline <time>", "Deadline (Unix timestamp or human readable)")
+    .option("-b, --before-key <pubkey>", "Public key for before-deadline withdrawals")
+    .option("-a, --after-key <pubkey>", "Public key for after-deadline withdrawals")
+    .action(async (cmdOptions) => {
+      const parentOptions = program.opts();
+      const locker = await initLocker(parentOptions);
+
+      let deadline = cmdOptions.deadline;
+      let beforePublicKey = cmdOptions.beforeKey;
+      let afterPublicKey = cmdOptions.afterKey;
+
+      // Interactive prompts if options not provided
+      if (!deadline || !beforePublicKey || !afterPublicKey) {
+        const answers = await inquirer.prompt([
+          {
+            type: "input",
+            name: "deadline",
+            message:
+              'Enter deadline (Unix timestamp or duration like "1 week", "30 days"):',
+            when: () => !deadline,
+            validate: validateLocktime
+          },
+          {
+            type: "input",
+            name: "beforePublicKey",
+            message: "Enter public key for before-deadline withdrawals (hex):",
+            when: () => !beforePublicKey,
+            validate: (input) =>
+              ScriptUtils.isValidPublicKey(input) || "Invalid public key format",
+          },
+          {
+            type: "input",
+            name: "afterPublicKey",
+            message: "Enter public key for after-deadline withdrawals (hex):",
+            when: () => !afterPublicKey,
+            validate: (input) => {
+              if (!ScriptUtils.isValidPublicKey(input)) {
+                return "Invalid public key format";
+              }
+              if (beforePublicKey && input === beforePublicKey) {
+                return "After-deadline key must be different from before-deadline key";
+              }
+              return true;
+            },
+          },
+        ]);
+
+        deadline = deadline || answers.deadline;
+        beforePublicKey = beforePublicKey || answers.beforePublicKey;
+        afterPublicKey = afterPublicKey || answers.afterPublicKey;
+      }
+
+      // Validate that keys are different
+      if (beforePublicKey === afterPublicKey) {
+        console.error(chalk.red("Error: Before-deadline and after-deadline public keys must be different"));
+        return;
+      }
+
+      // Parse human-readable time
+      deadline = parseLocktime(deadline);
+
+      try {
+        const script = await locker.createEscrowScript(deadline, beforePublicKey, afterPublicKey);
+        script.deadline_readable = new Date(deadline * 1000).toISOString();
+
+        displayResult(script, parentOptions, "Escrow Script Created");
+
+        if (!parentOptions.json) {
+          console.log(chalk.yellow(`Send Bitcoin to: ${script.address}`));
+          console.log(chalk.yellow(`Deadline: ${script.deadline_readable}`));
+          console.log();
+          console.log(chalk.cyan("Withdrawal Options:"));
+          console.log(chalk.green("• Before deadline: Use before-deadline key only"));
+          console.log(chalk.green("• After deadline: Use after-deadline key only"));
+          console.log();
+          console.log(chalk.gray(`Before-deadline key: ${beforePublicKey}`));
+          console.log(chalk.gray(`After-deadline key: ${afterPublicKey}`));
+        }
+      } catch (error) {
+        console.error(chalk.red(`Error: ${error.message}`));
+      }
+    });
 }

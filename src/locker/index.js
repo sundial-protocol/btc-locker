@@ -10,6 +10,7 @@ import { HodlScriptCreator } from "./hodl.js";
 import { TransactionManager } from "./transactions.js";
 import { YieldDistributor } from "./yield.js";
 import { EscrowManager } from "./escrow.js";
+import { DawnStakingManager } from "./dawn-stake.js";
 
 /**
  * Combined BTCLocker class that includes all functionality
@@ -38,6 +39,7 @@ export class BTCLocker extends BTCLockerCore {
     this.transactionManager = new TransactionManager(this.network);
     this.yieldDistributor = new YieldDistributor(this.network);
     this.escrowManager = new EscrowManager(this.network);
+    this.dawnStakingManager = new DawnStakingManager(this.network);
   }
 
   /**
@@ -60,6 +62,7 @@ export class BTCLocker extends BTCLockerCore {
       this.transactionManager.init(),
       this.yieldDistributor.init(),
       this.escrowManager.init(),
+      this.dawnStakingManager.init(),
     ]);
   }
 
@@ -384,6 +387,92 @@ export class BTCLocker extends BTCLockerCore {
   async distributeYield(params) {
     return this.yieldDistributor.distributeYield(params);
   }
+
+  /**
+   * Create a Dawn Protocol staking transaction
+   * @async
+   * @param {Object} params - Dawn staking parameters
+   * @param {Array<Object>} params.inputs - Input UTXOs to spend from
+   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
+   * @param {number} params.inputs[].vout - Output index of the UTXO
+   * @param {number} params.inputs[].value - Value in satoshis
+   * @param {string} params.escrowAddress - Address of the escrow script
+   * @param {number} params.escrowAmount - Amount to send to escrow (satoshis)
+   * @param {string} params.timelockAddress - Address of the configurable timelock script
+   * @param {number} params.timelockAmount - Amount to send to timelock script (satoshis)
+   * @param {string} [params.changeAddress] - Address for change (optional)
+   * @param {string} params.privateKey - Private key for signing inputs (hex format)
+   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
+   * @returns {Promise<Object>} Dawn staking transaction details
+   * @example
+   * const locker = new BTCLocker();
+   * const tx = await locker.createDawnStakingTransaction({
+   *   inputs: [{ txid: '...', vout: 0, value: 500000 }],
+   *   escrowAddress: '3ABC123...',
+   *   escrowAmount: 100000,
+   *   timelockAddress: '3XYZ789...',
+   *   timelockAmount: 200000,
+   *   privateKey: '...'
+   * });
+   */
+  async createDawnStakingTransaction(params) {
+    return this.dawnStakingManager.createDawnStakingTransaction(params);
+  }
+
+  /**
+   * Create a Dawn Protocol staking transaction using timelock script data
+   * @async
+   * @param {Object} params - Dawn staking parameters with script data
+   * @param {Array<Object>} params.inputs - Input UTXOs to spend from
+   * @param {string} params.escrowAddress - Address of the escrow script
+   * @param {number} params.escrowAmount - Amount to send to escrow (satoshis)
+   * @param {Object} params.timelockScript - Timelock script data object
+   * @param {string} params.timelockScript.address - Address of the timelock script
+   * @param {number} params.timelockScript.locktime - Locktime of the script
+   * @param {string} params.timelockScript.type - Type of timelock script
+   * @param {number} params.timelockAmount - Amount to send to timelock script (satoshis)
+   * @param {string} [params.changeAddress] - Address for change (optional)
+   * @param {string} params.privateKey - Private key for signing inputs (hex format)
+   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
+   * @returns {Promise<Object>} Dawn staking transaction details with script info
+   * @example
+   * const locker = new BTCLocker();
+   * const timelockScript = await locker.createTimelockScript(locktime, publicKey);
+   * const tx = await locker.createDawnStakingTransactionWithScript({
+   *   inputs: [{ txid: '...', vout: 0, value: 500000 }],
+   *   escrowAddress: '3ABC123...',
+   *   escrowAmount: 100000,
+   *   timelockScript: timelockScript,
+   *   timelockAmount: 200000,
+   *   privateKey: '...'
+   * });
+   */
+  async createDawnStakingTransactionWithScript(params) {
+    return this.dawnStakingManager.createDawnStakingTransactionWithScript(params);
+  }
+
+  /**
+   * Calculate optimal amounts for Dawn staking
+   * @async
+   * @param {Object} params - Calculation parameters
+   * @param {Array<Object>} params.inputs - Input UTXOs
+   * @param {number} params.inputs[].value - UTXO value in satoshis
+   * @param {number} params.desiredEscrowAmount - Desired escrow amount
+   * @param {number} params.desiredTimelockAmount - Desired timelock amount
+   * @param {boolean} [params.includeChange=false] - Whether to include change output
+   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
+   * @returns {Promise<Object>} Calculation results
+   * @example
+   * const locker = new BTCLocker();
+   * const calculation = await locker.calculateDawnStakingAmounts({
+   *   inputs: [{ value: 500000 }],
+   *   desiredEscrowAmount: 100000,
+   *   desiredTimelockAmount: 200000
+   * });
+   */
+  async calculateDawnStakingAmounts(params) {
+    return this.dawnStakingManager.calculateDawnStakingAmounts(params);
+  }
 }
 
 // Export all individual components for modular usage
@@ -395,5 +484,6 @@ export { HodlScriptCreator } from "./hodl.js";
 export { TransactionManager } from "./transactions.js";
 export { YieldDistributor } from "./yield.js";
 export { EscrowManager } from "./escrow.js";
+export { DawnStakingManager } from "./dawn-stake.js";
 
 export default BTCLocker;
