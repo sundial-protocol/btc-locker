@@ -2,6 +2,7 @@
  * Transaction commands for the BTC Locker CLI
  */
 
+import * as bitcoin from "bitcoinjs-lib";
 import inquirer from "inquirer";
 import chalk from "chalk";
 import { ScriptUtils, TransactionUtils } from "../../src/index.js";
@@ -87,6 +88,11 @@ async function handleLockCommand(cmdOptions, parentOptions) {
   const locker = await initLocker(parentOptions);
   const api = new BitcoinAPI(parentOptions.network);
 
+  // Get network for validation
+  const network = parentOptions.network === "mainnet" 
+    ? bitcoin.networks.bitcoin 
+    : bitcoin.networks.testnet;
+
   let fromPrivateKey = cmdOptions.fromKey;
   let toAddress = cmdOptions.to;
   let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
@@ -109,7 +115,7 @@ async function handleLockCommand(cmdOptions, parentOptions) {
         message: "Enter timelock script address to send to:",
         when: () => !toAddress,
         validate: (input) =>
-          ScriptUtils.isValidAddress(input) || "Invalid address",
+          ScriptUtils.isValidAddress(input, network) || "Invalid address",
       },
       {
         type: "input",
@@ -308,6 +314,11 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
     const locker = await initLocker(parentOptions);
     const api = new BitcoinAPI(parentOptions.network);
 
+    // Get network for validation
+    const network = parentOptions.network === "mainnet" 
+      ? bitcoin.networks.bitcoin 
+      : bitcoin.networks.testnet;
+
     let fromPrivateKey = cmdOptions.fromKey;
     let toAddress = cmdOptions.to;
     let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
@@ -330,7 +341,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
           message: "Enter timelock script address to distribute yield to:",
           when: () => !toAddress,
           validate: (input) =>
-            ScriptUtils.isValidAddress(input) || "Invalid address",
+            ScriptUtils.isValidAddress(input, network) || "Invalid address",
         },
         {
           type: "input",
@@ -532,6 +543,11 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
   const locker = await initLocker(parentOptions);
   const api = new BitcoinAPI(parentOptions.network);
 
+  // Get network for validation
+  const network = parentOptions.network === "mainnet" 
+    ? bitcoin.networks.bitcoin 
+    : bitcoin.networks.testnet;
+
   let scriptAddress = cmdOptions.address;
   let redeemScript = cmdOptions.script;
   let privateKey = cmdOptions.key;
@@ -548,7 +564,7 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
         message: "Enter timelock script address to spend from:",
         when: () => !scriptAddress,
         validate: (input) =>
-          ScriptUtils.isValidAddress(input) || "Invalid address",
+          ScriptUtils.isValidAddress(input, network) || "Invalid address",
       },
       {
         type: "input",
@@ -571,7 +587,7 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
         message: "Enter destination address:",
         when: () => !destinationAddress,
         validate: (input) =>
-          ScriptUtils.isValidAddress(input) || "Invalid address",
+          ScriptUtils.isValidAddress(input, network) || "Invalid address",
       },
       {
         type: "confirm",
@@ -743,6 +759,11 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
 async function handleDawnStakeCommand(cmdOptions, parentOptions) {
   const locker = await initLocker(parentOptions);
   const api = new BitcoinAPI(parentOptions.network);
+  
+  // Get network for validation
+  const network = parentOptions.network === "mainnet" 
+    ? bitcoin.networks.bitcoin 
+    : bitcoin.networks.testnet;
 
   let fromPrivateKey = cmdOptions.fromKey;
   let escrowAddress = cmdOptions.escrowAddress;
@@ -770,7 +791,7 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
           message: "Enter escrow script address:",
           when: () => !escrowAddress,
           validate: (input) =>
-            ScriptUtils.isValidAddress(input) || "Invalid address",
+            ScriptUtils.isValidAddress(input, network) || "Invalid address",
         },
         {
           type: "input",
@@ -788,7 +809,7 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
           message: "Enter timelock script address:",
           when: () => !timelockAddress,
           validate: (input) =>
-            ScriptUtils.isValidAddress(input) || "Invalid address",
+            ScriptUtils.isValidAddress(input, network) || "Invalid address",
         },
         {
           type: "input",
@@ -806,7 +827,7 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
           message: "Enter change address (optional, press enter to skip):",
           when: () => !changeAddress,
           validate: (input) =>
-            !input || ScriptUtils.isValidAddress(input) || "Invalid address",
+            !input || ScriptUtils.isValidAddress(input, network) || "Invalid address",
         },
       ]);
 

@@ -2,6 +2,7 @@
  * Inspect commands for the BTC Locker CLI
  */
 
+import * as bitcoin from "bitcoinjs-lib";
 import inquirer from "inquirer";
 import chalk from "chalk";
 import { initLocker, displayResult } from "./shared.js";
@@ -85,6 +86,11 @@ export function setupInspectCommands(program) {
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
       const api = new BitcoinAPI(parentOptions.network, cmdOptions.api);
+      
+      // Get network for validation
+      const network = parentOptions.network === "mainnet" 
+        ? bitcoin.networks.bitcoin 
+        : bitcoin.networks.testnet;
 
       let address = cmdOptions.address;
 
@@ -95,7 +101,7 @@ export function setupInspectCommands(program) {
             name: "address",
             message: "Enter Bitcoin address to check:",
             validate: (input) =>
-              ScriptUtils.isValidAddress(input) || "Invalid Bitcoin address",
+              ScriptUtils.isValidAddress(input, network) || "Invalid Bitcoin address",
           },
         ]);
         address = answer.address;
@@ -106,10 +112,11 @@ export function setupInspectCommands(program) {
           chalk.blue(`Checking ${address} on ${parentOptions.network}...`)
         );
 
-        const [addressInfo, utxos, feeEstimates] = await Promise.all([
+        const [addressInfo, utxos, feeEstimates, currentBlockHeight] = await Promise.all([
           api.getAddressInfo(address),
           api.getAddressUtxos(address),
           api.getFeeEstimates(),
+          api.getBlockHeight(),
         ]);
 
         const totalBalance =
@@ -152,11 +159,16 @@ export function setupInspectCommands(program) {
               confirmed: utxo.status.confirmed,
               block_height: utxo.status.block_height || null,
               confirmations: utxo.status.confirmed 
-                ? (addressInfo.chain_stats.block_height || 0) - (utxo.status.block_height || 0) + 1
+                ? (currentBlockHeight || 0) - (utxo.status.block_height || 0) + 1
                 : 0,
             })),
           },
-          fee_estimates: feeEstimates,
+          fee_estimates: {
+            high_priority: `${feeEstimates["1"] || "N/A"} sat/vB (~10 min, 1 block)`,
+            medium_priority: `${feeEstimates["6"] || "N/A"} sat/vB (~1 hour, 6 blocks)`,
+            low_priority: `${feeEstimates["144"] || "N/A"} sat/vB (~1 day, 144 blocks)`,
+            very_low_priority: `${feeEstimates["504"] || "N/A"} sat/vB (~3.5 days, 500 blocks)`
+          },
         };
 
         displayResult(result, parentOptions, "Address Information");

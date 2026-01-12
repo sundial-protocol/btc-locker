@@ -26,12 +26,33 @@ export function displayResult(data, options, title) {
   } else {
     console.log(chalk.green(`\n${title}`));
     console.log(chalk.blue("=".repeat(50)));
+    
+    const displayValue = (value, indent = 0) => {
+      const spacing = "  ".repeat(indent);
+      
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          console.log(`${spacing}[${index}]:`);
+          displayValue(item, indent + 1);
+        });
+      } else if (typeof value === "object" && value !== null) {
+        Object.entries(value).forEach(([subKey, subValue]) => {
+          if (typeof subValue === "object" && subValue !== null) {
+            console.log(`${spacing}${subKey}:`);
+            displayValue(subValue, indent + 1);
+          } else {
+            console.log(`${spacing}${subKey}: ${subValue}`);
+          }
+        });
+      } else {
+        console.log(`${spacing}${value}`);
+      }
+    };
+    
     Object.entries(data).forEach(([key, value]) => {
       if (typeof value === "object" && value !== null) {
         console.log(chalk.yellow(`${key}:`));
-        Object.entries(value).forEach(([subKey, subValue]) => {
-          console.log(`  ${subKey}: ${subValue}`);
-        });
+        displayValue(value, 1);
       } else {
         console.log(`${key}: ${value}`);
       }
