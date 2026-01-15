@@ -1,6 +1,6 @@
 {
   "name": "@sundial-protocol/btc-locker",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A comprehensive Bitcoin timelock script library for creating and managing time-locked transactions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -106,7 +106,9 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "extensionsToTreatAsEsm": [".ts"],
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
     "globals": {
       "ts-jest": {
         "useESM": true
@@ -115,7 +117,9 @@
     "transform": {
       "^.+\\.ts$": "ts-jest"
     },
-    "testMatch": ["**/*.test.ts"],
+    "testMatch": [
+      "**/*.test.ts"
+    ],
     "collectCoverage": true,
     "coverageDirectory": "coverage",
     "coverageReporters": [
@@ -140,7 +144,9 @@
       "@typescript-eslint/recommended"
     ],
     "parser": "@typescript-eslint/parser",
-    "plugins": ["@typescript-eslint"],
+    "plugins": [
+      "@typescript-eslint"
+    ],
     "parserOptions": {
       "ecmaVersion": 12,
       "sourceType": "module"
