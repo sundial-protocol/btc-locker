@@ -8,8 +8,8 @@ import fs from "fs";
 import path from "path";
 import * as bitcoin from "bitcoinjs-lib";
 import { initLocker, displayResult } from "./shared.js";
-import { ScriptUtils, TransactionUtils } from "../../src/index.js";
-import BitcoinAPI from "../../src/bitcoin-api.js";
+import { ScriptUtils, TransactionUtils } from "../../dist/index.js";
+import BitcoinAPI from "../../dist/bitcoin-api.js";
 
 /**
  * Format key pair data for file output

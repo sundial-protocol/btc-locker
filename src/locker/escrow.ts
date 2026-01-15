@@ -5,6 +5,12 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore, getECC } from "./core.js";
+import type { ScriptInfo } from "../types.js";
+
+interface EscrowSpendingTransaction {
+  txHex: string;
+  txId: string;
+}
 
 /**
  * Time-based escrow script management class
@@ -16,18 +22,11 @@ export class EscrowManager extends BTCLockerCore {
   /**
    * Create a time-based escrow script
    * @async
-   * @param {number} deadline - Unix timestamp deadline
-   * @param {Buffer|string} beforePublicKey - Public key of user who can withdraw before deadline
-   * @param {Buffer|string} afterPublicKey - Public key of user who can withdraw after deadline
-   * @returns {Promise<Object>} Script details object
-   * @returns {string} returns.redeemScript - Redeem script in hex format
-   * @returns {string} returns.scriptHash - Script hash in hex format
-   * @returns {string} returns.address - P2SH address for the script
-   * @returns {number} returns.deadline - The deadline timestamp
-   * @returns {string} returns.beforePublicKey - Public key for before-deadline withdrawals
-   * @returns {string} returns.afterPublicKey - Public key for after-deadline withdrawals
-   * @returns {string} returns.type - Script type identifier
-   * @throws {Error} If deadline or public keys are invalid
+   * @param deadline - Unix timestamp deadline
+   * @param beforePublicKey - Public key of user who can withdraw before deadline
+   * @param afterPublicKey - Public key of user who can withdraw after deadline
+   * @returns Script details object
+   * @throws If deadline or public keys are invalid
    * @example
    * const escrow = new EscrowManager();
    * const script = await escrow.createEscrowScript(
@@ -37,7 +36,7 @@ export class EscrowManager extends BTCLockerCore {
    * );
    * console.log(script.address);
    */
-  async createEscrowScript(deadline, beforePublicKey, afterPublicKey) {
+  async createEscrowScript(deadline: number, beforePublicKey: Buffer | string, afterPublicKey: Buffer | string): Promise<ScriptInfo> {
     await this.ensureInitialized();
 
     // Validate deadline
@@ -85,38 +84,36 @@ export class EscrowManager extends BTCLockerCore {
       const address = bitcoin.payments.p2sh({
         hash: scriptHash,
         network: this.network,
-      }).address;
+      }).address!;
 
       return {
-        redeemScript: redeemScript.toString("hex"),
-        scriptHash: scriptHash.toString("hex"),
+        redeemScript: Buffer.from(redeemScript).toString("hex"),
+        scriptHash: Buffer.from(scriptHash).toString("hex"),
         address,
-        deadline: deadlineNumber,
+        type: "time-escrow",
+        locktime: deadlineNumber,
         beforePublicKey: beforePubKeyBuffer.toString("hex"),
         afterPublicKey: afterPubKeyBuffer.toString("hex"),
-        type: "time-escrow",
       };
     } catch (error) {
-      throw new Error(`Failed to create escrow script: ${error.message}`);
+      throw new Error(`Failed to create escrow script: ${(error as Error).message}`);
     }
   }
 
   /**
    * Create a spending transaction for the escrow script
    * @async
-   * @param {Object} scriptData - Script data returned from createEscrowScript
-   * @param {string} utxoTxId - Transaction ID of the UTXO to spend
-   * @param {number} utxoIndex - Output index of the UTXO to spend
-   * @param {number} amount - Amount in satoshis to spend
-   * @param {string} outputAddress - Address to send funds to
-   * @param {boolean} spendAfterDeadline - Whether to spend after deadline (true) or before (false)
-   * @param {Buffer|string} privateKey - Private key corresponding to the appropriate public key
-   * @param {number} [currentTime] - Current time for validation (defaults to Date.now())
-   * @param {Buffer} [previousTransaction] - Previous transaction buffer (for testing/validation)
-   * @returns {Promise<Object>} Transaction details
-   * @returns {string} returns.txHex - Raw transaction in hex format
-   * @returns {string} returns.txId - Transaction ID
-   * @throws {Error} If spending conditions are not met or transaction creation fails
+   * @param scriptData - Script data returned from createEscrowScript
+   * @param utxoTxId - Transaction ID of the UTXO to spend
+   * @param utxoIndex - Output index of the UTXO to spend
+   * @param amount - Amount in satoshis to spend
+   * @param outputAddress - Address to send funds to
+   * @param spendAfterDeadline - Whether to spend after deadline (true) or before (false)
+   * @param privateKey - Private key corresponding to the appropriate public key
+   * @param currentTime - Current time for validation (defaults to Date.now())
+   * @param previousTransaction - Previous transaction buffer (for testing/validation)
+   * @returns Transaction details
+   * @throws If spending conditions are not met or transaction creation fails
    * @example
    * // Spend before deadline
    * const tx = await escrow.createEscrowSpendingTransaction(
@@ -142,16 +139,16 @@ export class EscrowManager extends BTCLockerCore {
    * );
    */
   async createEscrowSpendingTransaction(
-    scriptData,
-    utxoTxId,
-    utxoIndex,
-    amount,
-    outputAddress,
-    spendAfterDeadline,
-    privateKey,
-    currentTime = Date.now(),
-    previousTransaction = null
-  ) {
+    scriptData: ScriptInfo,
+    utxoTxId: string,
+    utxoIndex: number,
+    amount: number,
+    outputAddress: string,
+    spendAfterDeadline: boolean,
+    privateKey: Buffer | string,
+    currentTime: number = Date.now(),
+    previousTransaction: Buffer | null = null
+  ): Promise<EscrowSpendingTransaction> {
     await this.ensureInitialized();
 
     // Validate inputs
@@ -176,7 +173,7 @@ export class EscrowManager extends BTCLockerCore {
     }
 
     // Convert private key to ECPair
-    let keyPair;
+    let keyPair: any;
     try {
       const { ECPair } = getECC();
       if (typeof privateKey === "string") {
@@ -187,7 +184,7 @@ export class EscrowManager extends BTCLockerCore {
         throw new Error("privateKey must be a string or Buffer");
       }
     } catch (error) {
-      throw new Error(`Invalid private key: ${error.message}`);
+      throw new Error(`Invalid private key: ${(error as Error).message}`);
     }
 
     // Validate timing and key correspondence
@@ -195,9 +192,9 @@ export class EscrowManager extends BTCLockerCore {
     const publicKeyHex = keyPair.publicKey.toString("hex");
 
     if (spendAfterDeadline) {
-      if (currentTimeSeconds <= scriptData.deadline) {
+      if (currentTimeSeconds <= scriptData.locktime!) {
         throw new Error(
-          `Cannot spend after deadline yet. Current time: ${currentTimeSeconds}, Deadline: ${scriptData.deadline}`
+          `Cannot spend after deadline yet. Current time: ${currentTimeSeconds}, Deadline: ${scriptData.locktime}`
         );
       }
       if (publicKeyHex !== scriptData.afterPublicKey) {
@@ -216,7 +213,7 @@ export class EscrowManager extends BTCLockerCore {
 
       // Set locktime if spending after deadline
       if (spendAfterDeadline) {
-        tx.locktime = scriptData.deadline;
+        tx.locktime = scriptData.locktime!;
       }
 
       // Add input
@@ -231,11 +228,11 @@ export class EscrowManager extends BTCLockerCore {
       }
 
       // Get output script for the destination address
-      let outputScript;
+      let outputScript: Buffer;
       try {
-        outputScript = bitcoin.address.toOutputScript(outputAddress, this.network);
+        outputScript = Buffer.from(bitcoin.address.toOutputScript(outputAddress, this.network));
       } catch (error) {
-        throw new Error(`Invalid output address: ${error.message}`);
+        throw new Error(`Invalid output address: ${(error as Error).message}`);
       }
 
       tx.addOutput(outputScript, BigInt(outputAmount));
@@ -250,21 +247,21 @@ export class EscrowManager extends BTCLockerCore {
       const signatureWithHashType = Buffer.concat([signature, Buffer.from([hashType])]);
 
       // Create the unlocking script
-      let scriptSig;
+      let scriptSig: Buffer;
       if (spendAfterDeadline) {
         // Script path: true branch (after deadline)
-        scriptSig = bitcoin.script.compile([
+        scriptSig = Buffer.from(bitcoin.script.compile([
           signatureWithHashType,
           bitcoin.opcodes.OP_TRUE, // Choose IF branch
           redeemScript
-        ]);
+        ]));
       } else {
         // Script path: false branch (before deadline)
-        scriptSig = bitcoin.script.compile([
+        scriptSig = Buffer.from(bitcoin.script.compile([
           signatureWithHashType,
           bitcoin.opcodes.OP_FALSE, // Choose ELSE branch
           redeemScript
-        ]);
+        ]));
       }
 
       // Set the input script
@@ -275,24 +272,24 @@ export class EscrowManager extends BTCLockerCore {
         txId: tx.getId(),
       };
     } catch (error) {
-      throw new Error(`Failed to create spending transaction: ${error.message}`);
+      throw new Error(`Failed to create spending transaction: ${(error as Error).message}`);
     }
   }
 
   /**
    * Validate and convert a public key to Buffer format
    * @private
-   * @param {Buffer|string} publicKey - Public key to validate
-   * @param {string} paramName - Parameter name for error messages
-   * @returns {Buffer} Validated public key buffer
-   * @throws {Error} If public key is invalid
+   * @param publicKey - Public key to validate
+   * @param paramName - Parameter name for error messages
+   * @returns Validated public key buffer
+   * @throws If public key is invalid
    */
-  _validateAndConvertPublicKey(publicKey, paramName) {
+  private _validateAndConvertPublicKey(publicKey: Buffer | string, paramName: string): Buffer {
     if (publicKey === undefined || publicKey === null) {
       throw new Error(`${paramName} cannot be undefined or null`);
     }
 
-    let publicKeyBuffer;
+    let publicKeyBuffer: Buffer;
     if (typeof publicKey === "string") {
       if (!/^[0-9a-fA-F]+$/.test(publicKey)) {
         throw new Error(
@@ -302,7 +299,7 @@ export class EscrowManager extends BTCLockerCore {
       try {
         publicKeyBuffer = Buffer.from(publicKey, "hex");
       } catch (error) {
-        throw new Error(`Invalid ${paramName} hex string: ${error.message}`);
+        throw new Error(`Invalid ${paramName} hex string: ${(error as Error).message}`);
       }
     } else if (Buffer.isBuffer(publicKey)) {
       publicKeyBuffer = publicKey;

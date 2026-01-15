@@ -6,6 +6,65 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore, getECC } from "./core.js";
+import type { UTXO, ScriptInfo } from "../types.js";
+
+interface DawnStakingInput extends UTXO {
+  txid: string;
+  vout: number;
+  value: number;
+}
+
+interface DawnStakingParams {
+  inputs: DawnStakingInput[];
+  escrowAddress: string;
+  escrowAmount: number;
+  timelockAddress: string;
+  timelockAmount: number;
+  changeAddress?: string;
+  privateKey: string;
+  feeRate?: number;
+}
+
+interface DawnStakingResult {
+  hex: string;
+  txid: string;
+  size: number;
+  fee: number;
+  outputs: {
+    escrowAmount: number;
+    timelockAmount: number;
+    changeAmount?: number;
+  };
+}
+
+interface DawnStakingWithScriptParams extends Omit<DawnStakingParams, 'timelockAddress'> {
+  timelockScript: ScriptInfo;
+}
+
+interface DawnStakingWithScriptResult extends DawnStakingResult {
+  timelockScript: {
+    address: string;
+    type: string;
+    locktime?: number;
+  };
+}
+
+interface DawnStakingCalculationParams {
+  inputs: Array<{ value: number }>;
+  desiredEscrowAmount: number;
+  desiredTimelockAmount: number;
+  includeChange?: boolean;
+  feeRate?: number;
+}
+
+interface DawnStakingCalculationResult {
+  totalInputValue: number;
+  estimatedFee: number;
+  totalRequired: number;
+  changeAmount: number;
+  feasible: boolean;
+  recommendation?: string;
+}
 
 /**
  * Dawn Protocol staking manager class
@@ -17,28 +76,9 @@ export class DawnStakingManager extends BTCLockerCore {
   /**
    * Create a Dawn staking transaction
    * @async
-   * @param {Object} params - Dawn staking parameters
-   * @param {Array<Object>} params.inputs - Input UTXOs to spend from
-   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
-   * @param {number} params.inputs[].vout - Output index of the UTXO
-   * @param {number} params.inputs[].value - Value in satoshis
-   * @param {string} params.escrowAddress - Address of the escrow script
-   * @param {number} params.escrowAmount - Amount to send to escrow (satoshis)
-   * @param {string} params.timelockAddress - Address of the configurable timelock script
-   * @param {number} params.timelockAmount - Amount to send to timelock script (satoshis)
-   * @param {string} [params.changeAddress] - Address for change (optional)
-   * @param {string} params.privateKey - Private key for signing inputs (hex format)
-   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
-   * @returns {Promise<Object>} Dawn staking transaction details
-   * @returns {string} returns.hex - Signed transaction hex
-   * @returns {string} returns.txid - Transaction ID
-   * @returns {number} returns.size - Transaction size in bytes
-   * @returns {number} returns.fee - Transaction fee in satoshis
-   * @returns {Object} returns.outputs - Output breakdown
-   * @returns {number} returns.outputs.escrowAmount - Amount sent to escrow
-   * @returns {number} returns.outputs.timelockAmount - Amount sent to timelock script
-   * @returns {number} [returns.outputs.changeAmount] - Amount sent to change address (if any)
-   * @throws {Error} If insufficient funds or invalid parameters
+   * @param params - Dawn staking parameters
+   * @returns Dawn staking transaction details
+   * @throws If insufficient funds or invalid parameters
    * @example
    * const dawn = new DawnStakingManager();
    * const tx = await dawn.createDawnStakingTransaction({
@@ -50,7 +90,7 @@ export class DawnStakingManager extends BTCLockerCore {
    *   privateKey: '...'
    * });
    */
-  async createDawnStakingTransaction(params) {
+  async createDawnStakingTransaction(params: DawnStakingParams): Promise<DawnStakingResult> {
     await this.ensureInitialized();
     const { ECPair } = getECC();
     const {
@@ -155,8 +195,8 @@ export class DawnStakingManager extends BTCLockerCore {
             script: bitcoin.payments.p2wpkh({
               pubkey: keyPair.publicKey,
               network: this.network,
-            }).output,
-            value: input.value,
+            }).output!,
+            value: BigInt(input.value),
           },
         };
 
@@ -167,20 +207,20 @@ export class DawnStakingManager extends BTCLockerCore {
       // 1. Escrow output
       psbt.addOutput({
         address: escrowAddress,
-        value: escrowAmount,
+        value: BigInt(escrowAmount),
       });
 
       // 2. Timelock output
       psbt.addOutput({
         address: timelockAddress,
-        value: timelockAmount,
+        value: BigInt(timelockAmount),
       });
 
       // 3. Change output (if specified and above dust threshold)
       if (changeAddress && changeAmount >= dustThreshold) {
         psbt.addOutput({
           address: changeAddress,
-          value: changeAmount,
+          value: BigInt(changeAmount),
         });
       }
 
@@ -189,7 +229,7 @@ export class DawnStakingManager extends BTCLockerCore {
         try {
           psbt.signInput(i, keyPair);
         } catch (error) {
-          throw new Error(`Failed to sign input ${i}: ${error.message}`);
+          throw new Error(`Failed to sign input ${i}: ${(error as Error).message}`);
         }
       }
 
@@ -201,7 +241,7 @@ export class DawnStakingManager extends BTCLockerCore {
       const actualChangeAmount = changeAddress && changeAmount >= dustThreshold ? changeAmount : 0;
       const actualFee = totalInputValue - escrowAmount - timelockAmount - actualChangeAmount;
 
-      const result = {
+      const result: DawnStakingResult = {
         hex: transaction.toHex(),
         txid: transaction.getId(),
         size: transaction.byteLength(),
@@ -219,29 +259,15 @@ export class DawnStakingManager extends BTCLockerCore {
 
       return result;
     } catch (error) {
-      throw new Error(`Failed to create Dawn staking transaction: ${error.message}`);
+      throw new Error(`Failed to create Dawn staking transaction: ${(error as Error).message}`);
     }
   }
 
   /**
    * Create a Dawn staking transaction using timelock script data
    * @async
-   * @param {Object} params - Dawn staking parameters with script data
-   * @param {Array<Object>} params.inputs - Input UTXOs to spend from
-   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
-   * @param {number} params.inputs[].vout - Output index of the UTXO
-   * @param {number} params.inputs[].value - Value in satoshis
-   * @param {string} params.escrowAddress - Address of the escrow script
-   * @param {number} params.escrowAmount - Amount to send to escrow (satoshis)
-   * @param {Object} params.timelockScript - Timelock script data object
-   * @param {string} params.timelockScript.address - Address of the timelock script
-   * @param {number} params.timelockScript.locktime - Locktime of the script
-   * @param {string} params.timelockScript.type - Type of timelock script
-   * @param {number} params.timelockAmount - Amount to send to timelock script (satoshis)
-   * @param {string} [params.changeAddress] - Address for change (optional)
-   * @param {string} params.privateKey - Private key for signing inputs (hex format)
-   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
-   * @returns {Promise<Object>} Dawn staking transaction details with script info
+   * @param params - Dawn staking parameters with script data
+   * @returns Dawn staking transaction details with script info
    * @example
    * const timelockScript = await locker.createTimelockScript(locktime, publicKey);
    * const tx = await dawn.createDawnStakingTransactionWithScript({
@@ -253,7 +279,7 @@ export class DawnStakingManager extends BTCLockerCore {
    *   privateKey: '...'
    * });
    */
-  async createDawnStakingTransactionWithScript(params) {
+  async createDawnStakingTransactionWithScript(params: DawnStakingWithScriptParams): Promise<DawnStakingWithScriptResult> {
     const { timelockScript, ...otherParams } = params;
     
     // Validate timelock script
@@ -266,7 +292,7 @@ export class DawnStakingManager extends BTCLockerCore {
     }
 
     // Use the timelock script address
-    const txParams = {
+    const txParams: DawnStakingParams = {
       ...otherParams,
       timelockAddress: timelockScript.address
     };
@@ -274,32 +300,21 @@ export class DawnStakingManager extends BTCLockerCore {
     const result = await this.createDawnStakingTransaction(txParams);
 
     // Add script information to the result
-    result.timelockScript = {
-      address: timelockScript.address,
-      type: timelockScript.type || 'unknown',
-      locktime: timelockScript.locktime,
+    return {
+      ...result,
+      timelockScript: {
+        address: timelockScript.address,
+        type: timelockScript.type || 'unknown',
+        locktime: timelockScript.locktime,
+      },
     };
-
-    return result;
   }
 
   /**
    * Calculate optimal amounts for Dawn staking with both outputs
    * @async
-   * @param {Object} params - Calculation parameters
-   * @param {Array<Object>} params.inputs - Input UTXOs
-   * @param {number} params.inputs[].value - UTXO value in satoshis
-   * @param {number} params.desiredEscrowAmount - Desired escrow amount
-   * @param {number} params.desiredTimelockAmount - Desired timelock amount
-   * @param {boolean} [params.includeChange=false] - Whether to include change output
-   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
-   * @returns {Promise<Object>} Calculation results
-   * @returns {number} returns.totalInputValue - Total input value
-   * @returns {number} returns.estimatedFee - Estimated transaction fee
-   * @returns {number} returns.totalRequired - Total amount required
-   * @returns {number} returns.changeAmount - Change amount (if any)
-   * @returns {boolean} returns.feasible - Whether transaction is feasible
-   * @returns {string} [returns.recommendation] - Recommendation if not feasible
+   * @param params - Calculation parameters
+   * @returns Calculation results
    * @example
    * const calculation = await dawn.calculateDawnStakingAmounts({
    *   inputs: [{ value: 500000 }],
@@ -307,7 +322,7 @@ export class DawnStakingManager extends BTCLockerCore {
    *   desiredTimelockAmount: 200000
    * });
    */
-  async calculateDawnStakingAmounts(params) {
+  async calculateDawnStakingAmounts(params: DawnStakingCalculationParams): Promise<DawnStakingCalculationResult> {
     const {
       inputs,
       desiredEscrowAmount,

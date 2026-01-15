@@ -4,6 +4,7 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core.js";
+import type { ScriptInfo } from "../types.js";
 
 /**
  * HODL script creation class with emergency escape mechanisms
@@ -13,18 +14,11 @@ export class HodlScriptCreator extends BTCLockerCore {
   /**
    * Create a HODL script with emergency escape mechanism
    * @async
-   * @param {number} locktime - Unix timestamp or block height for the HODL period
-   * @param {Buffer|string} ownerPubKey - Owner's public key (normal spending after locktime)
-   * @param {Buffer|string} penaltyPubKey - Emergency escape public key (immediate spending)
-   * @returns {Promise<Object>} Script details object
-   * @returns {Buffer} returns.script - The compiled HODL script with conditional logic
-   * @returns {string} returns.scriptHex - Script in hex format
-   * @returns {string} returns.address - P2SH address for the script
-   * @returns {string} returns.redeemScript - Redeem script in hex format
-   * @returns {number} returns.locktime - The locktime value
-   * @returns {string} returns.ownerPubKey - Owner public key in hex
-   * @returns {string} returns.penaltyPubKey - Penalty public key in hex
-   * @throws {Error} If parameters are invalid
+   * @param locktime - Unix timestamp or block height for the HODL period
+   * @param ownerPubKey - Owner's public key (normal spending after locktime)
+   * @param penaltyPubKey - Emergency escape public key (immediate spending)
+   * @returns Script details object
+   * @throws If parameters are invalid
    * @example
    * const hodl = new HodlScriptCreator();
    * const script = await hodl.createHodlScript(
@@ -34,14 +28,22 @@ export class HodlScriptCreator extends BTCLockerCore {
    * );
    * console.log(script.address);
    */
-  async createHodlScript(locktime, ownerPubKey, penaltyPubKey) {
+  async createHodlScript(locktime: number, ownerPubKey: Buffer | string, penaltyPubKey: Buffer | string): Promise<ScriptInfo> {
     await this.ensureInitialized();
 
+    let ownerPubKeyBuffer: Buffer;
+    let penaltyPubKeyBuffer: Buffer;
+
     if (typeof ownerPubKey === "string") {
-      ownerPubKey = Buffer.from(ownerPubKey, "hex");
+      ownerPubKeyBuffer = Buffer.from(ownerPubKey, "hex");
+    } else {
+      ownerPubKeyBuffer = ownerPubKey;
     }
+
     if (typeof penaltyPubKey === "string") {
-      penaltyPubKey = Buffer.from(penaltyPubKey, "hex");
+      penaltyPubKeyBuffer = Buffer.from(penaltyPubKey, "hex");
+    } else {
+      penaltyPubKeyBuffer = penaltyPubKey;
     }
 
     const redeemScript = bitcoin.script.compile([
@@ -49,12 +51,12 @@ export class HodlScriptCreator extends BTCLockerCore {
       bitcoin.script.number.encode(locktime),
       bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
       bitcoin.opcodes.OP_DROP,
-      ownerPubKey,
+      ownerPubKeyBuffer,
       bitcoin.opcodes.OP_CHECKSIG,
       bitcoin.opcodes.OP_ELSE,
       bitcoin.script.number.encode(2),
-      ownerPubKey,
-      penaltyPubKey,
+      ownerPubKeyBuffer,
+      penaltyPubKeyBuffer,
       bitcoin.script.number.encode(2),
       bitcoin.opcodes.OP_CHECKMULTISIG,
       bitcoin.opcodes.OP_ENDIF,
@@ -64,15 +66,15 @@ export class HodlScriptCreator extends BTCLockerCore {
     const address = bitcoin.payments.p2sh({
       hash: scriptHash,
       network: this.network,
-    }).address;
+    }).address!;
 
     return {
-      redeemScript: redeemScript.toString("hex"),
-      scriptHash: scriptHash.toString("hex"),
+      redeemScript: Buffer.from(redeemScript).toString("hex"),
+      scriptHash: Buffer.from(scriptHash).toString("hex"),
       address,
       locktime,
-      ownerPubKey: ownerPubKey.toString("hex"),
-      penaltyPubKey: penaltyPubKey.toString("hex"),
+      ownerPubKey: ownerPubKeyBuffer.toString("hex"),
+      penaltyPubKey: penaltyPubKeyBuffer.toString("hex"),
       type: "hodl",
     };
   }

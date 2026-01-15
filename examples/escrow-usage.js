@@ -4,7 +4,7 @@
  * one user can withdraw before a deadline and another can withdraw after
  */
 
-import { BTCLocker } from "../src/locker/index.js";
+import { BTCLocker } from "../dist/index.js";
 
 /**
  * Example: Create and use a time-based escrow script

@@ -3,7 +3,7 @@
  */
 
 import { displayResult } from "./shared.js";
-import { ScriptUtils, TimeUtils } from "../../src/index.js";
+import { ScriptUtils, TimeUtils } from "../../dist/index.js";
 
 /**
  * Setup utility commands

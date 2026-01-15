@@ -5,8 +5,59 @@
 
 import https from "https";
 
-class BitcoinAPI {
-  constructor(network = "testnet", apiProvider = "mempool") {
+type NetworkType = "mainnet" | "testnet";
+type ApiProvider = "mempool" | "blockstream" | "blockcypher";
+
+interface ApiUrls {
+  [provider: string]: {
+    [network: string]: string;
+  };
+}
+
+interface AddressInfo {
+  address: string;
+  chain_stats: {
+    funded_txo_count: number;
+    funded_txo_sum: number;
+    spent_txo_count: number;
+    spent_txo_sum: number;
+    tx_count: number;
+  };
+  mempool_stats: {
+    funded_txo_count: number;
+    funded_txo_sum: number;
+    spent_txo_count: number;
+    spent_txo_sum: number;
+    tx_count: number;
+  };
+}
+
+interface UTXO {
+  txid: string;
+  vout: number;
+  value: number;
+  status: {
+    confirmed: boolean;
+    block_height?: number;
+    block_hash?: string;
+  };
+}
+
+interface FeeEstimates {
+  [blocks: number]: number;
+}
+
+interface BroadcastResult {
+  txid: string;
+}
+
+export default class BitcoinAPI {
+  private network: NetworkType;
+  private apiProvider: ApiProvider;
+  private baseUrls: ApiUrls;
+  private baseUrl: string;
+
+  constructor(network: NetworkType = "testnet", apiProvider: ApiProvider = "mempool") {
     this.network = network;
     this.apiProvider = apiProvider;
     this.baseUrls = {
@@ -30,12 +81,12 @@ class BitcoinAPI {
   /**
    * Make HTTP request
    */
-  async makeRequest(endpoint, method = "GET", data = null) {
+  async makeRequest(endpoint: string, method: "GET" | "POST" = "GET", data: any = null): Promise<any> {
     return new Promise((resolve, reject) => {
       const url = `${this.baseUrl}${endpoint}`;
       const urlObj = new URL(url);
 
-      const options = {
+      const options: https.RequestOptions = {
         hostname: urlObj.hostname,
         port: urlObj.port || 443,
         path: urlObj.pathname + urlObj.search,
@@ -48,7 +99,9 @@ class BitcoinAPI {
 
       if (data && method !== "GET") {
         const postData = JSON.stringify(data);
-        options.headers["Content-Length"] = Buffer.byteLength(postData);
+        if (options.headers) {
+          (options.headers as any)["Content-Length"] = Buffer.byteLength(postData);
+        }
       }
 
       const req = https.request(options, (res) => {
@@ -57,13 +110,13 @@ class BitcoinAPI {
         res.on("end", () => {
           try {
             const result = body ? JSON.parse(body) : {};
-            if (res.statusCode >= 200 && res.statusCode < 300) {
+            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
               resolve(result);
             } else {
               reject(new Error(`API Error ${res.statusCode}: ${body}`));
             }
           } catch (error) {
-            reject(new Error(`Parse Error: ${error.message}`));
+            reject(new Error(`Parse Error: ${(error as Error).message}`));
           }
         });
       });
@@ -81,7 +134,7 @@ class BitcoinAPI {
   /**
    * Get address balance and transaction count
    */
-  async getAddressInfo(address) {
+  async getAddressInfo(address: string): Promise<AddressInfo> {
     try {
       if (
         this.apiProvider === "mempool" ||
@@ -108,15 +161,16 @@ class BitcoinAPI {
           },
         };
       }
+      throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(`Failed to get address info: ${error.message}`);
+      throw new Error(`Failed to get address info: ${(error as Error).message}`);
     }
   }
 
   /**
    * Get UTXOs for an address
    */
-  async getAddressUtxos(address) {
+  async getAddressUtxos(address: string): Promise<UTXO[]> {
     try {
       if (
         this.apiProvider === "mempool" ||
@@ -128,7 +182,7 @@ class BitcoinAPI {
           `/addrs/${address}?unspentOnly=true&includeScript=true`
         );
         return (
-          result.txrefs?.map((utxo) => ({
+          result.txrefs?.map((utxo: any) => ({
             txid: utxo.tx_hash,
             vout: utxo.tx_output_n,
             value: utxo.value,
@@ -140,15 +194,16 @@ class BitcoinAPI {
           })) || []
         );
       }
+      throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(`Failed to get UTXOs: ${error.message}`);
+      throw new Error(`Failed to get UTXOs: ${(error as Error).message}`);
     }
   }
 
   /**
    * Get raw transaction data
    */
-  async getTransaction(txid) {
+  async getTransaction(txid: string): Promise<string> {
     try {
       if (
         this.apiProvider === "mempool" ||
@@ -159,15 +214,16 @@ class BitcoinAPI {
         const result = await this.makeRequest(`/txs/${txid}?includeHex=true`);
         return result.hex;
       }
+      throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(`Failed to get transaction: ${error.message}`);
+      throw new Error(`Failed to get transaction: ${(error as Error).message}`);
     }
   }
 
   /**
    * Broadcast transaction to network
    */
-  async broadcastTransaction(txHex) {
+  async broadcastTransaction(txHex: string): Promise<BroadcastResult> {
     try {
       if (
         this.apiProvider === "mempool" ||
@@ -177,20 +233,21 @@ class BitcoinAPI {
       } else if (this.apiProvider === "blockcypher") {
         return await this.makeRequest("/txs/push", "POST", { tx: txHex });
       }
+      throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(`Failed to broadcast transaction: ${error.message}`);
+      throw new Error(`Failed to broadcast transaction: ${(error as Error).message}`);
     }
   }
 
   /**
    * Make broadcast request (for raw hex data)
    */
-  async makeBroadcastRequest(endpoint, txHex) {
+  async makeBroadcastRequest(endpoint: string, txHex: string): Promise<BroadcastResult> {
     return new Promise((resolve, reject) => {
       const url = `${this.baseUrl}${endpoint}`;
       const urlObj = new URL(url);
 
-      const options = {
+      const options: https.RequestOptions = {
         hostname: urlObj.hostname,
         port: urlObj.port || 443,
         path: urlObj.pathname + urlObj.search,
@@ -206,7 +263,7 @@ class BitcoinAPI {
         let body = "";
         res.on("data", (chunk) => (body += chunk));
         res.on("end", () => {
-          if (res.statusCode >= 200 && res.statusCode < 300) {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
             // Return the response as-is (usually the txid)
             resolve({ txid: body.trim() });
           } else {
@@ -224,7 +281,7 @@ class BitcoinAPI {
   /**
    * Get current fee estimates
    */
-  async getFeeEstimates() {
+  async getFeeEstimates(): Promise<FeeEstimates> {
     try {
       if (
         this.apiProvider === "mempool" ||
@@ -239,15 +296,16 @@ class BitcoinAPI {
           144: 5, // low priority (1 day)
         };
       }
+      throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(`Failed to get fee estimates: ${error.message}`);
+      throw new Error(`Failed to get fee estimates: ${(error as Error).message}`);
     }
   }
 
   /**
    * Get current block height
    */
-  async getBlockHeight() {
+  async getBlockHeight(): Promise<number> {
     try {
       if (
         this.apiProvider === "mempool" ||
@@ -259,10 +317,9 @@ class BitcoinAPI {
         const result = await this.makeRequest("/");
         return result.height;
       }
+      throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(`Failed to get block height: ${error.message}`);
+      throw new Error(`Failed to get block height: ${(error as Error).message}`);
     }
   }
 }
-
-export default BitcoinAPI;

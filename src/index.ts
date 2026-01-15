@@ -2,10 +2,9 @@
  * Main entry point for BTC Locker library
  */
 
-import * as bitcoin from "bitcoinjs-lib";
+export * as bitcoin from "bitcoinjs-lib";
 // Import the modular BTCLocker implementation
-import BTCLocker from "./locker/index.js";
-import {
+import BTCLocker, {
   BTCLockerCore,
   KeyPairGenerator,
   TimelockManager,
@@ -14,7 +13,7 @@ import {
   TransactionManager,
   YieldDistributor,
   DawnStakingManager,
-} from "./locker/index.js";
+} from "./locker/index";
 import {
   TimeUtils,
   ScriptUtils,
@@ -23,11 +22,12 @@ import {
   ValidationError,
   TimelockError,
 } from "./utils.js";
+import type { NetworkType } from "./types";
 
 /**
  * Factory function to create an initialized BTCLocker instance
- * @param {string|Object} network - Network ('bitcoin', 'testnet', 'regtest', or network object)
- * @returns {Promise<BTCLocker>} Initialized BTCLocker instance
+ * @param network - Network ('bitcoin', 'testnet', 'regtest', or network object)
+ * @returns Initialized BTCLocker instance
  * @example
  * // Using string network name
  * const locker = await createBTCLocker('testnet');
@@ -35,7 +35,7 @@ import {
  * // Using network object
  * const locker = await createBTCLocker(bitcoin.networks.testnet);
  */
-async function createBTCLocker(network = "testnet") {
+export async function createBTCLocker(network: NetworkType = "testnet"): Promise<BTCLocker> {
   const locker = new BTCLocker(network);
   await locker.init();
   return locker;
@@ -50,7 +50,7 @@ export {
   HodlScriptCreator,
   TransactionManager,
   YieldDistributor,
-  createBTCLocker,
+  DawnStakingManager,
   TimeUtils,
   ScriptUtils,
   TransactionUtils,

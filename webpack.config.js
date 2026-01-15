@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
 
 export default {
-  entry: ["./src/index.js"],
+  entry: ["./src/index.ts"],
   output: {
     path: path.resolve(__dirname, "dist"),
     filename: "btc-locker.bundle.js",
@@ -33,6 +33,7 @@ export default {
     moduleIds: "deterministic",
   },
   resolve: {
+    extensions: [".ts", ".js"],
     fallback: {
       crypto: require.resolve("crypto-browserify"),
       buffer: require.resolve("buffer"),
@@ -41,6 +42,16 @@ export default {
   },
   module: {
     rules: [
+      {
+        test: /\.ts$/,
+        exclude: /node_modules/,
+        use: {
+          loader: "ts-loader",
+          options: {
+            configFile: "tsconfig.build.json",
+          },
+        },
+      },
       {
         test: /\.js$/,
         exclude: /node_modules/,

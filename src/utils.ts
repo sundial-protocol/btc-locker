@@ -7,13 +7,13 @@ import * as bitcoin from "bitcoinjs-lib";
 /**
  * Time and date utilities
  */
-class TimeUtils {
+export class TimeUtils {
   /**
    * Convert date to Unix timestamp
-   * @param {Date|string} date - Date object or date string
-   * @returns {number} Unix timestamp
+   * @param date - Date object or date string
+   * @returns Unix timestamp
    */
-  static dateToTimestamp(date) {
+  static dateToTimestamp(date: Date | string): number {
     if (typeof date === "string") {
       date = new Date(date);
     }
@@ -22,20 +22,20 @@ class TimeUtils {
 
   /**
    * Convert Unix timestamp to Date
-   * @param {number} timestamp - Unix timestamp
-   * @returns {Date} Date object
+   * @param timestamp - Unix timestamp
+   * @returns Date object
    */
-  static timestampToDate(timestamp) {
+  static timestampToDate(timestamp: number): Date {
     return new Date(timestamp * 1000);
   }
 
   /**
    * Add time duration to current timestamp
-   * @param {number} duration - Duration in seconds
-   * @param {number} baseTime - Base timestamp (optional, defaults to now)
-   * @returns {number} Future timestamp
+   * @param duration - Duration in seconds
+   * @param baseTime - Base timestamp (optional, defaults to now)
+   * @returns Future timestamp
    */
-  static addDuration(duration, baseTime = Math.floor(Date.now() / 1000)) {
+  static addDuration(duration: number, baseTime: number = Math.floor(Date.now() / 1000)): number {
     return baseTime + duration;
   }
 
@@ -50,16 +50,16 @@ class TimeUtils {
       WEEK: 604800,
       MONTH: 2592000, // 30 days
       YEAR: 31536000, // 365 days
-    };
+    } as const;
   }
 
   /**
    * Convert blocks to approximate time duration
-   * @param {number} blocks - Number of blocks
-   * @param {number} blockTime - Average block time in seconds (default: 600 for Bitcoin)
-   * @returns {number} Duration in seconds
+   * @param blocks - Number of blocks
+   * @param blockTime - Average block time in seconds (default: 600 for Bitcoin)
+   * @returns Duration in seconds
    */
-  static blocksToSeconds(blocks, blockTime = 600) {
+  static blocksToSeconds(blocks: number, blockTime: number = 600): number {
     return blocks * blockTime;
   }
 }
@@ -67,13 +67,13 @@ class TimeUtils {
 /**
  * Script validation utilities
  */
-class ScriptUtils {
+export class ScriptUtils {
   /**
    * Validate public key format
-   * @param {string|Buffer} publicKey - Public key to validate
-   * @returns {boolean} True if valid
+   * @param publicKey - Public key to validate
+   * @returns True if valid
    */
-  static isValidPublicKey(publicKey) {
+  static isValidPublicKey(publicKey: string | Buffer): boolean {
     try {
       if (typeof publicKey === "string") {
         publicKey = Buffer.from(publicKey, "hex");
@@ -86,10 +86,10 @@ class ScriptUtils {
 
   /**
    * Validate private key format
-   * @param {string|Buffer} privateKey - Private key to validate
-   * @returns {boolean} True if valid
+   * @param privateKey - Private key to validate
+   * @returns True if valid
    */
-  static isValidPrivateKey(privateKey) {
+  static isValidPrivateKey(privateKey: string | Buffer): boolean {
     try {
       if (typeof privateKey === "string") {
         privateKey = Buffer.from(privateKey, "hex");
@@ -102,11 +102,11 @@ class ScriptUtils {
 
   /**
    * Validate Bitcoin address
-   * @param {string} address - Bitcoin address to validate
-   * @param {Object} network - Bitcoin network (optional)
-   * @returns {boolean} True if valid
+   * @param address - Bitcoin address to validate
+   * @param network - Bitcoin network (optional)
+   * @returns True if valid
    */
-  static isValidAddress(address, network = bitcoin.networks.bitcoin) {
+  static isValidAddress(address: string, network: bitcoin.Network = bitcoin.networks.bitcoin): boolean {
     try {
       bitcoin.address.toOutputScript(address, network);
       return true;
@@ -117,12 +117,16 @@ class ScriptUtils {
 
   /**
    * Parse script hex to human-readable format
-   * @param {string} scriptHex - Script in hex format
-   * @returns {string} Human-readable script
+   * @param scriptHex - Script in hex format
+   * @returns Human-readable script
    */
-  static parseScript(scriptHex) {
+  static parseScript(scriptHex: string): string {
     const script = Buffer.from(scriptHex, "hex");
     const decompiled = bitcoin.script.decompile(script);
+
+    if (!decompiled) {
+      throw new Error("Failed to decompile script");
+    }
 
     return decompiled
       .map((element) => {
@@ -139,15 +143,15 @@ class ScriptUtils {
 /**
  * Transaction utilities
  */
-class TransactionUtils {
+export class TransactionUtils {
   /**
    * Estimate transaction fee
-   * @param {number} inputs - Number of inputs
-   * @param {number} outputs - Number of outputs
-   * @param {number} feeRate - Fee rate in sat/vB
-   * @returns {number} Estimated fee in satoshis
+   * @param inputs - Number of inputs
+   * @param outputs - Number of outputs
+   * @param feeRate - Fee rate in sat/vB
+   * @returns Estimated fee in satoshis
    */
-  static estimateFee(inputs, outputs, feeRate = 10) {
+  static estimateFee(inputs: number, outputs: number, feeRate: number = 10): number {
     // Rough estimation: P2SH input ~147 vB, P2PKH output ~34 vB, overhead ~10 vB
     const estimatedSize = inputs * 147 + outputs * 34 + 10;
     return Math.ceil(estimatedSize * feeRate);
@@ -155,19 +159,19 @@ class TransactionUtils {
 
   /**
    * Convert satoshis to BTC
-   * @param {number} satoshis - Amount in satoshis
-   * @returns {number} Amount in BTC
+   * @param satoshis - Amount in satoshis
+   * @returns Amount in BTC
    */
-  static satoshisToBTC(satoshis) {
+  static satoshisToBTC(satoshis: number): number {
     return satoshis / 100000000;
   }
 
   /**
    * Convert BTC to satoshis
-   * @param {number} btc - Amount in BTC
-   * @returns {number} Amount in satoshis
+   * @param btc - Amount in BTC
+   * @returns Amount in satoshis
    */
-  static btcToSatoshis(btc) {
+  static btcToSatoshis(btc: number): number {
     return Math.round(btc * 100000000);
   }
 }
@@ -175,33 +179,26 @@ class TransactionUtils {
 /**
  * Error classes for better error handling
  */
-class BTCLockerError extends Error {
-  constructor(message, code) {
+export class BTCLockerError extends Error {
+  public code?: string;
+
+  constructor(message: string, code?: string) {
     super(message);
     this.name = "BTCLockerError";
     this.code = code;
   }
 }
 
-class ValidationError extends BTCLockerError {
-  constructor(message) {
+export class ValidationError extends BTCLockerError {
+  constructor(message: string) {
     super(message, "VALIDATION_ERROR");
     this.name = "ValidationError";
   }
 }
 
-class TimelockError extends BTCLockerError {
-  constructor(message) {
+export class TimelockError extends BTCLockerError {
+  constructor(message: string) {
     super(message, "TIMELOCK_ERROR");
     this.name = "TimelockError";
   }
 }
-
-export {
-  TimeUtils,
-  ScriptUtils,
-  TransactionUtils,
-  BTCLockerError,
-  ValidationError,
-  TimelockError,
-};

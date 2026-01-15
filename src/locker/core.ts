@@ -3,27 +3,26 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BIP32Factory } from "bip32";
-import { ECPairFactory } from "ecpair";
+import { BIP32Factory, BIP32Interface } from "bip32";
+import { ECPairFactory, ECPairInterface } from "ecpair";
 import tinysecp from "@bitcoinerlab/secp256k1";
+import type { ECCLib, InitializedECC, NetworkType } from "../types.js";
 
 // ECC will be initialized asynchronously
-let ecc = null;
-let bip32 = null;
-let ECPair = null;
+let ecc: ECCLib | null = null;
+let bip32: ReturnType<typeof BIP32Factory> | null = null;
+let ECPair: ReturnType<typeof ECPairFactory> | null = null;
 
 /**
  * Initialize ECC asynchronously for browser compatibility
- * @async
- * @function initECC
- * @returns {Promise<void>} Promise that resolves when ECC is initialized
- * @throws {Error} If ECC initialization fails
+ * @returns Promise that resolves when ECC is initialized
+ * @throws If ECC initialization fails
  */
-export async function initECC() {
+export async function initECC(): Promise<InitializedECC> {
   if (!ecc) {
     try {
       // Handle ES module default export
-      ecc = tinysecp.default || tinysecp;
+      ecc = (tinysecp as any).default || tinysecp;
 
       // Validate ECC library has required methods
       if (!ecc || typeof ecc !== "object") {
@@ -32,40 +31,36 @@ export async function initECC() {
 
       const requiredMethods = ["isPoint", "isPrivate", "pointFromScalar"];
       for (const method of requiredMethods) {
-        if (typeof ecc[method] !== "function") {
+        if (typeof (ecc as any)[method] !== "function") {
           throw new Error(`ECC library missing required method: ${method}`);
         }
       }
 
       // Initialize bitcoinjs-lib with the ECC library
-      bitcoin.initEccLib(ecc);
+      bitcoin.initEccLib(ecc as any);
 
-      bip32 = BIP32Factory(ecc);
-      ECPair = ECPairFactory(ecc);
+      bip32 = BIP32Factory(ecc as any);
+      ECPair = ECPairFactory(ecc as any);
 
       // Validate factories
       if (!bip32 || !ECPair) {
         throw new Error("Failed to create BIP32 or ECPair factories");
       }
     } catch (error) {
-      throw new Error(`Failed to initialize ECC: ${error.message}`);
+      throw new Error(`Failed to initialize ECC: ${(error as Error).message}`);
     }
   }
-  return { ecc, bip32, ECPair };
+  return { ecc: ecc!, bip32: bip32!, ECPair: ECPair! };
 }
 
 /**
  * Get the initialized ECC components
- * @function getECC
- * @returns {Object} Object containing initialized ECC components
- * @returns {Object} returns.ecc - The ECC library instance
- * @returns {Object} returns.bip32 - The BIP32 factory instance
- * @returns {Object} returns.ECPair - The ECPair factory instance
- * @throws {Error} If ECC components are not initialized
+ * @returns Object containing initialized ECC components
+ * @throws If ECC components are not initialized
  * @example
  * const { ecc, bip32, ECPair } = getECC();
  */
-export function getECC() {
+export function getECC(): InitializedECC {
   if (!ecc || !bip32 || !ECPair) {
     throw new Error("ECC not initialized. Call initECC() first.");
   }
@@ -73,10 +68,12 @@ export function getECC() {
 }
 
 export class BTCLockerCore {
+  public network: bitcoin.Network;
+  public initialized: boolean;
+
   /**
    * Create a new BTCLockerCore instance
-   * @constructor
-   * @param {string|Object} [network=bitcoin.networks.bitcoin] - Bitcoin network ('bitcoin', 'testnet', 'regtest') or network object
+   * @param network - Bitcoin network ('bitcoin', 'testnet', 'regtest') or network object
    * @example
    * // Using string network name
    * const core = new BTCLockerCore('testnet');
@@ -86,7 +83,7 @@ export class BTCLockerCore {
    * const core = new BTCLockerCore(bitcoin.networks.testnet);
    * await core.init();
    */
-  constructor(network = bitcoin.networks.bitcoin) {
+  constructor(network: NetworkType = bitcoin.networks.bitcoin) {
     // Convert string network names to network objects
     if (typeof network === "string") {
       switch (network.toLowerCase()) {
@@ -113,14 +110,13 @@ export class BTCLockerCore {
 
   /**
    * Initialize the BTCLocker with ECC library
-   * @async
-   * @returns {Promise<void>} Promise that resolves when initialization is complete
-   * @throws {Error} If ECC initialization fails
+   * @returns Promise that resolves when initialization is complete
+   * @throws If ECC initialization fails
    * @example
    * const locker = new BTCLockerCore();
    * await locker.init();
    */
-  async init() {
+  async init(): Promise<void> {
     if (!this.initialized) {
       await initECC();
       this.initialized = true;
@@ -129,12 +125,10 @@ export class BTCLockerCore {
 
   /**
    * Ensure the instance is initialized, throw error if not
-   * @async
-   * @returns {Promise<void>} Promise that resolves if initialized
-   * @throws {Error} If not initialized
-   * @private
+   * @returns Promise that resolves if initialized
+   * @throws If not initialized
    */
-  async ensureInitialized() {
+  protected async ensureInitialized(): Promise<void> {
     if (!this.initialized) {
       await this.init();
     }
@@ -142,11 +136,11 @@ export class BTCLockerCore {
 
   /**
    * Validate if a timelock has expired
-   * @param {number} locktime - Locktime to check
-   * @param {number} currentTime - Current timestamp (optional, defaults to now)
-   * @returns {boolean} True if locktime has expired
+   * @param locktime - Locktime to check
+   * @param currentTime - Current timestamp (optional, defaults to now)
+   * @returns True if locktime has expired
    */
-  isTimelockExpired(locktime, currentTime = Math.floor(Date.now() / 1000)) {
+  isTimelockExpired(locktime: number, currentTime: number = Math.floor(Date.now() / 1000)): boolean {
     if (locktime < 500000000) {
       // Block height locktime
       throw new Error("Block height validation requires current block height");

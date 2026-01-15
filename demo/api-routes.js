@@ -17,8 +17,8 @@ async function loadBTCLocker() {
     BTCLocker = bundle.BTCLocker || bundle.default?.BTCLocker || bundle.default;
   } catch (error) {
     try {
-      // Fallback to direct import from src
-      const srcModule = await import("../src/index.js");
+      // Fallback to direct import from dist
+      const srcModule = await import("../dist/index.js");
       BTCLocker = srcModule.BTCLocker || srcModule.default;
     } catch (srcError) {
       console.error("Failed to load BTCLocker:", srcError);
