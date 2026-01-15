@@ -845,7 +845,7 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
 
     // Get UTXOs for the from address
     console.log(chalk.cyan("Fetching UTXOs..."));
-    const utxos = await api.getUTXOs(fromKeyPair.address);
+    const utxos = await api.getAddressUtxos(fromKeyPair.address);
     
     if (!utxos || utxos.length === 0) {
       throw new Error(`No UTXOs found for address ${fromKeyPair.address}`);
