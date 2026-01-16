@@ -26,11 +26,11 @@
     "docs": "typedoc src/index.ts",
     "docs:swagger": "node -e \"console.log('Swagger docs available at: http://localhost:3000/api-docs')\"",
     "prepare": "npm run build",
-    "example": "tsx examples/basic-usage.ts",
-    "cli": "tsx bin/btc-locker",
-    "demo": "tsx demo/demo-server.ts",
-    "demo:dev": "tsx --watch demo/demo-server.ts",
-    "start": "tsx demo/demo-server.ts"
+    "example": "node examples/basic-usage.js",
+    "cli": "node bin/btc-locker",
+    "demo": "node demo/demo-server.js",
+    "demo:dev": "node --watch demo/demo-server.js",
+    "start": "node demo/demo-server.js"
   },
   "keywords": [
     "bitcoin",

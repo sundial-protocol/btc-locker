@@ -12,14 +12,16 @@ let BTCLocker;
 
 async function loadBTCLocker() {
   try {
-    // Try to load the built bundle first
-    const bundle = require("../dist/btc-locker.js");
-    BTCLocker = bundle.BTCLocker || bundle.default?.BTCLocker || bundle.default;
+    // Try to load from ES module export first
+    const srcModule = await import("../dist/esm/index.js");
+    BTCLocker = srcModule.BTCLocker || srcModule.default?.BTCLocker || srcModule.default;
   } catch (error) {
     try {
-      // Fallback to direct import from dist
-      const srcModule = await import("../dist/index.js");
-      BTCLocker = srcModule.BTCLocker || srcModule.default;
+      // Fallback to CommonJS version
+      const { createRequire } = await import("module");
+      const require = createRequire(import.meta.url);
+      const bundle = require("../dist/cjs/index.js");
+      BTCLocker = bundle.BTCLocker || bundle.default?.BTCLocker || bundle.default;
     } catch (srcError) {
       console.error("Failed to load BTCLocker:", srcError);
       throw new Error("Could not load BTCLocker module");
