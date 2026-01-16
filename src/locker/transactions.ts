@@ -3,8 +3,8 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore, getECC } from "./core.js";
-import type { UTXO, TransactionResult } from "../types.js";
+import { BTCLockerCore, getECC } from "./core";
+import type { UTXO, TransactionResult } from "../types";
 
 interface TransactionOutput {
   address: string;

@@ -3,10 +3,10 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BIP32Factory, BIP32Interface } from "bip32";
-import { ECPairFactory, ECPairInterface } from "ecpair";
+import { BIP32Factory } from "bip32";
+import { ECPairFactory } from "ecpair";
 import tinysecp from "@bitcoinerlab/secp256k1";
-import type { ECCLib, InitializedECC, NetworkType } from "../types.js";
+import type { ECCLib, InitializedECC, NetworkType } from "../types";
 
 // ECC will be initialized asynchronously
 let ecc: ECCLib | null = null;

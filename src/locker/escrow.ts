@@ -4,8 +4,8 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore, getECC } from "./core.js";
-import type { ScriptInfo } from "../types.js";
+import { BTCLockerCore, getECC } from "./core";
+import type { ScriptInfo } from "../types";
 
 interface EscrowSpendingTransaction {
   txHex: string;

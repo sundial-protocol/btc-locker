@@ -3,8 +3,8 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BIP32Interface, BIP32Factory } from "bip32";
-import { ECPairInterface, ECPairFactory } from "ecpair";
+import { BIP32Factory } from "bip32";
+import { ECPairFactory } from "ecpair";
 
 export interface KeyPair {
   privateKey: string;

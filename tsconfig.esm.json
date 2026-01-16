@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "outDir": "./dist/esm",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "preserveConstEnums": true,
+    "allowImportingTsExtensions": false,
+    "moduleDetection": "force"
+  },
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.spec.ts", 
+    "tests/**/*",
+    "examples/**/*",
+    "demo/**/*"
+  ]
+}

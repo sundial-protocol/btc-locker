@@ -5,7 +5,7 @@
 import inquirer from "inquirer";
 import chalk from "chalk";
 import { initLocker, displayResult } from "./shared.js";
-import { ScriptUtils } from "../../dist/index.js";
+import { ScriptUtils } from "../../dist/esm/index.js";
 import { validateLocktime, parseLocktime } from "../locktime.js";
 
 /**

@@ -5,8 +5,8 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore, getECC } from "./core.js";
-import type { UTXO, ScriptInfo } from "../types.js";
+import { BTCLockerCore, getECC } from "./core";
+import type { UTXO, ScriptInfo } from "../types";
 
 interface DawnStakingInput extends UTXO {
   txid: string;

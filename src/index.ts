@@ -21,7 +21,7 @@ import {
   BTCLockerError,
   ValidationError,
   TimelockError,
-} from "./utils.js";
+} from "./utils";
 import type { NetworkType } from "./types";
 
 /**

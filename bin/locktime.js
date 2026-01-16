@@ -1,4 +1,4 @@
-import { TimeUtils } from "../dist/index.js";
+import { TimeUtils } from "../dist/esm/index.js";
 
 export const validateLocktime = (input) => {
   if (input.match(/^\d+$/)) return true;

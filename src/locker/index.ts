@@ -2,22 +2,22 @@
  * @fileoverview BTCLocker modular components
  */
 
-import { BTCLockerCore } from "./core.js";
-import { KeyPairGenerator } from "./keypair.js";
-import { TimelockManager } from "./timelock.js";
-import { MultisigTimelockManager } from "./multisig.js";
-import { HodlScriptCreator } from "./hodl.js";
-import { TransactionManager } from "./transactions.js";
-import { YieldDistributor } from "./yield.js";
-import { EscrowManager } from "./escrow.js";
-import { DawnStakingManager } from "./dawn-stake.js";
+import { BTCLockerCore } from "./core";
+import { KeyPairGenerator } from "./keypair";
+import { TimelockManager } from "./timelock";
+import { MultisigTimelockManager } from "./multisig";
+import { HodlScriptCreator } from "./hodl";
+import { TransactionManager } from "./transactions";
+import { YieldDistributor } from "./yield";
+import { EscrowManager } from "./escrow";
+import { DawnStakingManager } from "./dawn-stake";
 import { 
   KeyPair, 
   ScriptInfo, 
   UTXO, 
   TransactionResult, 
   NetworkType 
-} from "../types.js";
+} from "../types";
 
 /**
  * Parameters for creating spending transactions
@@ -478,14 +478,14 @@ export class BTCLocker extends BTCLockerCore {
 }
 
 // Export all individual components for modular usage
-export { BTCLockerCore } from "./core.js";
-export { KeyPairGenerator } from "./keypair.js";
-export { TimelockManager } from "./timelock.js";
-export { MultisigTimelockManager } from "./multisig.js";
-export { HodlScriptCreator } from "./hodl.js";
-export { TransactionManager } from "./transactions.js";
-export { YieldDistributor } from "./yield.js";
-export { EscrowManager } from "./escrow.js";
-export { DawnStakingManager } from "./dawn-stake.js";
+export { BTCLockerCore } from "./core";
+export { KeyPairGenerator } from "./keypair";
+export { TimelockManager } from "./timelock";
+export { MultisigTimelockManager } from "./multisig";
+export { HodlScriptCreator } from "./hodl";
+export { TransactionManager } from "./transactions";
+export { YieldDistributor } from "./yield";
+export { EscrowManager } from "./escrow";
+export { DawnStakingManager } from "./dawn-stake";
 
 export default BTCLocker;

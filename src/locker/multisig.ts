@@ -3,8 +3,8 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore } from "./core.js";
-import type { ScriptInfo } from "../types.js";
+import { BTCLockerCore } from "./core";
+import type { ScriptInfo } from "../types";
 
 /**
  * Multisig timelock script management class for M-of-N timelock operations

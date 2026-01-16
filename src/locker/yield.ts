@@ -3,8 +3,8 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore, getECC } from "./core.js";
-import type { UTXO } from "../types.js";
+import { BTCLockerCore, getECC } from "./core";
+import type { UTXO } from "../types";
 
 interface YieldInput extends UTXO {
   txid: string;

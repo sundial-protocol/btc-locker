@@ -4,8 +4,8 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { ECPairInterface } from "ecpair";
-import { BTCLockerCore, getECC } from "./core.js";
-import type { KeyPair } from "../types.js";
+import { BTCLockerCore, getECC } from "./core";
+import type { KeyPair } from "../types";
 
 interface ExtendedKeyPair extends KeyPair {
   keyPair: ECPairInterface;
