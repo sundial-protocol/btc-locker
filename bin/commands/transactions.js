@@ -419,7 +419,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
         value: utxo.value,
       }));
 
-      const distributionResult = locker.distributeYield({
+      const distributionResult = await locker.distributeYield({
         inputs: txInputs,
         timelockAddress: toAddress,
         amount: amount,

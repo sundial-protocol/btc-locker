@@ -59,6 +59,18 @@ export interface YieldDistributionParams {
 }
 
 /**
+ * Result of yield distribution
+ */
+export interface YieldDistributionResult extends TransactionResult {
+  memo: string;
+  distribution: {
+    amount: number;
+    destination: string;
+    change: number;
+  };
+}
+
+/**
  * Parameters for Dawn staking transactions
  */
 export interface DawnStakingParams {
@@ -402,7 +414,7 @@ export class BTCLocker extends BTCLockerCore {
    * Distribute yield back to a timelock script
    * @async
    * @param {YieldDistributionParams} params - Distribution parameters
-   * @returns {Promise<TransactionResult & { memo?: string }>} Signed distribution transaction object
+   * @returns {Promise<YieldDistributionResult>} Signed distribution transaction object
    * @throws {Error} If insufficient funds or invalid parameters
    * @example
    * const locker = new BTCLocker();
@@ -414,7 +426,7 @@ export class BTCLocker extends BTCLockerCore {
    *   memo: 'Quarterly yield distribution'
    * });
    */
-  async distributeYield(params: YieldDistributionParams): Promise<TransactionResult & { memo?: string }> {
+  async distributeYield(params: YieldDistributionParams): Promise<YieldDistributionResult> {
     return this.yieldDistributor.distributeYield(params);
   }
 
