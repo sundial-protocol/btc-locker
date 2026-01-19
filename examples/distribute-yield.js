@@ -82,7 +82,7 @@ async function distributeYieldExample() {
       console.log("✅ Transaction broadcasted successfully!");
       console.log(
         "Explorer:",
-        `https://mempool.space/testnet/tx/${result.txid}`
+        `https://mempool.space/testnet/tx/${broadcastResult.txid}`
       );
     } else {
       console.log("🔍 Dry run completed. Transaction hex:");

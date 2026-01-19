@@ -965,20 +965,20 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
 
     if (!cmdOptions.dryRun) {
       console.log(chalk.cyan("\nBroadcasting transaction..."));
-      const txid = await api.broadcastTransaction(stakingTx.hex);
+      const broadcastResult = await api.broadcastTransaction(stakingTx.hex);
       console.log(chalk.green(`✓ Transaction broadcasted successfully!`));
-      console.log(chalk.blue(`Transaction ID: ${txid}`));
+      console.log(chalk.blue(`Transaction ID: ${broadcastResult.txid}`));
 
       if (parentOptions.network === "testnet") {
         console.log(
           chalk.blue(
-            `View on explorer: https://mempool.space/testnet/tx/${txid}`
+            `View on explorer: https://mempool.space/testnet/tx/${broadcastResult.txid}`
           )
         );
       } else {
         console.log(
           chalk.blue(
-            `View on explorer: https://mempool.space/tx/${txid}`
+            `View on explorer: https://mempool.space/tx/${broadcastResult.txid}`
           )
         );
       }
