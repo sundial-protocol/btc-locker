@@ -66,6 +66,39 @@ interface DawnStakingCalculationResult {
   recommendation?: string;
 }
 
+interface DawnWithdrawalInput {
+  txid: string;
+  vout: number;
+  value: number;
+  redeemScript: string;
+}
+
+interface DawnWithdrawalParams {
+  escrowInputs: DawnWithdrawalInput[];
+  timelockInputs: DawnWithdrawalInput[];
+  destination: string;
+  escrowPrivateKey: string;
+  timelockPrivateKey: string;
+  feeAmount?: number;
+  api?: any; // Bitcoin API instance for fetching transaction data
+}
+
+interface DawnWithdrawalResult {
+  hex: string;
+  txid: string;
+  size: number;
+  fee: number;
+  inputs: {
+    escrowValue: number;
+    timelockValue: number;
+    totalValue: number;
+  };
+  output: {
+    destination: string;
+    value: number;
+  };
+}
+
 /**
  * Dawn Protocol staking manager class
  * @class DawnStakingManager
@@ -388,6 +421,327 @@ export class DawnStakingManager extends BTCLockerCore {
       changeAmount: Math.max(0, changeAmount),
       feasible,
       recommendation: recommendation.trim() || undefined,
+    };
+  }
+
+  /**
+   * Create a Dawn withdrawal transaction that combines escrow and timelock inputs into a single output
+   * @async
+   * @param params - Dawn withdrawal parameters
+   * @returns Dawn withdrawal transaction details
+   * @throws If insufficient funds or invalid parameters
+   * @example
+   * const dawn = new DawnStakingManager();
+   * const tx = await dawn.createDawnWithdrawalTransaction({
+   *   escrowInputs: [{ txid: '...', vout: 0, value: 100000, redeemScript: '...' }],
+   *   timelockInputs: [{ txid: '...', vout: 0, value: 200000, redeemScript: '...' }],
+   *   destination: 'tb1q...',
+   *   escrowPrivateKey: '...',
+   *   timelockPrivateKey: '...',
+   *   feeAmount: 2000
+   * });
+   */
+  async createDawnWithdrawalTransaction(params: DawnWithdrawalParams): Promise<DawnWithdrawalResult> {
+    await this.ensureInitialized();
+    const { ECPair } = getECC();
+    const {
+      escrowInputs,
+      timelockInputs,
+      destination,
+      escrowPrivateKey,
+      timelockPrivateKey,
+      feeAmount = 2000,
+      api,
+    } = params;
+
+    // Validate that we have at least one input
+    if (escrowInputs.length === 0 && timelockInputs.length === 0) {
+      throw new Error("No inputs provided for withdrawal");
+    }
+
+    // Create key pairs from private keys (only if we need them)
+    const escrowKeyPair = escrowInputs.length > 0 ? ECPair.fromPrivateKey(Buffer.from(escrowPrivateKey, "hex"), {
+      network: this.network,
+    }) : null;
+    
+    const timelockKeyPair = timelockInputs.length > 0 ? ECPair.fromPrivateKey(Buffer.from(timelockPrivateKey, "hex"), {
+      network: this.network,
+    }) : null;
+
+    // Calculate total values
+    const escrowValue = escrowInputs.reduce((sum, input) => sum + input.value, 0);
+    const timelockValue = timelockInputs.reduce((sum, input) => sum + input.value, 0);
+    const totalInputValue = escrowValue + timelockValue;
+    const outputValue = totalInputValue - feeAmount;
+
+    if (outputValue <= 546) { // Dust threshold
+      throw new Error("Output amount would be below dust threshold after fees");
+    }
+
+    const psbt = new bitcoin.Psbt({ network: this.network });
+
+    // Determine if we need to set locktime for escrow and timelock scripts
+    let maxLocktime = 0;
+    const currentTime = Math.floor(Date.now() / 1000);
+    
+    // Check escrow inputs
+    for (const input of escrowInputs) {
+      try {
+        const script = Buffer.from(input.redeemScript, 'hex');
+        if (script.length > 5 && script[0] === 0x63) { // OP_IF (escrow script)
+          // Extract timestamp (next 4 bytes after OP_IF and push opcode)
+          const timestampBytes = script.slice(2, 6);
+          const timestamp = timestampBytes.readUInt32LE(0);
+          
+          console.log(`Debug: Escrow - Current time: ${currentTime}, Script deadline: ${timestamp}`);
+          console.log(`Debug: Escrow - Current time human: ${new Date(currentTime * 1000).toISOString()}`);
+          console.log(`Debug: Escrow - Deadline human: ${new Date(timestamp * 1000).toISOString()}`);
+          
+          // Validate that we're past the deadline
+          if (currentTime < timestamp) {
+            throw new Error(`Cannot withdraw from escrow script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(timestamp * 1000).toISOString()}`);
+          }
+          
+          maxLocktime = Math.max(maxLocktime, timestamp);
+        }
+      } catch (parseError) {
+        // Re-throw validation errors, ignore parsing errors
+        if (parseError instanceof Error && parseError.message.includes('Cannot withdraw')) {
+          throw parseError;
+        }
+      }
+    }
+
+    // Check timelock inputs
+    for (const input of timelockInputs) {
+      try {
+        const script = Buffer.from(input.redeemScript, 'hex');
+        if (script.length > 4 && script[0] === 0x04) { // Push 4 bytes (timelock script)
+          // Extract timestamp (next 4 bytes after push opcode)
+          const timestampBytes = script.slice(1, 5);
+          const timestamp = timestampBytes.readUInt32LE(0);
+          
+          console.log(`Debug: Timelock - Current time: ${currentTime}, Script deadline: ${timestamp}`);
+          console.log(`Debug: Timelock - Current time human: ${new Date(currentTime * 1000).toISOString()}`);
+          console.log(`Debug: Timelock - Deadline human: ${new Date(timestamp * 1000).toISOString()}`);
+          
+          // Validate that we're past the deadline
+          if (currentTime < timestamp) {
+            throw new Error(`Cannot withdraw from timelock script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(timestamp * 1000).toISOString()}`);
+          }
+          
+          maxLocktime = Math.max(maxLocktime, timestamp);
+        }
+      } catch (parseError) {
+        // Re-throw validation errors, ignore parsing errors
+        if (parseError instanceof Error && parseError.message.includes('Cannot withdraw')) {
+          throw parseError;
+        }
+      }
+    }
+
+    // Set transaction locktime if needed
+    if (maxLocktime > 0) {
+      psbt.setLocktime(maxLocktime);
+    }
+
+    // Add escrow inputs
+    for (let i = 0; i < escrowInputs.length; i++) {
+      const input = escrowInputs[i];
+      const redeemScript = Buffer.from(input.redeemScript, "hex");
+      
+      let inputData;
+      if (api) {
+        // Fetch full transaction for nonWitnessUtxo
+        try {
+          const txHex = await api.getTransaction(input.txid);
+          inputData = {
+            hash: input.txid,
+            index: input.vout,
+            nonWitnessUtxo: Buffer.from(txHex, "hex"),
+            redeemScript: redeemScript,
+            sequence: 0xfffffffe, // Enable locktime validation
+          };
+        } catch (error) {
+          throw new Error(`Failed to fetch transaction ${input.txid}: ${(error as Error).message}`);
+        }
+      } else {
+        // Fallback to witnessUtxo (may not work for all P2SH scripts)
+        const scriptHash = bitcoin.crypto.hash160(redeemScript);
+        const p2shScript = bitcoin.script.compile([
+          bitcoin.opcodes.OP_HASH160,
+          scriptHash,
+          bitcoin.opcodes.OP_EQUAL,
+        ]);
+
+        inputData = {
+          hash: input.txid,
+          index: input.vout,
+          witnessUtxo: {
+            script: p2shScript,
+            value: BigInt(input.value),
+          },
+          redeemScript: redeemScript,
+          sequence: 0xfffffffe, // Enable locktime validation
+        };
+      }
+
+      psbt.addInput(inputData);
+    }
+
+    // Add timelock inputs
+    for (let i = 0; i < timelockInputs.length; i++) {
+      const input = timelockInputs[i];
+      const redeemScript = Buffer.from(input.redeemScript, "hex");
+      
+      let inputData;
+      if (api) {
+        // Fetch full transaction for nonWitnessUtxo
+        try {
+          const txHex = await api.getTransaction(input.txid);
+          inputData = {
+            hash: input.txid,
+            index: input.vout,
+            nonWitnessUtxo: Buffer.from(txHex, "hex"),
+            redeemScript: redeemScript,
+            sequence: 0xfffffffe, // Enable locktime validation
+          };
+        } catch (error) {
+          throw new Error(`Failed to fetch transaction ${input.txid}: ${(error as Error).message}`);
+        }
+      } else {
+        // Fallback to witnessUtxo (may not work for all P2SH scripts)
+        const scriptHash = bitcoin.crypto.hash160(redeemScript);
+        const p2shScript = bitcoin.script.compile([
+          bitcoin.opcodes.OP_HASH160,
+          scriptHash,
+          bitcoin.opcodes.OP_EQUAL,
+        ]);
+
+        inputData = {
+          hash: input.txid,
+          index: input.vout,
+          witnessUtxo: {
+            script: p2shScript,
+            value: BigInt(input.value),
+          },
+          redeemScript: redeemScript,
+          sequence: 0xfffffffe, // Enable locktime validation
+        };
+      }
+
+      psbt.addInput(inputData);
+    }
+
+    // Add single output to destination
+    psbt.addOutput({
+      address: destination,
+      value: BigInt(outputValue),
+    });
+
+    // Sign escrow inputs
+    if (escrowKeyPair && escrowInputs.length > 0) {
+      for (let i = 0; i < escrowInputs.length; i++) {
+        try {
+          psbt.signInput(i, escrowKeyPair);
+        } catch (error) {
+          throw new Error(`Failed to sign escrow input ${i}: ${(error as Error).message}`);
+        }
+      }
+    }
+
+    // Sign timelock inputs
+    if (timelockKeyPair && timelockInputs.length > 0) {
+      for (let i = 0; i < timelockInputs.length; i++) {
+        const inputIndex = escrowInputs.length + i;
+        try {
+          psbt.signInput(inputIndex, timelockKeyPair);
+        } catch (error) {
+          throw new Error(`Failed to sign timelock input ${inputIndex}: ${(error as Error).message}`);
+        }
+      }
+    }
+
+    // Finalize inputs with custom finalizers for conditional scripts
+    for (let i = 0; i < escrowInputs.length; i++) {
+      try {
+        // For escrow scripts, we need a custom finalizer to provide the correct stack
+        psbt.finalizeInput(i, (inputIndex: number, input: any) => {
+          const scriptSig = input.partialSig?.[0];
+          if (!scriptSig) {
+            throw new Error("Missing signature for escrow input");
+          }
+          
+          const redeemScript = input.redeemScript;
+          if (!redeemScript) {
+            throw new Error("Missing redeem script for escrow input");
+          }
+
+          // Dawn withdrawal always uses the "after deadline" path (OP_TRUE)
+          const scriptWitness = bitcoin.script.compile([
+            scriptSig.signature,
+            bitcoin.opcodes.OP_TRUE, // Always choose IF branch (after deadline)
+            redeemScript
+          ]);
+
+          return {
+            finalScriptSig: scriptWitness,
+            finalScriptWitness: undefined
+          };
+        });
+      } catch (error) {
+        throw new Error(`Failed to finalize escrow input ${i}: ${(error as Error).message}`);
+      }
+    }
+
+    // Finalize timelock inputs with custom finalizers
+    for (let i = 0; i < timelockInputs.length; i++) {
+      const inputIndex = escrowInputs.length + i;
+      try {
+        psbt.finalizeInput(inputIndex, (idx: number, input: any) => {
+          const scriptSig = input.partialSig?.[0];
+          if (!scriptSig) {
+            throw new Error("Missing signature for timelock input");
+          }
+          
+          const redeemScript = input.redeemScript;
+          if (!redeemScript) {
+            throw new Error("Missing redeem script for timelock input");
+          }
+
+          // For timelock scripts, provide signature and redeem script
+          const scriptWitness = bitcoin.script.compile([
+            scriptSig.signature,
+            redeemScript
+          ]);
+
+          return {
+            finalScriptSig: scriptWitness,
+            finalScriptWitness: undefined
+          };
+        });
+      } catch (error) {
+        throw new Error(`Failed to finalize timelock input ${inputIndex}: ${(error as Error).message}`);
+      }
+    }
+
+    // Extract the final transaction
+    const transaction = psbt.extractTransaction();
+
+    return {
+      hex: transaction.toHex(),
+      txid: transaction.getId(),
+      size: transaction.byteLength(),
+      fee: feeAmount,
+      inputs: {
+        escrowValue,
+        timelockValue,
+        totalValue: totalInputValue,
+      },
+      output: {
+        destination,
+        value: outputValue,
+      },
     };
   }
 }
