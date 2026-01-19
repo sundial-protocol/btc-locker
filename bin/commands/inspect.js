@@ -6,8 +6,8 @@ import * as bitcoin from "bitcoinjs-lib";
 import inquirer from "inquirer";
 import chalk from "chalk";
 import { initLocker, displayResult } from "./shared.js";
-import { ScriptUtils } from "../../src/index.js";
-import BitcoinAPI from "../../src/bitcoin-api.js";
+import { ScriptUtils } from "../../dist/esm/index.js";
+import BitcoinAPI from "../../dist/esm/bitcoin-api.js";
 
 /**
  * Setup inspect commands

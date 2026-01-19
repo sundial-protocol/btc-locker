@@ -5,8 +5,8 @@
 import * as bitcoin from "bitcoinjs-lib";
 import inquirer from "inquirer";
 import chalk from "chalk";
-import { ScriptUtils, TransactionUtils } from "../../src/index.js";
-import BitcoinAPI from "../../src/bitcoin-api.js";
+import { ScriptUtils, TransactionUtils } from "../../dist/esm/index.js";
+import BitcoinAPI from "../../dist/esm/bitcoin-api.js";
 import { initLocker, displayResult } from "./shared.js";
 
 /**
@@ -419,7 +419,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
         value: utxo.value,
       }));
 
-      const distributionResult = locker.distributeYield({
+      const distributionResult = await locker.distributeYield({
         inputs: txInputs,
         timelockAddress: toAddress,
         amount: amount,
@@ -674,15 +674,15 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
       privateKeys: emergencyKey ? [privateKey, emergencyKey] : [privateKey],
     };
 
-    const spendingTx = locker.createSpendingTransaction(txParams);
+    const spendingTx = await locker.createSpendingTransaction(txParams);
 
     const result = {
       transaction: {
-        hex: spendingTx.toHex(),
-        txid: spendingTx.getId(),
-        size: spendingTx.byteLength(),
-        fee: feeAmount,
-        fee_rate: (feeAmount / spendingTx.byteLength()).toFixed(2),
+        hex: spendingTx.hex,
+        txid: spendingTx.txid,
+        size: spendingTx.size,
+        fee: spendingTx.fee,
+        fee_rate: (spendingTx.fee / spendingTx.size).toFixed(2),
       },
       inputs: {
         count: confirmedUtxos.length,
@@ -700,7 +700,7 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
 
     if (cmdOptions.dryRun) {
       console.log(chalk.yellow("🔍 Dry run - transaction not broadcasted"));
-      console.log(chalk.blue(`Transaction hex: ${spendingTx.toHex()}`));
+      console.log(chalk.blue(`Transaction hex: ${spendingTx.hex}`));
       return;
     }
 
@@ -725,26 +725,26 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
 
     // Broadcast the transaction
     const broadcastResult = await api.broadcastTransaction(
-      spendingTx.toHex()
+      spendingTx.hex
     );
 
     console.log(chalk.green("✅ Transaction broadcasted successfully!"));
     console.log(
       chalk.blue(
-        `Transaction ID: ${broadcastResult.txid || spendingTx.getId()}`
+        `Transaction ID: ${broadcastResult.txid || spendingTx.txid}`
       )
     );
 
     if (parentOptions.network === "testnet") {
       console.log(
         chalk.blue(
-          `View on explorer: https://mempool.space/testnet/tx/${spendingTx.getId()}`
+          `View on explorer: https://mempool.space/testnet/tx/${spendingTx.txid}`
         )
       );
     } else {
       console.log(
         chalk.blue(
-          `View on explorer: https://mempool.space/tx/${spendingTx.getId()}`
+          `View on explorer: https://mempool.space/tx/${spendingTx.txid}`
         )
       );
     }
@@ -965,20 +965,20 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
 
     if (!cmdOptions.dryRun) {
       console.log(chalk.cyan("\nBroadcasting transaction..."));
-      const txid = await api.broadcastTransaction(stakingTx.hex);
+      const broadcastResult = await api.broadcastTransaction(stakingTx.hex);
       console.log(chalk.green(`✓ Transaction broadcasted successfully!`));
-      console.log(chalk.blue(`Transaction ID: ${txid}`));
+      console.log(chalk.blue(`Transaction ID: ${broadcastResult.txid}`));
 
       if (parentOptions.network === "testnet") {
         console.log(
           chalk.blue(
-            `View on explorer: https://mempool.space/testnet/tx/${txid}`
+            `View on explorer: https://mempool.space/testnet/tx/${broadcastResult.txid}`
           )
         );
       } else {
         console.log(
           chalk.blue(
-            `View on explorer: https://mempool.space/tx/${txid}`
+            `View on explorer: https://mempool.space/tx/${broadcastResult.txid}`
           )
         );
       }

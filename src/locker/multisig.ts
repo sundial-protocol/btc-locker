@@ -3,7 +3,8 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore } from "./core.js";
+import { BTCLockerCore } from "./core";
+import type { ScriptInfo } from "../types";
 
 /**
  * Multisig timelock script management class for M-of-N timelock operations
@@ -13,18 +14,11 @@ export class MultisigTimelockManager extends BTCLockerCore {
   /**
    * Create a multisig timelock script
    * @async
-   * @param {number} locktime - Unix timestamp or block height for timelock
-   * @param {number} m - Required number of signatures (M-of-N multisig)
-   * @param {Array<Buffer|string>} publicKeys - Array of public keys (buffers or hex strings)
-   * @returns {Promise<Object>} Script details object
-   * @returns {Buffer} returns.script - The compiled multisig timelock script
-   * @returns {string} returns.scriptHex - Script in hex format
-   * @returns {string} returns.address - P2SH address for the script
-   * @returns {string} returns.redeemScript - Redeem script in hex format
-   * @returns {number} returns.locktime - The locktime value
-   * @returns {number} returns.m - Required signatures count
-   * @returns {number} returns.n - Total public keys count
-   * @throws {Error} If parameters are invalid or insufficient public keys provided
+   * @param locktime - Unix timestamp or block height for timelock
+   * @param m - Required number of signatures (M-of-N multisig)
+   * @param publicKeys - Array of public keys (buffers or hex strings)
+   * @returns Script details object
+   * @throws If parameters are invalid or insufficient public keys provided
    * @example
    * const multisig = new MultisigTimelockManager();
    * const script = await multisig.createMultisigTimelockScript(
@@ -34,7 +28,7 @@ export class MultisigTimelockManager extends BTCLockerCore {
    * );
    * console.log(script.address);
    */
-  async createMultisigTimelockScript(locktime, m, publicKeys) {
+  async createMultisigTimelockScript(locktime: number, m: number, publicKeys: Array<Buffer | string>): Promise<ScriptInfo> {
     await this.ensureInitialized();
 
     const pubKeyBuffers = publicKeys.map((key) =>
@@ -55,11 +49,11 @@ export class MultisigTimelockManager extends BTCLockerCore {
     const address = bitcoin.payments.p2sh({
       hash: scriptHash,
       network: this.network,
-    }).address;
+    }).address!;
 
     return {
-      redeemScript: redeemScript.toString("hex"),
-      scriptHash: scriptHash.toString("hex"),
+      redeemScript: Buffer.from(redeemScript).toString("hex"),
+      scriptHash: Buffer.from(scriptHash).toString("hex"),
       address,
       locktime,
       m,

@@ -1,18 +1,29 @@
 {
   "name": "@sundial-protocol/btc-locker",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "A comprehensive Bitcoin timelock script library for creating and managing time-locked transactions",
-  "main": "src/index.js",
-  "types": "types/index.d.ts",
+  "main": "dist/cjs/index.js",
+  "types": "dist/cjs/index.d.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/esm/index.d.ts"
+    }
+  },
   "scripts": {
-    "build": "webpack --mode production",
-    "build:dev": "webpack --mode development",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "lint": "eslint src/**/*.js",
-    "lint:fix": "eslint src/**/*.js --fix",
-    "docs": "jsdoc -c jsdoc.json",
+    "build": "npm run build:esm && npm run build:cjs && webpack --mode production",
+    "build:esm": "tsc -p tsconfig.esm.json && node scripts/fix-imports.mjs",
+    "build:cjs": "tsc -p tsconfig.build.json --module commonjs --outDir dist/cjs",
+    "build:dev": "npm run build:esm && webpack --mode development",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "type-check": "tsc --noEmit",
+    "docs": "typedoc src/index.ts",
     "docs:swagger": "node -e \"console.log('Swagger docs available at: http://localhost:3000/api-docs')\"",
     "prepare": "npm run build",
     "example": "node examples/basic-usage.js",
@@ -60,6 +71,10 @@
   "devDependencies": {
     "@babel/core": "^7.23.0",
     "@babel/preset-env": "^7.23.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
     "babel-loader": "^9.1.3",
     "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.0",
@@ -71,6 +86,11 @@
     "stream-browserify": "^3.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
+    "ts-jest": "^29.1.0",
+    "ts-loader": "^9.5.0",
+    "tsx": "^4.7.0",
+    "typedoc": "^0.25.0",
+    "typescript": "^5.3.0",
     "webpack": "^5.88.0",
     "webpack-cli": "^5.1.0",
     "yamljs": "^0.3.0"
@@ -78,8 +98,6 @@
   "files": [
     "src/",
     "dist/",
-    "types/",
-    "scripts/",
     "README.md",
     "LICENSE"
   ],
@@ -87,14 +105,31 @@
     "node": ">=14.0.0"
   },
   "jest": {
-    "transform": {},
+    "preset": "ts-jest",
     "testEnvironment": "node",
+    "transform": {
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": "./tsconfig.test.json"
+        }
+      ]
+    },
+    "testMatch": [
+      "**/*.test.ts"
+    ],
     "collectCoverage": true,
     "coverageDirectory": "coverage",
     "coverageReporters": [
       "text",
       "lcov",
       "html"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "/dist/",
+      "/coverage/",
+      "/docs/"
     ]
   },
   "eslintConfig": {
@@ -102,14 +137,22 @@
       "node": true,
       "es2021": true
     },
-    "extends": "eslint:recommended",
+    "extends": [
+      "eslint:recommended",
+      "@typescript-eslint/recommended"
+    ],
+    "parser": "@typescript-eslint/parser",
+    "plugins": [
+      "@typescript-eslint"
+    ],
     "parserOptions": {
       "ecmaVersion": 12,
       "sourceType": "module"
     },
     "rules": {
       "no-console": "warn",
-      "no-unused-vars": "error"
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": "error"
     }
   }
 }

@@ -3,7 +3,34 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore, getECC } from "./core.js";
+import { BTCLockerCore, getECC } from "./core";
+import type { UTXO, TransactionResult } from "../types";
+
+interface TransactionOutput {
+  address: string;
+  value: number;
+}
+
+interface TransactionInput {
+  txid: string;
+  vout: number;
+  value: number;
+  hex: string;
+}
+
+interface SpendingTransactionParams {
+  inputs: UTXO[];
+  outputs: TransactionOutput[];
+  redeemScript: string;
+  privateKeys: string[];
+  locktime?: number;
+}
+
+interface FundingTransactionParams {
+  inputs: UTXO[];
+  outputs: TransactionOutput[];
+  privateKey: string;
+}
 
 /**
  * Transaction management class for creating funding and spending transactions
@@ -13,22 +40,9 @@ export class TransactionManager extends BTCLockerCore {
   /**
    * Create spending transaction for timelock scripts
    * @async
-   * @param {Object} params - Transaction parameters
-   * @param {Array<Object>} params.inputs - Input UTXOs array
-   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
-   * @param {number} params.inputs[].vout - Output index of the UTXO
-   * @param {number} params.inputs[].value - Value in satoshis
-   * @param {Array<Object>} params.outputs - Output destinations array
-   * @param {string} params.outputs[].address - Destination address
-   * @param {number} params.outputs[].value - Amount in satoshis
-   * @param {string} params.redeemScript - Redeem script in hex format
-   * @param {Array<string>} params.privateKeys - Private keys for signing (hex format)
-   * @param {number} [params.locktime] - Transaction locktime (optional)
-   * @returns {Promise<Object>} Transaction details object
-   * @returns {string} returns.hex - Signed transaction hex
-   * @returns {string} returns.txid - Transaction ID
-   * @returns {number} returns.size - Transaction size in bytes
-   * @throws {Error} If timelock hasn't expired or parameters are invalid
+   * @param params - Transaction parameters
+   * @returns Transaction details object
+   * @throws If timelock hasn't expired or parameters are invalid
    * @example
    * const txManager = new TransactionManager();
    * const tx = await txManager.createSpendingTransaction({
@@ -38,14 +52,14 @@ export class TransactionManager extends BTCLockerCore {
    *   privateKeys: ['...']
    * });
    */
-  async createSpendingTransaction(params) {
+  async createSpendingTransaction(params: SpendingTransactionParams): Promise<TransactionResult> {
     await this.ensureInitialized();
     const { ECPair } = getECC();
     const { inputs, outputs, redeemScript, privateKeys } = params;
 
     // First, check if this is a timelock script and if it has expired
     const redeemScriptBuffer = Buffer.from(redeemScript, "hex");
-    let locktime = null;
+    let locktime: number | null = null;
 
     try {
       const ops = bitcoin.script.decompile(redeemScriptBuffer);
@@ -82,10 +96,10 @@ export class TransactionManager extends BTCLockerCore {
         }
       }
     } catch (error) {
-      if (error.message.includes("Timelock has not expired")) {
+      if ((error as Error).message.includes("Timelock has not expired")) {
         throw error; // Re-throw timelock errors
       }
-      console.warn("Could not parse locktime from script:", error.message);
+      console.warn("Could not parse locktime from script:", (error as Error).message);
     }
 
     // Create transaction manually for better P2SH support
@@ -108,7 +122,7 @@ export class TransactionManager extends BTCLockerCore {
     outputs.forEach((output) => {
       tx.addOutput(
         bitcoin.address.toOutputScript(output.address, this.network),
-        output.value
+        BigInt(output.value)
       );
     });
 
@@ -119,7 +133,7 @@ export class TransactionManager extends BTCLockerCore {
       const privateKey =
         typeof privateKeys[0] === "string"
           ? Buffer.from(privateKeys[0], "hex")
-          : privateKeys[0];
+          : Buffer.from(privateKeys[0]);
 
       const keyPair = ECPair.fromPrivateKey(privateKey, {
         network: this.network,
@@ -135,7 +149,7 @@ export class TransactionManager extends BTCLockerCore {
       );
 
       // Sign with canonical DER encoding
-      const signature = keyPair.sign(signatureHash);
+      const signature = keyPair.sign(Buffer.from(signatureHash));
       const signatureWithHashType = bitcoin.script.signature.encode(
         signature,
         hashType
@@ -151,26 +165,22 @@ export class TransactionManager extends BTCLockerCore {
       tx.setInputScript(inputIndex, scriptSig);
     });
 
-    return tx;
+    // Convert to TransactionResult
+    const txHex = tx.toHex();
+    return {
+      hex: txHex,
+      txid: tx.getId(),
+      size: tx.virtualSize(),
+      fee: 0 // TODO: Calculate actual fee
+    };
   }
 
   /**
    * Create a funding transaction to send Bitcoin to a timelock script
    * @async
-   * @param {Object} params - Funding transaction parameters
-   * @param {Array<Object>} params.inputs - Input UTXOs to spend from
-   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
-   * @param {number} params.inputs[].vout - Output index of the UTXO
-   * @param {number} params.inputs[].value - Value in satoshis
-   * @param {Array<Object>} params.outputs - Output destinations
-   * @param {string} params.outputs[].address - Destination address
-   * @param {number} params.outputs[].value - Amount in satoshis
-   * @param {string} params.privateKey - Private key for signing inputs (hex format)
-   * @returns {Promise<Object>} Signed transaction object
-   * @returns {string} returns.hex - Signed transaction hex
-   * @returns {string} returns.txid - Transaction ID
-   * @returns {number} returns.size - Transaction size in bytes
-   * @throws {Error} If insufficient funds or invalid parameters
+   * @param params - Funding transaction parameters
+   * @returns Signed transaction object
+   * @throws If insufficient funds or invalid parameters
    * @example
    * const txManager = new TransactionManager();
    * const tx = await txManager.createFundingTransaction({
@@ -179,7 +189,7 @@ export class TransactionManager extends BTCLockerCore {
    *   privateKey: '...'
    * });
    */
-  async createFundingTransaction(params) {
+  async createFundingTransaction(params: FundingTransactionParams): Promise<TransactionResult> {
     await this.ensureInitialized();
     const { ECPair } = getECC();
     const { inputs, outputs, privateKey } = params;
@@ -198,8 +208,8 @@ export class TransactionManager extends BTCLockerCore {
           script: bitcoin.payments.p2wpkh({
             pubkey: keyPair.publicKey,
             network: this.network,
-          }).output,
-          value: input.value,
+          }).output!,
+          value: BigInt(input.value),
         },
       };
 
@@ -210,7 +220,7 @@ export class TransactionManager extends BTCLockerCore {
     for (const output of outputs) {
       psbt.addOutput({
         address: output.address,
-        value: output.value,
+        value: BigInt(output.value),
       });
     }
 
@@ -219,13 +229,22 @@ export class TransactionManager extends BTCLockerCore {
       try {
         psbt.signInput(i, keyPair);
       } catch (error) {
-        console.warn(`Could not sign input ${i}:`, error.message);
+        console.warn(`Could not sign input ${i}:`, (error as Error).message);
         throw error; // Re-throw to help with debugging
       }
     }
 
     // Finalize and extract transaction
     psbt.finalizeAllInputs();
-    return psbt.extractTransaction();
+    const tx = psbt.extractTransaction();
+    
+    // Convert to TransactionResult
+    const txHex = tx.toHex();
+    return {
+      hex: txHex,
+      txid: tx.getId(),
+      size: tx.virtualSize(),
+      fee: 0 // TODO: Calculate actual fee
+    };
   }
 }

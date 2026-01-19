@@ -2,15 +2,114 @@
  * @fileoverview BTCLocker modular components
  */
 
-import { BTCLockerCore } from "./core.js";
-import { KeyPairGenerator } from "./keypair.js";
-import { TimelockManager } from "./timelock.js";
-import { MultisigTimelockManager } from "./multisig.js";
-import { HodlScriptCreator } from "./hodl.js";
-import { TransactionManager } from "./transactions.js";
-import { YieldDistributor } from "./yield.js";
-import { EscrowManager } from "./escrow.js";
-import { DawnStakingManager } from "./dawn-stake.js";
+import { BTCLockerCore } from "./core";
+import { KeyPairGenerator } from "./keypair";
+import { TimelockManager } from "./timelock";
+import { MultisigTimelockManager } from "./multisig";
+import { HodlScriptCreator } from "./hodl";
+import { TransactionManager } from "./transactions";
+import { YieldDistributor } from "./yield";
+import { EscrowManager } from "./escrow";
+import { DawnStakingManager } from "./dawn-stake";
+import { 
+  KeyPair, 
+  ScriptInfo, 
+  UTXO, 
+  TransactionResult, 
+  NetworkType 
+} from "../types";
+
+/**
+ * Parameters for creating spending transactions
+ */
+export interface SpendingTransactionParams {
+  inputs: UTXO[];
+  outputs: Array<{
+    address: string;
+    value: number;
+  }>;
+  redeemScript: string;
+  privateKeys: string[];
+  locktime?: number;
+}
+
+/**
+ * Parameters for creating funding transactions
+ */
+export interface FundingTransactionParams {
+  inputs: UTXO[];
+  outputs: Array<{
+    address: string;
+    value: number;
+  }>;
+  privateKey: string;
+}
+
+/**
+ * Parameters for yield distribution
+ */
+export interface YieldDistributionParams {
+  inputs: UTXO[];
+  timelockAddress: string;
+  amount: number;
+  privateKey: string;
+  memo?: string;
+  changeAddress?: string;
+  feeRate?: number;
+}
+
+/**
+ * Result of yield distribution
+ */
+export interface YieldDistributionResult extends TransactionResult {
+  memo: string;
+  distribution: {
+    amount: number;
+    destination: string;
+    change: number;
+  };
+}
+
+/**
+ * Parameters for Dawn staking transactions
+ */
+export interface DawnStakingParams {
+  inputs: UTXO[];
+  escrowAddress: string;
+  escrowAmount: number;
+  timelockAddress: string;
+  timelockAmount: number;
+  changeAddress?: string;
+  privateKey: string;
+  feeRate?: number;
+}
+
+/**
+ * Parameters for Dawn staking with script data
+ */
+export interface DawnStakingWithScriptParams {
+  inputs: UTXO[];
+  escrowAddress: string;
+  escrowAmount: number;
+  timelockScript: ScriptInfo;
+  timelockAmount: number;
+  changeAddress?: string;
+  privateKey: string;
+  feeRate?: number;
+}
+
+/**
+ * Parameters for Dawn staking amount calculation
+ */
+export interface DawnStakingCalculationParams {
+  inputs: Array<{
+    value: number;
+  }>;
+  desiredEscrowAmount: number;
+  desiredTimelockAmount: number;
+  includeChange?: boolean;
+  feeRate?: number;
+}
 
 /**
  * Combined BTCLocker class that includes all functionality
@@ -28,7 +127,16 @@ import { DawnStakingManager } from "./dawn-stake.js";
  * await locker.init();
  */
 export class BTCLocker extends BTCLockerCore {
-  constructor(network) {
+  public readonly keyPairGenerator: KeyPairGenerator;
+  public readonly timelockCreator: TimelockManager;
+  public readonly multisigCreator: MultisigTimelockManager;
+  public readonly hodlCreator: HodlScriptCreator;
+  public readonly transactionManager: TransactionManager;
+  public readonly yieldDistributor: YieldDistributor;
+  public readonly escrowManager: EscrowManager;
+  public readonly dawnStakingManager: DawnStakingManager;
+
+  constructor(network?: NetworkType) {
     super(network);
 
     // Initialize component instances with the converted network object from parent
@@ -51,7 +159,7 @@ export class BTCLocker extends BTCLockerCore {
    * const locker = new BTCLocker();
    * await locker.init();
    */
-  async init() {
+  async init(): Promise<void> {
     await super.init();
     // Initialize all components
     await Promise.all([
@@ -71,17 +179,14 @@ export class BTCLocker extends BTCLockerCore {
   /**
    * Generate a new Bitcoin key pair
    * @async
-   * @returns {Promise<Object>} Key pair object
-   * @returns {string} returns.privateKey - Private key in hex format
-   * @returns {string} returns.publicKey - Public key in hex format
-   * @returns {string} returns.address - Bitcoin address (P2WPKH)
+   * @returns {Promise<KeyPair>} Key pair object
    * @throws {Error} If key generation fails
    * @example
    * const locker = new BTCLocker();
    * const keyPair = await locker.generateKeyPair();
    * console.log(keyPair.address);
    */
-  async generateKeyPair() {
+  async generateKeyPair(): Promise<KeyPair> {
     return this.keyPairGenerator.generateKeyPair();
   }
 
@@ -89,17 +194,14 @@ export class BTCLocker extends BTCLockerCore {
    * Generate key pair from existing private key
    * @async
    * @param {string} privateKeyHex - Private key in hex format (64 characters)
-   * @returns {Promise<Object>} Key pair object
-   * @returns {string} returns.privateKey - Private key in hex format
-   * @returns {string} returns.publicKey - Public key in hex format
-   * @returns {string} returns.address - Bitcoin address (P2WPKH)
+   * @returns {Promise<KeyPair>} Key pair object
    * @throws {Error} If private key is invalid
    * @example
    * const locker = new BTCLocker();
    * const keyPair = await locker.generateKeyPairFromPrivateKey('1234567890abcdef...');
    * console.log(keyPair.address);
    */
-  async generateKeyPairFromPrivateKey(privateKeyHex) {
+  async generateKeyPairFromPrivateKey(privateKeyHex: string): Promise<KeyPair> {
     return this.keyPairGenerator.generateKeyPairFromPrivateKey(privateKeyHex);
   }
 
@@ -108,19 +210,14 @@ export class BTCLocker extends BTCLockerCore {
    * @async
    * @param {number} locktime - Unix timestamp (for time-based) or block height (for height-based)
    * @param {Buffer|string} publicKey - Public key as buffer or hex string
-   * @returns {Promise<Object>} Script details object
-   * @returns {Buffer} returns.script - The compiled timelock script
-   * @returns {string} returns.scriptHex - Script in hex format
-   * @returns {string} returns.address - P2SH address for the script
-   * @returns {string} returns.redeemScript - Redeem script in hex format
-   * @returns {number} returns.locktime - The locktime value
+   * @returns {Promise<ScriptInfo>} Script details object
    * @throws {Error} If locktime or publicKey is invalid
    * @example
    * const locker = new BTCLocker();
    * const script = await locker.createTimelockScript(1640995200, publicKey);
    * console.log(script.address);
    */
-  async createTimelockScript(locktime, publicKey) {
+  async createTimelockScript(locktime: number, publicKey: Buffer | string): Promise<ScriptInfo> {
     return this.timelockCreator.createTimelockScript(locktime, publicKey);
   }
 
@@ -129,19 +226,14 @@ export class BTCLocker extends BTCLockerCore {
    * @async
    * @param {number} sequence - Relative timelock value (blocks or time units)
    * @param {Buffer|string} publicKey - Public key as buffer or hex string
-   * @returns {Promise<Object>} Script details object
-   * @returns {Buffer} returns.script - The compiled timelock script
-   * @returns {string} returns.scriptHex - Script in hex format
-   * @returns {string} returns.address - P2SH address for the script
-   * @returns {string} returns.redeemScript - Redeem script in hex format
-   * @returns {number} returns.sequence - The sequence value
+   * @returns {Promise<ScriptInfo>} Script details object
    * @throws {Error} If sequence or publicKey is invalid
    * @example
    * const locker = new BTCLocker();
    * const script = await locker.createRelativeTimelockScript(144, publicKey); // 1 day
    * console.log(script.address);
    */
-  async createRelativeTimelockScript(sequence, publicKey) {
+  async createRelativeTimelockScript(sequence: number, publicKey: Buffer | string): Promise<ScriptInfo> {
     return this.timelockCreator.createRelativeTimelockScript(
       sequence,
       publicKey
@@ -154,14 +246,7 @@ export class BTCLocker extends BTCLockerCore {
    * @param {number} locktime - Unix timestamp or block height for timelock
    * @param {number} m - Required number of signatures (M-of-N multisig)
    * @param {Array<Buffer|string>} publicKeys - Array of public keys (buffers or hex strings)
-   * @returns {Promise<Object>} Script details object
-   * @returns {Buffer} returns.script - The compiled multisig timelock script
-   * @returns {string} returns.scriptHex - Script in hex format
-   * @returns {string} returns.address - P2SH address for the script
-   * @returns {string} returns.redeemScript - Redeem script in hex format
-   * @returns {number} returns.locktime - The locktime value
-   * @returns {number} returns.m - Required signatures count
-   * @returns {number} returns.n - Total public keys count
+   * @returns {Promise<ScriptInfo>} Script details object
    * @throws {Error} If parameters are invalid or insufficient public keys provided
    * @example
    * const locker = new BTCLocker();
@@ -172,7 +257,11 @@ export class BTCLocker extends BTCLockerCore {
    * );
    * console.log(script.address);
    */
-  async createMultisigTimelockScript(locktime, m, publicKeys) {
+  async createMultisigTimelockScript(
+    locktime: number, 
+    m: number, 
+    publicKeys: Array<Buffer | string>
+  ): Promise<ScriptInfo> {
     return this.multisigCreator.createMultisigTimelockScript(
       locktime,
       m,
@@ -186,14 +275,7 @@ export class BTCLocker extends BTCLockerCore {
    * @param {number} locktime - Unix timestamp or block height for the HODL period
    * @param {Buffer|string} ownerPubKey - Owner's public key (normal spending after locktime)
    * @param {Buffer|string} penaltyPubKey - Emergency escape public key (immediate spending)
-   * @returns {Promise<Object>} Script details object
-   * @returns {Buffer} returns.script - The compiled HODL script with conditional logic
-   * @returns {string} returns.scriptHex - Script in hex format
-   * @returns {string} returns.address - P2SH address for the script
-   * @returns {string} returns.redeemScript - Redeem script in hex format
-   * @returns {number} returns.locktime - The locktime value
-   * @returns {string} returns.ownerPubKey - Owner public key in hex
-   * @returns {string} returns.penaltyPubKey - Penalty public key in hex
+   * @returns {Promise<ScriptInfo>} Script details object
    * @throws {Error} If parameters are invalid
    * @example
    * const locker = new BTCLocker();
@@ -204,7 +286,11 @@ export class BTCLocker extends BTCLockerCore {
    * );
    * console.log(script.address);
    */
-  async createHodlScript(locktime, ownerPubKey, penaltyPubKey) {
+  async createHodlScript(
+    locktime: number, 
+    ownerPubKey: Buffer | string, 
+    penaltyPubKey: Buffer | string
+  ): Promise<ScriptInfo> {
     return this.hodlCreator.createHodlScript(
       locktime,
       ownerPubKey,
@@ -215,21 +301,8 @@ export class BTCLocker extends BTCLockerCore {
   /**
    * Create spending transaction for timelock scripts
    * @async
-   * @param {Object} params - Transaction parameters
-   * @param {Array<Object>} params.inputs - Input UTXOs array
-   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
-   * @param {number} params.inputs[].vout - Output index of the UTXO
-   * @param {number} params.inputs[].value - Value in satoshis
-   * @param {Array<Object>} params.outputs - Output destinations array
-   * @param {string} params.outputs[].address - Destination address
-   * @param {number} params.outputs[].value - Amount in satoshis
-   * @param {string} params.redeemScript - Redeem script in hex format
-   * @param {Array<string>} params.privateKeys - Private keys for signing (hex format)
-   * @param {number} [params.locktime] - Transaction locktime (optional)
-   * @returns {Promise<Object>} Transaction details object
-   * @returns {string} returns.hex - Signed transaction hex
-   * @returns {string} returns.txid - Transaction ID
-   * @returns {number} returns.size - Transaction size in bytes
+   * @param {SpendingTransactionParams} params - Transaction parameters
+   * @returns {Promise<TransactionResult>} Transaction details object
    * @throws {Error} If timelock hasn't expired or parameters are invalid
    * @example
    * const locker = new BTCLocker();
@@ -240,27 +313,15 @@ export class BTCLocker extends BTCLockerCore {
    *   privateKeys: ['...']
    * });
    */
-  async createSpendingTransaction(params) {
+  async createSpendingTransaction(params: SpendingTransactionParams): Promise<TransactionResult> {
     return this.transactionManager.createSpendingTransaction(params);
   }
 
   /**
    * Create a funding transaction to send Bitcoin to a timelock script
    * @async
-   * @param {Object} params - Funding transaction parameters
-   * @param {Array<Object>} params.inputs - Input UTXOs to spend from
-   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
-   * @param {number} params.inputs[].vout - Output index of the UTXO
-   * @param {number} params.inputs[].value - Value in satoshis
-   * @param {string} params.timelockAddress - Address of the timelock script
-   * @param {number} params.amount - Amount to send to timelock (satoshis)
-   * @param {string} params.changeAddress - Address for change output
-   * @param {Array<string>} params.privateKeys - Private keys for signing inputs
-   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
-   * @returns {Promise<Object>} Transaction details object
-   * @returns {string} returns.hex - Signed transaction hex
-   * @returns {string} returns.txid - Transaction ID
-   * @returns {number} returns.fee - Transaction fee in satoshis
+   * @param {FundingTransactionParams} params - Funding transaction parameters
+   * @returns {Promise<TransactionResult>} Transaction details object
    * @throws {Error} If insufficient funds or invalid parameters
    * @example
    * const locker = new BTCLocker();
@@ -272,7 +333,7 @@ export class BTCLocker extends BTCLockerCore {
    *   privateKeys: ['...']
    * });
    */
-  async createFundingTransaction(params) {
+  async createFundingTransaction(params: FundingTransactionParams): Promise<TransactionResult> {
     return this.transactionManager.createFundingTransaction(params);
   }
 
@@ -282,14 +343,7 @@ export class BTCLocker extends BTCLockerCore {
    * @param {number} deadline - Unix timestamp deadline
    * @param {Buffer|string} beforePublicKey - Public key of user who can withdraw before deadline
    * @param {Buffer|string} afterPublicKey - Public key of user who can withdraw after deadline
-   * @returns {Promise<Object>} Script details object
-   * @returns {string} returns.redeemScript - Redeem script in hex format
-   * @returns {string} returns.scriptHash - Script hash in hex format
-   * @returns {string} returns.address - P2SH address for the script
-   * @returns {number} returns.deadline - The deadline timestamp
-   * @returns {string} returns.beforePublicKey - Public key for before-deadline withdrawals
-   * @returns {string} returns.afterPublicKey - Public key for after-deadline withdrawals
-   * @returns {string} returns.type - Script type identifier
+   * @returns {Promise<ScriptInfo>} Script details object
    * @throws {Error} If deadline or public keys are invalid
    * @example
    * const locker = new BTCLocker();
@@ -300,14 +354,18 @@ export class BTCLocker extends BTCLockerCore {
    * );
    * console.log(script.address);
    */
-  async createEscrowScript(deadline, beforePublicKey, afterPublicKey) {
+  async createEscrowScript(
+    deadline: number, 
+    beforePublicKey: Buffer | string, 
+    afterPublicKey: Buffer | string
+  ): Promise<ScriptInfo> {
     return this.escrowManager.createEscrowScript(deadline, beforePublicKey, afterPublicKey);
   }
 
   /**
    * Create a spending transaction for the escrow script
    * @async
-   * @param {Object} scriptData - Script data returned from createEscrowScript
+   * @param {ScriptInfo} scriptData - Script data returned from createEscrowScript
    * @param {string} utxoTxId - Transaction ID of the UTXO to spend
    * @param {number} utxoIndex - Output index of the UTXO to spend
    * @param {number} amount - Amount in satoshis to spend
@@ -315,9 +373,7 @@ export class BTCLocker extends BTCLockerCore {
    * @param {boolean} spendAfterDeadline - Whether to spend after deadline (true) or before (false)
    * @param {Buffer|string} privateKey - Private key corresponding to the appropriate public key
    * @param {number} [currentTime] - Current time for validation (defaults to Date.now())
-   * @returns {Promise<Object>} Transaction details
-   * @returns {string} returns.txHex - Raw transaction in hex format
-   * @returns {string} returns.txId - Transaction ID
+   * @returns {Promise<{ txHex: string; txId: string }>} Transaction details
    * @throws {Error} If spending conditions are not met or transaction creation fails
    * @example
    * const locker = new BTCLocker();
@@ -333,15 +389,15 @@ export class BTCLocker extends BTCLockerCore {
    * );
    */
   async createEscrowSpendingTransaction(
-    scriptData,
-    utxoTxId,
-    utxoIndex,
-    amount,
-    outputAddress,
-    spendAfterDeadline,
-    privateKey,
-    currentTime
-  ) {
+    scriptData: ScriptInfo,
+    utxoTxId: string,
+    utxoIndex: number,
+    amount: number,
+    outputAddress: string,
+    spendAfterDeadline: boolean,
+    privateKey: Buffer | string,
+    currentTime?: number
+  ): Promise<{ txHex: string; txId: string }> {
     return this.escrowManager.createEscrowSpendingTransaction(
       scriptData,
       utxoTxId,
@@ -357,22 +413,8 @@ export class BTCLocker extends BTCLockerCore {
   /**
    * Distribute yield back to a timelock script
    * @async
-   * @param {Object} params - Distribution parameters
-   * @param {Array<Object>} params.inputs - Input UTXOs from yield source
-   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
-   * @param {number} params.inputs[].vout - Output index of the UTXO
-   * @param {number} params.inputs[].value - Value in satoshis
-   * @param {string} params.timelockAddress - Timelock script address to send yield to
-   * @param {number} params.amount - Amount to distribute in satoshis
-   * @param {string} params.privateKey - Private key for signing inputs (hex format)
-   * @param {string} [params.memo] - Optional memo for the distribution
-   * @param {string} [params.changeAddress] - Change address (defaults to derived from private key)
-   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
-   * @returns {Promise<Object>} Signed distribution transaction object
-   * @returns {string} returns.hex - Signed transaction hex
-   * @returns {string} returns.txid - Transaction ID
-   * @returns {number} returns.fee - Transaction fee in satoshis
-   * @returns {string} [returns.memo] - Memo if provided
+   * @param {YieldDistributionParams} params - Distribution parameters
+   * @returns {Promise<YieldDistributionResult>} Signed distribution transaction object
    * @throws {Error} If insufficient funds or invalid parameters
    * @example
    * const locker = new BTCLocker();
@@ -384,26 +426,15 @@ export class BTCLocker extends BTCLockerCore {
    *   memo: 'Quarterly yield distribution'
    * });
    */
-  async distributeYield(params) {
+  async distributeYield(params: YieldDistributionParams): Promise<YieldDistributionResult> {
     return this.yieldDistributor.distributeYield(params);
   }
 
   /**
    * Create a Dawn Protocol staking transaction
    * @async
-   * @param {Object} params - Dawn staking parameters
-   * @param {Array<Object>} params.inputs - Input UTXOs to spend from
-   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
-   * @param {number} params.inputs[].vout - Output index of the UTXO
-   * @param {number} params.inputs[].value - Value in satoshis
-   * @param {string} params.escrowAddress - Address of the escrow script
-   * @param {number} params.escrowAmount - Amount to send to escrow (satoshis)
-   * @param {string} params.timelockAddress - Address of the configurable timelock script
-   * @param {number} params.timelockAmount - Amount to send to timelock script (satoshis)
-   * @param {string} [params.changeAddress] - Address for change (optional)
-   * @param {string} params.privateKey - Private key for signing inputs (hex format)
-   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
-   * @returns {Promise<Object>} Dawn staking transaction details
+   * @param {DawnStakingParams} params - Dawn staking parameters
+   * @returns {Promise<TransactionResult>} Dawn staking transaction details
    * @example
    * const locker = new BTCLocker();
    * const tx = await locker.createDawnStakingTransaction({
@@ -415,26 +446,15 @@ export class BTCLocker extends BTCLockerCore {
    *   privateKey: '...'
    * });
    */
-  async createDawnStakingTransaction(params) {
+  async createDawnStakingTransaction(params: DawnStakingParams): Promise<TransactionResult> {
     return this.dawnStakingManager.createDawnStakingTransaction(params);
   }
 
   /**
    * Create a Dawn Protocol staking transaction using timelock script data
    * @async
-   * @param {Object} params - Dawn staking parameters with script data
-   * @param {Array<Object>} params.inputs - Input UTXOs to spend from
-   * @param {string} params.escrowAddress - Address of the escrow script
-   * @param {number} params.escrowAmount - Amount to send to escrow (satoshis)
-   * @param {Object} params.timelockScript - Timelock script data object
-   * @param {string} params.timelockScript.address - Address of the timelock script
-   * @param {number} params.timelockScript.locktime - Locktime of the script
-   * @param {string} params.timelockScript.type - Type of timelock script
-   * @param {number} params.timelockAmount - Amount to send to timelock script (satoshis)
-   * @param {string} [params.changeAddress] - Address for change (optional)
-   * @param {string} params.privateKey - Private key for signing inputs (hex format)
-   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
-   * @returns {Promise<Object>} Dawn staking transaction details with script info
+   * @param {DawnStakingWithScriptParams} params - Dawn staking parameters with script data
+   * @returns {Promise<TransactionResult>} Dawn staking transaction details with script info
    * @example
    * const locker = new BTCLocker();
    * const timelockScript = await locker.createTimelockScript(locktime, publicKey);
@@ -447,21 +467,15 @@ export class BTCLocker extends BTCLockerCore {
    *   privateKey: '...'
    * });
    */
-  async createDawnStakingTransactionWithScript(params) {
+  async createDawnStakingTransactionWithScript(params: DawnStakingWithScriptParams): Promise<TransactionResult> {
     return this.dawnStakingManager.createDawnStakingTransactionWithScript(params);
   }
 
   /**
    * Calculate optimal amounts for Dawn staking
    * @async
-   * @param {Object} params - Calculation parameters
-   * @param {Array<Object>} params.inputs - Input UTXOs
-   * @param {number} params.inputs[].value - UTXO value in satoshis
-   * @param {number} params.desiredEscrowAmount - Desired escrow amount
-   * @param {number} params.desiredTimelockAmount - Desired timelock amount
-   * @param {boolean} [params.includeChange=false] - Whether to include change output
-   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
-   * @returns {Promise<Object>} Calculation results
+   * @param {DawnStakingCalculationParams} params - Calculation parameters
+   * @returns {Promise<any>} Calculation results
    * @example
    * const locker = new BTCLocker();
    * const calculation = await locker.calculateDawnStakingAmounts({
@@ -470,20 +484,20 @@ export class BTCLocker extends BTCLockerCore {
    *   desiredTimelockAmount: 200000
    * });
    */
-  async calculateDawnStakingAmounts(params) {
+  async calculateDawnStakingAmounts(params: DawnStakingCalculationParams): Promise<any> {
     return this.dawnStakingManager.calculateDawnStakingAmounts(params);
   }
 }
 
 // Export all individual components for modular usage
-export { BTCLockerCore } from "./core.js";
-export { KeyPairGenerator } from "./keypair.js";
-export { TimelockManager } from "./timelock.js";
-export { MultisigTimelockManager } from "./multisig.js";
-export { HodlScriptCreator } from "./hodl.js";
-export { TransactionManager } from "./transactions.js";
-export { YieldDistributor } from "./yield.js";
-export { EscrowManager } from "./escrow.js";
-export { DawnStakingManager } from "./dawn-stake.js";
+export { BTCLockerCore } from "./core";
+export { KeyPairGenerator } from "./keypair";
+export { TimelockManager } from "./timelock";
+export { MultisigTimelockManager } from "./multisig";
+export { HodlScriptCreator } from "./hodl";
+export { TransactionManager } from "./transactions";
+export { YieldDistributor } from "./yield";
+export { EscrowManager } from "./escrow";
+export { DawnStakingManager } from "./dawn-stake";
 
 export default BTCLocker;

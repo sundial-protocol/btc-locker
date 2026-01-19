@@ -3,7 +3,38 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore, getECC } from "./core.js";
+import { BTCLockerCore, getECC } from "./core";
+import type { UTXO } from "../types";
+
+interface YieldInput extends UTXO {
+  txid: string;
+  vout: number;
+  value: number;
+}
+
+interface YieldDistributionParams {
+  inputs: YieldInput[];
+  timelockAddress: string;
+  amount: number;
+  privateKey: string;
+  memo?: string;
+  changeAddress?: string;
+  feeRate?: number;
+}
+
+interface YieldDistributionResult {
+  transaction: bitcoin.Transaction;
+  hex: string;
+  txid: string;
+  size: number;
+  fee: number;
+  memo: string;
+  distribution: {
+    amount: number;
+    destination: string;
+    change: number;
+  };
+}
 
 /**
  * Yield distribution class for distributing yields to timelock addresses
@@ -13,23 +44,9 @@ export class YieldDistributor extends BTCLockerCore {
   /**
    * Distribute yield back to a timelock script
    * @async
-   * @param {Object} params - Distribution parameters
-   * @param {Array<Object>} params.inputs - Input UTXOs from yield source
-   * @param {string} params.inputs[].txid - Transaction ID of the UTXO
-   * @param {number} params.inputs[].vout - Output index of the UTXO
-   * @param {number} params.inputs[].value - Value in satoshis
-   * @param {string} params.timelockAddress - Timelock script address to send yield to
-   * @param {number} params.amount - Amount to distribute in satoshis
-   * @param {string} params.privateKey - Private key for signing inputs (hex format)
-   * @param {string} [params.memo] - Optional memo for the distribution
-   * @param {string} [params.changeAddress] - Change address (defaults to derived from private key)
-   * @param {number} [params.feeRate=10] - Fee rate in sat/byte
-   * @returns {Promise<Object>} Signed distribution transaction object
-   * @returns {string} returns.hex - Signed transaction hex
-   * @returns {string} returns.txid - Transaction ID
-   * @returns {number} returns.fee - Transaction fee in satoshis
-   * @returns {string} [returns.memo] - Memo if provided
-   * @throws {Error} If insufficient funds or invalid parameters
+   * @param params - Distribution parameters
+   * @returns Signed distribution transaction object
+   * @throws If insufficient funds or invalid parameters
    * @example
    * const yieldDistributor = new YieldDistributor();
    * const tx = await yieldDistributor.distributeYield({
@@ -40,7 +57,7 @@ export class YieldDistributor extends BTCLockerCore {
    *   memo: 'Quarterly yield distribution'
    * });
    */
-  async distributeYield(params) {
+  async distributeYield(params: YieldDistributionParams): Promise<YieldDistributionResult> {
     await this.ensureInitialized();
     const { ECPair } = getECC();
     const { inputs, timelockAddress, amount, privateKey, memo } = params;
@@ -64,8 +81,8 @@ export class YieldDistributor extends BTCLockerCore {
           script: bitcoin.payments.p2wpkh({
             pubkey: keyPair.publicKey,
             network: this.network,
-          }).output,
-          value: input.value,
+          }).output!,
+          value: BigInt(input.value),
         },
       };
 
@@ -75,7 +92,7 @@ export class YieldDistributor extends BTCLockerCore {
     // Add yield distribution output
     psbt.addOutput({
       address: timelockAddress,
-      value: amount,
+      value: BigInt(amount),
     });
 
     // Add change output if needed (above dust threshold)
@@ -83,11 +100,11 @@ export class YieldDistributor extends BTCLockerCore {
       const sourceAddress = bitcoin.payments.p2wpkh({
         pubkey: keyPair.publicKey,
         network: this.network,
-      }).address;
+      }).address!;
 
       psbt.addOutput({
         address: sourceAddress,
-        value: changeAmount,
+        value: BigInt(changeAmount),
       });
     }
 
@@ -96,7 +113,7 @@ export class YieldDistributor extends BTCLockerCore {
       try {
         psbt.signInput(i, keyPair);
       } catch (error) {
-        console.warn(`Could not sign input ${i}:`, error.message);
+        console.warn(`Could not sign input ${i}:`, (error as Error).message);
         throw error; // Re-throw to help with debugging
       }
     }

@@ -7,7 +7,7 @@
  * 2. A configurable amount to a configurable timelock script
  */
 
-import { BTCLocker } from "../src/index.js";
+import { BTCLocker } from "../dist/index.js";
 
 /**
  * Example: Create Dawn Protocol staking transaction with configurable timelock script

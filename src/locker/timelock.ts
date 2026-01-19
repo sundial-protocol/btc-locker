@@ -3,7 +3,8 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore } from "./core.js";
+import { BTCLockerCore } from "./core";
+import type { ScriptInfo } from "../types";
 
 /**
  * Timelock script management class for creating time-locked Bitcoin scripts
@@ -13,21 +14,16 @@ export class TimelockManager extends BTCLockerCore {
   /**
    * Create a simple timelock script (absolute time)
    * @async
-   * @param {number} locktime - Unix timestamp (for time-based) or block height (for height-based)
-   * @param {Buffer|string} publicKey - Public key as buffer or hex string
-   * @returns {Promise<Object>} Script details object
-   * @returns {Buffer} returns.script - The compiled timelock script
-   * @returns {string} returns.scriptHex - Script in hex format
-   * @returns {string} returns.address - P2SH address for the script
-   * @returns {string} returns.redeemScript - Redeem script in hex format
-   * @returns {number} returns.locktime - The locktime value
-   * @throws {Error} If locktime or publicKey is invalid
+   * @param locktime - Unix timestamp (for time-based) or block height (for height-based)
+   * @param publicKey - Public key as buffer or hex string
+   * @returns Script details object
+   * @throws If locktime or publicKey is invalid
    * @example
    * const timelock = new TimelockManager();
    * const script = await timelock.createTimelockScript(1640995200, publicKey);
    * console.log(script.address);
    */
-  async createTimelockScript(locktime, publicKey) {
+  async createTimelockScript(locktime: number, publicKey: Buffer | string): Promise<ScriptInfo> {
     await this.ensureInitialized();
 
     // Validate inputs
@@ -40,7 +36,7 @@ export class TimelockManager extends BTCLockerCore {
     }
 
     // Convert and validate public key
-    let publicKeyBuffer;
+    let publicKeyBuffer: Buffer;
     if (typeof publicKey === "string") {
       if (!/^[0-9a-fA-F]+$/.test(publicKey)) {
         throw new Error(
@@ -50,7 +46,7 @@ export class TimelockManager extends BTCLockerCore {
       try {
         publicKeyBuffer = Buffer.from(publicKey, "hex");
       } catch (error) {
-        throw new Error(`Invalid public key hex string: ${error.message}`);
+        throw new Error(`Invalid public key hex string: ${(error as Error).message}`);
       }
     } else if (Buffer.isBuffer(publicKey)) {
       publicKeyBuffer = publicKey;
@@ -84,50 +80,48 @@ export class TimelockManager extends BTCLockerCore {
       const address = bitcoin.payments.p2sh({
         hash: scriptHash,
         network: this.network,
-      }).address;
+      }).address!;
 
       return {
-        redeemScript: redeemScript.toString("hex"),
-        scriptHash: scriptHash.toString("hex"),
+        redeemScript: Buffer.from(redeemScript).toString("hex"),
+        scriptHash: Buffer.from(scriptHash).toString("hex"),
         address,
         locktime: locktimeNumber,
         publicKey: publicKeyBuffer.toString("hex"),
         type: "timelock",
       };
     } catch (error) {
-      throw new Error(`Failed to create timelock script: ${error.message}`);
+      throw new Error(`Failed to create timelock script: ${(error as Error).message}`);
     }
   }
 
   /**
    * Create a relative timelock script (CSV - CheckSequenceVerify)
    * @async
-   * @param {number} sequence - Relative timelock value (blocks or time units)
-   * @param {Buffer|string} publicKey - Public key as buffer or hex string
-   * @returns {Promise<Object>} Script details object
-   * @returns {Buffer} returns.script - The compiled timelock script
-   * @returns {string} returns.scriptHex - Script in hex format
-   * @returns {string} returns.address - P2SH address for the script
-   * @returns {string} returns.redeemScript - Redeem script in hex format
-   * @returns {number} returns.sequence - The sequence value
-   * @throws {Error} If sequence or publicKey is invalid
+   * @param sequence - Relative timelock value (blocks or time units)
+   * @param publicKey - Public key as buffer or hex string
+   * @returns Script details object
+   * @throws If sequence or publicKey is invalid
    * @example
    * const timelock = new TimelockManager();
    * const script = await timelock.createRelativeTimelockScript(144, publicKey); // 1 day
    * console.log(script.address);
    */
-  async createRelativeTimelockScript(sequence, publicKey) {
+  async createRelativeTimelockScript(sequence: number, publicKey: Buffer | string): Promise<ScriptInfo> {
     await this.ensureInitialized();
 
+    let publicKeyBuffer: Buffer;
     if (typeof publicKey === "string") {
-      publicKey = Buffer.from(publicKey, "hex");
+      publicKeyBuffer = Buffer.from(publicKey, "hex");
+    } else {
+      publicKeyBuffer = publicKey;
     }
 
     const redeemScript = bitcoin.script.compile([
       bitcoin.script.number.encode(sequence),
       bitcoin.opcodes.OP_CHECKSEQUENCEVERIFY,
       bitcoin.opcodes.OP_DROP,
-      publicKey,
+      publicKeyBuffer,
       bitcoin.opcodes.OP_CHECKSIG,
     ]);
 
@@ -135,14 +129,14 @@ export class TimelockManager extends BTCLockerCore {
     const address = bitcoin.payments.p2sh({
       hash: scriptHash,
       network: this.network,
-    }).address;
+    }).address!;
 
     return {
-      redeemScript: redeemScript.toString("hex"),
-      scriptHash: scriptHash.toString("hex"),
+      redeemScript: Buffer.from(redeemScript).toString("hex"),
+      scriptHash: Buffer.from(scriptHash).toString("hex"),
       address,
       sequence,
-      publicKey: publicKey.toString("hex"),
+      publicKey: publicKeyBuffer.toString("hex"),
       type: "relative-timelock",
     };
   }
