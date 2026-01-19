@@ -82,6 +82,26 @@ export function setupTransactionCommands(program) {
       const parentOptions = program.opts();
       await handleDawnStakeCommand(cmdOptions, parentOptions);
     });
+
+  /**
+   * Dawn Protocol withdrawal command
+   */
+  txCommand
+    .command("dawn-withdraw")
+    .description("Withdraw funds from both escrow and timelock scripts")
+    .option("-e, --escrow-address <address>", "Escrow script address to withdraw from")
+    .option("--escrow-script <script>", "Escrow redeem script (hex)")
+    .option("--escrow-key <key>", "Private key for escrow script (hex)")
+    .option("-t, --timelock-address <address>", "Timelock script address to withdraw from")
+    .option("--timelock-script <script>", "Timelock redeem script (hex)")
+    .option("--timelock-key <key>", "Private key for timelock script (hex)")
+    .option("-d, --destination <address>", "Destination address for withdrawal")
+    .option("--fee <satoshis>", "Fee in satoshis", "2000")
+    .option("--dry-run", "Create transaction but don't broadcast")
+    .action(async (cmdOptions) => {
+      const parentOptions = program.opts();
+      await handleDawnWithdrawCommand(cmdOptions, parentOptions);
+    });
 }
 
 async function handleLockCommand(cmdOptions, parentOptions) {
@@ -214,7 +234,7 @@ async function handleLockCommand(cmdOptions, parentOptions) {
       );
     }
 
-    const lockingTx = locker.createFundingTransaction({
+    const lockingTx = await locker.createFundingTransaction({
       inputs: txInputs,
       outputs: outputs,
       privateKey: fromPrivateKey,
@@ -222,11 +242,11 @@ async function handleLockCommand(cmdOptions, parentOptions) {
 
     const result = {
       transaction: {
-        hex: lockingTx.toHex(),
-        txid: lockingTx.getId(),
-        size: lockingTx.byteLength(),
-        fee: feeAmount,
-        fee_rate: (feeAmount / lockingTx.byteLength()).toFixed(2),
+        hex: lockingTx.hex,
+        txid: lockingTx.txid,
+        size: lockingTx.size,
+        fee: lockingTx.fee,
+        fee_rate: (lockingTx.fee / lockingTx.size).toFixed(2),
       },
       inputs: {
         count: confirmedUtxos.length,
@@ -249,7 +269,7 @@ async function handleLockCommand(cmdOptions, parentOptions) {
 
     if (cmdOptions.dryRun) {
       console.log(chalk.yellow("🔍 Dry run - transaction not broadcasted"));
-      console.log(chalk.blue(`Transaction hex: ${lockingTx.toHex()}`));
+      console.log(chalk.blue(`Transaction hex: ${lockingTx.hex}`));
       return;
     }
 
@@ -273,12 +293,12 @@ async function handleLockCommand(cmdOptions, parentOptions) {
     console.log(chalk.blue("Broadcasting transaction..."));
 
     // Broadcast the transaction
-    const broadcastResult = await api.broadcastTransaction(lockingTx.toHex());
+    const broadcastResult = await api.broadcastTransaction(lockingTx.hex);
 
     console.log(chalk.green("✅ Funds locked successfully!"));
     console.log(
       chalk.blue(
-        `Transaction ID: ${broadcastResult.txid || lockingTx.getId()}`
+        `Transaction ID: ${broadcastResult.txid || lockingTx.txid}`
       )
     );
     console.log(
@@ -292,13 +312,13 @@ async function handleLockCommand(cmdOptions, parentOptions) {
     if (parentOptions.network === "testnet") {
       console.log(
         chalk.blue(
-          `View on explorer: https://mempool.space/testnet/tx/${lockingTx.getId()}`
+          `View on explorer: https://mempool.space/testnet/tx/${lockingTx.txid}`
         )
       );
     } else {
       console.log(
         chalk.blue(
-          `View on explorer: https://mempool.space/tx/${lockingTx.getId()}`
+          `View on explorer: https://mempool.space/tx/${lockingTx.txid}`
         )
       );
     }
@@ -983,8 +1003,240 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
         );
       }
     } else {
-      console.log(chalk.yellow("\n⚠️  DRY RUN: Transaction not broadcasted"));
+      console.log(chalk.yellow("\nDRY RUN: Transaction not broadcasted"));
       console.log(chalk.gray("Use without --dry-run flag to actually send the transaction"));
+    }
+
+  } catch (error) {
+    console.error(chalk.red(`Error: ${error.message}`));
+    if (parentOptions.verbose) {
+      console.error(error.stack);
+    }
+  }
+}
+
+async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
+  const locker = await initLocker(parentOptions);
+  const api = new BitcoinAPI(parentOptions.network);
+  
+  // Get network for validation
+  const network = parentOptions.network === "mainnet" 
+    ? bitcoin.networks.bitcoin 
+    : bitcoin.networks.testnet;
+
+  let escrowAddress = cmdOptions.escrowAddress;
+  let escrowScript = cmdOptions.escrowScript;
+  let escrowKey = cmdOptions.escrowKey;
+  let timelockAddress = cmdOptions.timelockAddress;
+  let timelockScript = cmdOptions.timelockScript;
+  let timelockKey = cmdOptions.timelockKey;
+  let destination = cmdOptions.destination;
+  let feeAmount = parseInt(cmdOptions.fee);
+
+  try {
+    // First check what addresses we have to work with
+    let needEscrowParams = !escrowAddress || !escrowScript || !escrowKey;
+    let needTimelockParams = !timelockAddress || !timelockScript || !timelockKey;
+    
+    // Interactive prompts if options not provided
+    if (!destination || needEscrowParams || needTimelockParams) {
+      const answers = await inquirer.prompt([
+        {
+          type: "input",
+          name: "escrowAddress",
+          message: "Enter escrow script address to withdraw from:",
+          when: () => !escrowAddress,
+          validate: (input) =>
+            ScriptUtils.isValidAddress(input, network) || "Invalid address",
+        },
+        {
+          type: "input",
+          name: "escrowScript",
+          message: "Enter escrow redeem script (hex):",
+          when: () => !escrowScript,
+          validate: (input) => input.length > 0 || "Redeem script required",
+        },
+        {
+          type: "input",
+          name: "escrowKey",
+          message: "Enter private key for escrow script (hex):",
+          when: () => !escrowKey,
+          validate: (input) =>
+            ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
+        },
+        {
+          type: "input",
+          name: "timelockAddress",
+          message: "Enter timelock script address to withdraw from:",
+          when: () => !timelockAddress,
+          validate: (input) =>
+            ScriptUtils.isValidAddress(input, network) || "Invalid address",
+        },
+        {
+          type: "input",
+          name: "timelockScript",
+          message: "Enter timelock redeem script (hex):",
+          when: () => !timelockScript,
+          validate: (input) => input.length > 0 || "Redeem script required",
+        },
+        {
+          type: "input",
+          name: "timelockKey",
+          message: "Enter private key for timelock script (hex):",
+          when: () => !timelockKey,
+          validate: (input) =>
+            ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
+        },
+        {
+          type: "input",
+          name: "destination",
+          message: "Enter destination address for withdrawal:",
+          when: () => !destination,
+          validate: (input) =>
+            ScriptUtils.isValidAddress(input, network) || "Invalid address",
+        },
+      ]);
+
+      escrowAddress = escrowAddress || answers.escrowAddress;
+      escrowScript = escrowScript || answers.escrowScript;
+      escrowKey = escrowKey || answers.escrowKey;
+      timelockAddress = timelockAddress || answers.timelockAddress;
+      timelockScript = timelockScript || answers.timelockScript;
+      timelockKey = timelockKey || answers.timelockKey;
+      destination = destination || answers.destination;
+    }
+
+    console.log(chalk.blue(`Checking UTXOs for escrow address: ${escrowAddress}...`));
+    
+    // Get UTXOs for both addresses
+    const escrowUtxos = await api.getAddressUtxos(escrowAddress);
+    const confirmedEscrowUtxos = escrowUtxos.filter(u => u.status?.confirmed);
+    
+    console.log(chalk.blue(`Checking UTXOs for timelock address: ${timelockAddress}...`));
+    
+    const timelockUtxos = await api.getAddressUtxos(timelockAddress);
+    const confirmedTimelockUtxos = timelockUtxos.filter(u => u.status?.confirmed);
+
+    if (confirmedEscrowUtxos.length === 0 && confirmedTimelockUtxos.length === 0) {
+      console.log(chalk.yellow("No confirmed UTXOs found in either escrow or timelock addresses"));
+      return;
+    }
+
+    // Calculate total available from both sources
+    const escrowValue = confirmedEscrowUtxos.reduce((sum, utxo) => sum + utxo.value, 0);
+    const timelockValue = confirmedTimelockUtxos.reduce((sum, utxo) => sum + utxo.value, 0);
+    const totalInputValue = escrowValue + timelockValue;
+    const outputValue = totalInputValue - feeAmount;
+
+    if (outputValue <= 546) { // Dust threshold
+      console.log(chalk.red("Output amount would be below dust threshold after fees"));
+      return;
+    }
+
+    console.log(chalk.blue("Creating dawn withdrawal transaction..."));
+    console.log(chalk.gray(`  Escrow balance: ${escrowValue} sats (${TransactionUtils.satoshisToBTC(escrowValue)} BTC)`));
+    console.log(chalk.gray(`  Timelock balance: ${timelockValue} sats (${TransactionUtils.satoshisToBTC(timelockValue)} BTC)`));
+    console.log(chalk.gray(`  Total input: ${totalInputValue} sats (${TransactionUtils.satoshisToBTC(totalInputValue)} BTC)`));
+    console.log(chalk.gray(`  Fee: ${feeAmount} sats`));
+    console.log(chalk.gray(`  Output: ${outputValue} sats (${TransactionUtils.satoshisToBTC(outputValue)} BTC)`));
+
+    // Prepare inputs for the dawn withdrawal method
+    const dawnEscrowInputs = confirmedEscrowUtxos.length > 0 ? confirmedEscrowUtxos.map(utxo => ({
+      txid: utxo.txid,
+      vout: utxo.vout,
+      value: utxo.value,
+      redeemScript: escrowScript,
+    })) : [];
+
+    const dawnTimelockInputs = confirmedTimelockUtxos.length > 0 ? confirmedTimelockUtxos.map(utxo => ({
+      txid: utxo.txid,
+      vout: utxo.vout,
+      value: utxo.value,
+      redeemScript: timelockScript,
+    })) : [];
+
+    // Create single dawn withdrawal transaction
+    const withdrawalResult = await locker.createDawnWithdrawalTransaction({
+      escrowInputs: dawnEscrowInputs,
+      timelockInputs: dawnTimelockInputs,
+      destination: destination,
+      escrowPrivateKey: escrowKey || "0000000000000000000000000000000000000000000000000000000000000001", // Dummy key if no escrow inputs
+      timelockPrivateKey: timelockKey || "0000000000000000000000000000000000000000000000000000000000000001", // Dummy key if no timelock inputs
+      feeAmount: feeAmount,
+      api: api, // Pass API instance for transaction fetching
+    });
+
+    // Display results
+    const result = {
+      transaction: {
+        hex: withdrawalResult.hex,
+        txid: withdrawalResult.txid,
+        size: withdrawalResult.size,
+        fee: withdrawalResult.fee,
+        fee_rate: (withdrawalResult.fee / withdrawalResult.size).toFixed(2),
+      },
+      inputs: {
+        escrow: {
+          count: confirmedEscrowUtxos.length,
+          value: withdrawalResult.inputs.escrowValue,
+          value_btc: TransactionUtils.satoshisToBTC(withdrawalResult.inputs.escrowValue),
+        },
+        timelock: {
+          count: confirmedTimelockUtxos.length,
+          value: withdrawalResult.inputs.timelockValue,
+          value_btc: TransactionUtils.satoshisToBTC(withdrawalResult.inputs.timelockValue),
+        },
+        total: {
+          count: confirmedEscrowUtxos.length + confirmedTimelockUtxos.length,
+          value: withdrawalResult.inputs.totalValue,
+          value_btc: TransactionUtils.satoshisToBTC(withdrawalResult.inputs.totalValue),
+        },
+      },
+      output: {
+        destination: withdrawalResult.output.destination,
+        value: withdrawalResult.output.value,
+        value_btc: TransactionUtils.satoshisToBTC(withdrawalResult.output.value),
+      },
+    };
+
+    displayResult(result, parentOptions, "Dawn Withdrawal Transaction Created");
+
+    if (cmdOptions.dryRun) {
+      console.log(chalk.yellow("Dry run - transaction not broadcasted"));
+      console.log(chalk.blue(`Transaction hex: ${withdrawalResult.hex}`));
+      return;
+    }
+
+    // Ask for confirmation before broadcasting
+    const { confirm } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "confirm",
+        message: `Broadcast withdrawal transaction moving ${TransactionUtils.satoshisToBTC(totalInputValue)} BTC to ${destination} with ${feeAmount} sat fee?`,
+        default: false,
+      },
+    ]);
+
+    if (!confirm) {
+      console.log(chalk.yellow("Withdrawal cancelled"));
+      return;
+    }
+
+    console.log(chalk.blue("Broadcasting dawn withdrawal transaction..."));
+
+    // Broadcast the single withdrawal transaction
+    try {
+      const broadcastResult = await api.broadcastTransaction(withdrawalResult.hex);
+      console.log(chalk.green("Dawn withdrawal transaction broadcasted successfully!"));
+      console.log(chalk.blue(`Transaction ID: ${broadcastResult.txid}`));
+      
+      if (parentOptions.network === "testnet") {
+        console.log(chalk.blue(`View withdrawal: https://mempool.space/testnet/tx/${broadcastResult.txid}`));
+      } else {
+        console.log(chalk.blue(`View withdrawal: https://mempool.space/tx/${broadcastResult.txid}`));
+      }
+    } catch (error) {
+      console.log(chalk.red(`Failed to broadcast dawn withdrawal: ${error.message}`));
     }
 
   } catch (error) {

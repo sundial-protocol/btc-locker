@@ -112,6 +112,43 @@ export interface DawnStakingCalculationParams {
 }
 
 /**
+ * Parameters for Dawn withdrawal
+ */
+export interface DawnWithdrawalParams {
+  escrowInputs: Array<{
+    txid: string;
+    vout: number;
+    value: number;
+    redeemScript: string;
+  }>;
+  timelockInputs: Array<{
+    txid: string;
+    vout: number;
+    value: number;
+    redeemScript: string;
+  }>;
+  destination: string;
+  escrowPrivateKey: string;
+  timelockPrivateKey: string;
+  feeAmount?: number;
+}
+
+/**
+ * Result of Dawn withdrawal
+ */
+export interface DawnWithdrawalResult extends TransactionResult {
+  inputs: {
+    escrowValue: number;
+    timelockValue: number;
+    totalValue: number;
+  };
+  output: {
+    destination: string;
+    value: number;
+  };
+}
+
+/**
  * Combined BTCLocker class that includes all functionality
  * @class BTCLocker
  * @description Main interface class that combines all BTC Locker functionality in a single class
@@ -486,6 +523,27 @@ export class BTCLocker extends BTCLockerCore {
    */
   async calculateDawnStakingAmounts(params: DawnStakingCalculationParams): Promise<any> {
     return this.dawnStakingManager.calculateDawnStakingAmounts(params);
+  }
+
+  /**
+   * Create a Dawn withdrawal transaction that combines escrow and timelock inputs into a single output
+   * @async
+   * @param {DawnWithdrawalParams} params - Dawn withdrawal parameters
+   * @returns {Promise<DawnWithdrawalResult>} Dawn withdrawal transaction details
+   * @throws {Error} If insufficient funds or invalid parameters
+   * @example
+   * const locker = new BTCLocker();
+   * const tx = await locker.createDawnWithdrawalTransaction({
+   *   escrowInputs: [{ txid: '...', vout: 0, value: 100000, redeemScript: '...' }],
+   *   timelockInputs: [{ txid: '...', vout: 0, value: 200000, redeemScript: '...' }],
+   *   destination: 'tb1q...',
+   *   escrowPrivateKey: '...',
+   *   timelockPrivateKey: '...',
+   *   feeAmount: 2000
+   * });
+   */
+  async createDawnWithdrawalTransaction(params: DawnWithdrawalParams): Promise<DawnWithdrawalResult> {
+    return this.dawnStakingManager.createDawnWithdrawalTransaction(params);
   }
 }
 

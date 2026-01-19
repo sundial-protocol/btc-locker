@@ -79,6 +79,41 @@ export default class BitcoinAPI {
   }
 
   /**
+   * Make HTTP request for raw text responses
+   */
+  async makeRequestText(endpoint: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const url = `${this.baseUrl}${endpoint}`;
+      const urlObj = new URL(url);
+
+      const options: https.RequestOptions = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || 443,
+        path: urlObj.pathname + urlObj.search,
+        method: "GET",
+        headers: {
+          "User-Agent": "btc-locker-cli/1.0.0",
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let body = "";
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(body.trim());
+          } else {
+            reject(new Error(`API Error ${res.statusCode}: ${body}`));
+          }
+        });
+      });
+
+      req.on("error", reject);
+      req.end();
+    });
+  }
+
+  /**
    * Make HTTP request
    */
   async makeRequest(endpoint: string, method: "GET" | "POST" = "GET", data: any = null): Promise<any> {
@@ -209,7 +244,7 @@ export default class BitcoinAPI {
         this.apiProvider === "mempool" ||
         this.apiProvider === "blockstream"
       ) {
-        return await this.makeRequest(`/tx/${txid}/hex`);
+        return await this.makeRequestText(`/tx/${txid}/hex`);
       } else if (this.apiProvider === "blockcypher") {
         const result = await this.makeRequest(`/txs/${txid}?includeHex=true`);
         return result.hex;
