@@ -4,6 +4,7 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core";
+import { ScriptUtils, KeyUtils, ValidationUtils } from "../utils";
 import type { ScriptInfo } from "../types";
 
 /**
@@ -31,24 +32,14 @@ export class HodlScriptCreator extends BTCLockerCore {
   async createHodlScript(locktime: number, ownerPubKey: Buffer | string, penaltyPubKey: Buffer | string): Promise<ScriptInfo> {
     await this.ensureInitialized();
 
-    let ownerPubKeyBuffer: Buffer;
-    let penaltyPubKeyBuffer: Buffer;
-
-    if (typeof ownerPubKey === "string") {
-      ownerPubKeyBuffer = Buffer.from(ownerPubKey, "hex");
-    } else {
-      ownerPubKeyBuffer = ownerPubKey;
-    }
-
-    if (typeof penaltyPubKey === "string") {
-      penaltyPubKeyBuffer = Buffer.from(penaltyPubKey, "hex");
-    } else {
-      penaltyPubKeyBuffer = penaltyPubKey;
-    }
+    // Validate inputs using shared utilities
+    const locktimeNumber = ValidationUtils.validateLocktime(locktime);
+    const ownerPubKeyBuffer = KeyUtils.validateAndConvertPublicKey(ownerPubKey, "ownerPubKey");
+    const penaltyPubKeyBuffer = KeyUtils.validateAndConvertPublicKey(penaltyPubKey, "penaltyPubKey");
 
     const redeemScript = bitcoin.script.compile([
       bitcoin.opcodes.OP_IF,
-      bitcoin.script.number.encode(locktime),
+      bitcoin.script.number.encode(locktimeNumber),
       bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
       bitcoin.opcodes.OP_DROP,
       ownerPubKeyBuffer,
@@ -62,17 +53,14 @@ export class HodlScriptCreator extends BTCLockerCore {
       bitcoin.opcodes.OP_ENDIF,
     ]);
 
-    const scriptHash = bitcoin.crypto.hash160(redeemScript);
-    const address = bitcoin.payments.p2sh({
-      hash: scriptHash,
-      network: this.network,
-    }).address!;
+    const scriptHash = ScriptUtils.calculateScriptHash(Buffer.from(redeemScript));
+    const address = ScriptUtils.createScriptAddress(Buffer.from(redeemScript), this.network);
 
     return {
       redeemScript: Buffer.from(redeemScript).toString("hex"),
-      scriptHash: Buffer.from(scriptHash).toString("hex"),
+      scriptHash,
       address,
-      locktime,
+      locktime: locktimeNumber,
       ownerPubKey: ownerPubKeyBuffer.toString("hex"),
       penaltyPubKey: penaltyPubKeyBuffer.toString("hex"),
       type: "hodl",

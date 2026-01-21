@@ -4,6 +4,7 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core";
+import { ScriptUtils, ValidationUtils } from "../utils";
 import type { ScriptInfo } from "../types";
 
 /**
@@ -31,12 +32,16 @@ export class MultisigTimelockManager extends BTCLockerCore {
   async createMultisigTimelockScript(locktime: number, m: number, publicKeys: Array<Buffer | string>): Promise<ScriptInfo> {
     await this.ensureInitialized();
 
+    // Validate inputs using shared utilities
+    const locktimeNumber = ValidationUtils.validateLocktime(locktime);
+    
+    // Convert public keys to buffers
     const pubKeyBuffers = publicKeys.map((key) =>
       typeof key === "string" ? Buffer.from(key, "hex") : key
     );
 
     const redeemScript = bitcoin.script.compile([
-      bitcoin.script.number.encode(locktime),
+      bitcoin.script.number.encode(locktimeNumber),
       bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
       bitcoin.opcodes.OP_DROP,
       bitcoin.script.number.encode(m),
@@ -45,17 +50,14 @@ export class MultisigTimelockManager extends BTCLockerCore {
       bitcoin.opcodes.OP_CHECKMULTISIG,
     ]);
 
-    const scriptHash = bitcoin.crypto.hash160(redeemScript);
-    const address = bitcoin.payments.p2sh({
-      hash: scriptHash,
-      network: this.network,
-    }).address!;
+    const scriptHash = ScriptUtils.calculateScriptHash(Buffer.from(redeemScript));
+    const address = ScriptUtils.createScriptAddress(Buffer.from(redeemScript), this.network);
 
     return {
       redeemScript: Buffer.from(redeemScript).toString("hex"),
-      scriptHash: Buffer.from(scriptHash).toString("hex"),
+      scriptHash,
       address,
-      locktime,
+      locktime: locktimeNumber,
       m,
       publicKeys: pubKeyBuffers.map((buf) => buf.toString("hex")),
       type: "multisig-timelock",

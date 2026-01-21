@@ -4,6 +4,7 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore, getECC } from "./core";
+import { KeyUtils, FeeUtils } from "../utils";
 import type { UTXO } from "../types";
 
 interface YieldInput extends UTXO {
@@ -59,18 +60,16 @@ export class YieldDistributor extends BTCLockerCore {
    */
   async distributeYield(params: YieldDistributionParams): Promise<YieldDistributionResult> {
     await this.ensureInitialized();
-    const { ECPair } = getECC();
     const { inputs, timelockAddress, amount, privateKey, memo } = params;
 
     const psbt = new bitcoin.Psbt({ network: this.network });
-    const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, "hex"), {
-      network: this.network,
-    });
+    // Create key pair using shared utility
+    const { ECPair } = getECC();
+    const keyPair = KeyUtils.createKeyPair(privateKey, ECPair, this.network);
 
-    // Calculate total input value
+    // Calculate total input value and change
     const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
-    const defaultFee = 1000; // Default fee of 1000 satoshis
-    const changeAmount = totalInputValue - amount - defaultFee;
+    const changeResult = FeeUtils.calculateChange(totalInputValue, amount, FeeUtils.DEFAULT_FEE);
 
     // Add inputs
     for (const input of inputs) {
@@ -96,7 +95,7 @@ export class YieldDistributor extends BTCLockerCore {
     });
 
     // Add change output if needed (above dust threshold)
-    if (changeAmount > 546) {
+    if (changeResult.isAboveDustThreshold) {
       const sourceAddress = bitcoin.payments.p2wpkh({
         pubkey: keyPair.publicKey,
         network: this.network,
@@ -104,7 +103,7 @@ export class YieldDistributor extends BTCLockerCore {
 
       psbt.addOutput({
         address: sourceAddress,
-        value: BigInt(changeAmount),
+        value: BigInt(changeResult.changeAmount),
       });
     }
 
@@ -128,12 +127,12 @@ export class YieldDistributor extends BTCLockerCore {
       hex: transaction.toHex(),
       txid: transaction.getId(),
       size: transaction.byteLength(),
-      fee: changeAmount <= 546 ? totalInputValue - amount : defaultFee,
+      fee: changeResult.adjustedFee,
       memo: memo || "Yield distribution to timelock",
       distribution: {
         amount,
         destination: timelockAddress,
-        change: changeAmount > 546 ? changeAmount : 0,
+        change: changeResult.changeAmount,
       },
     };
   }

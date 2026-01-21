@@ -4,6 +4,7 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core";
+import { ScriptUtils, KeyUtils, ValidationUtils } from "../utils";
 import type { ScriptInfo } from "../types";
 
 /**
@@ -26,46 +27,9 @@ export class TimelockManager extends BTCLockerCore {
   async createTimelockScript(locktime: number, publicKey: Buffer | string): Promise<ScriptInfo> {
     await this.ensureInitialized();
 
-    // Validate inputs
-    if (locktime === undefined || locktime === null) {
-      throw new Error("locktime cannot be undefined or null");
-    }
-
-    if (publicKey === undefined || publicKey === null) {
-      throw new Error("publicKey cannot be undefined or null");
-    }
-
-    // Convert and validate public key
-    let publicKeyBuffer: Buffer;
-    if (typeof publicKey === "string") {
-      if (!/^[0-9a-fA-F]+$/.test(publicKey)) {
-        throw new Error(
-          "publicKey string must contain only hexadecimal characters"
-        );
-      }
-      try {
-        publicKeyBuffer = Buffer.from(publicKey, "hex");
-      } catch (error) {
-        throw new Error(`Invalid public key hex string: ${(error as Error).message}`);
-      }
-    } else if (Buffer.isBuffer(publicKey)) {
-      publicKeyBuffer = publicKey;
-    } else {
-      throw new Error("publicKey must be a string or Buffer");
-    }
-
-    // Validate public key length
-    if (publicKeyBuffer.length !== 33 && publicKeyBuffer.length !== 65) {
-      throw new Error(
-        `Invalid public key length: ${publicKeyBuffer.length}. Expected 33 (compressed) or 65 (uncompressed) bytes`
-      );
-    }
-
-    // Validate locktime
-    const locktimeNumber = Number(locktime);
-    if (!Number.isInteger(locktimeNumber) || locktimeNumber < 0) {
-      throw new Error("locktime must be a non-negative integer");
-    }
+    // Validate inputs using shared utilities
+    const locktimeNumber = ValidationUtils.validateLocktime(locktime);
+    const publicKeyBuffer = KeyUtils.validateAndConvertPublicKey(publicKey);
 
     try {
       const redeemScript = bitcoin.script.compile([
@@ -76,15 +40,12 @@ export class TimelockManager extends BTCLockerCore {
         bitcoin.opcodes.OP_CHECKSIG,
       ]);
 
-      const scriptHash = bitcoin.crypto.hash160(redeemScript);
-      const address = bitcoin.payments.p2sh({
-        hash: scriptHash,
-        network: this.network,
-      }).address!;
+      const scriptHash = ScriptUtils.calculateScriptHash(Buffer.from(redeemScript));
+      const address = ScriptUtils.createScriptAddress(Buffer.from(redeemScript), this.network);
 
       return {
         redeemScript: Buffer.from(redeemScript).toString("hex"),
-        scriptHash: Buffer.from(scriptHash).toString("hex"),
+        scriptHash,
         address,
         locktime: locktimeNumber,
         publicKey: publicKeyBuffer.toString("hex"),
@@ -110,12 +71,8 @@ export class TimelockManager extends BTCLockerCore {
   async createRelativeTimelockScript(sequence: number, publicKey: Buffer | string): Promise<ScriptInfo> {
     await this.ensureInitialized();
 
-    let publicKeyBuffer: Buffer;
-    if (typeof publicKey === "string") {
-      publicKeyBuffer = Buffer.from(publicKey, "hex");
-    } else {
-      publicKeyBuffer = publicKey;
-    }
+    // Validate public key using shared utility
+    const publicKeyBuffer = KeyUtils.validateAndConvertPublicKey(publicKey);
 
     const redeemScript = bitcoin.script.compile([
       bitcoin.script.number.encode(sequence),
@@ -125,15 +82,12 @@ export class TimelockManager extends BTCLockerCore {
       bitcoin.opcodes.OP_CHECKSIG,
     ]);
 
-    const scriptHash = bitcoin.crypto.hash160(redeemScript);
-    const address = bitcoin.payments.p2sh({
-      hash: scriptHash,
-      network: this.network,
-    }).address!;
+    const scriptHash = ScriptUtils.calculateScriptHash(Buffer.from(redeemScript));
+    const address = ScriptUtils.createScriptAddress(Buffer.from(redeemScript), this.network);
 
     return {
       redeemScript: Buffer.from(redeemScript).toString("hex"),
-      scriptHash: Buffer.from(scriptHash).toString("hex"),
+      scriptHash,
       address,
       sequence,
       publicKey: publicKeyBuffer.toString("hex"),

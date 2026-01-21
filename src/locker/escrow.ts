@@ -5,6 +5,7 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore, getECC } from "./core";
+import { KeyUtils, ValidationUtils, ScriptUtils } from "../utils";
 import type { ScriptInfo } from "../types";
 
 interface EscrowSpendingTransaction {
@@ -39,19 +40,10 @@ export class EscrowManager extends BTCLockerCore {
   async createEscrowScript(deadline: number, beforePublicKey: Buffer | string, afterPublicKey: Buffer | string): Promise<ScriptInfo> {
     await this.ensureInitialized();
 
-    // Validate deadline
-    if (deadline === undefined || deadline === null) {
-      throw new Error("deadline cannot be undefined or null");
-    }
-
-    const deadlineNumber = Number(deadline);
-    if (!Number.isInteger(deadlineNumber) || deadlineNumber < 0) {
-      throw new Error("deadline must be a non-negative integer");
-    }
-
-    // Convert and validate public keys
-    const beforePubKeyBuffer = this._validateAndConvertPublicKey(beforePublicKey, "beforePublicKey");
-    const afterPubKeyBuffer = this._validateAndConvertPublicKey(afterPublicKey, "afterPublicKey");
+    // Validate inputs using shared utilities
+    const deadlineNumber = ValidationUtils.validateLocktime(deadline, "deadline");
+    const beforePubKeyBuffer = KeyUtils.validateAndConvertPublicKey(beforePublicKey, "beforePublicKey");
+    const afterPubKeyBuffer = KeyUtils.validateAndConvertPublicKey(afterPublicKey, "afterPublicKey");
 
     // Ensure the public keys are different
     if (beforePubKeyBuffer.equals(afterPubKeyBuffer)) {
@@ -80,15 +72,12 @@ export class EscrowManager extends BTCLockerCore {
         bitcoin.opcodes.OP_ENDIF,
       ]);
 
-      const scriptHash = bitcoin.crypto.hash160(redeemScript);
-      const address = bitcoin.payments.p2sh({
-        hash: scriptHash,
-        network: this.network,
-      }).address!;
+      const scriptHash = ScriptUtils.calculateScriptHash(Buffer.from(redeemScript));
+      const address = ScriptUtils.createScriptAddress(Buffer.from(redeemScript), this.network);
 
       return {
         redeemScript: Buffer.from(redeemScript).toString("hex"),
-        scriptHash: Buffer.from(scriptHash).toString("hex"),
+        scriptHash,
         address,
         type: "time-escrow",
         locktime: deadlineNumber,
@@ -172,17 +161,11 @@ export class EscrowManager extends BTCLockerCore {
       throw new Error("outputAddress must be a string");
     }
 
-    // Convert private key to ECPair
+    // Convert private key to ECPair using shared utility
     let keyPair: any;
     try {
       const { ECPair } = getECC();
-      if (typeof privateKey === "string") {
-        keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, "hex"));
-      } else if (Buffer.isBuffer(privateKey)) {
-        keyPair = ECPair.fromPrivateKey(privateKey);
-      } else {
-        throw new Error("privateKey must be a string or Buffer");
-      }
+      keyPair = KeyUtils.createKeyPair(privateKey, ECPair);
     } catch (error) {
       throw new Error(`Invalid private key: ${(error as Error).message}`);
     }
@@ -284,36 +267,4 @@ export class EscrowManager extends BTCLockerCore {
    * @returns Validated public key buffer
    * @throws If public key is invalid
    */
-  private _validateAndConvertPublicKey(publicKey: Buffer | string, paramName: string): Buffer {
-    if (publicKey === undefined || publicKey === null) {
-      throw new Error(`${paramName} cannot be undefined or null`);
-    }
-
-    let publicKeyBuffer: Buffer;
-    if (typeof publicKey === "string") {
-      if (!/^[0-9a-fA-F]+$/.test(publicKey)) {
-        throw new Error(
-          `${paramName} string must contain only hexadecimal characters`
-        );
-      }
-      try {
-        publicKeyBuffer = Buffer.from(publicKey, "hex");
-      } catch (error) {
-        throw new Error(`Invalid ${paramName} hex string: ${(error as Error).message}`);
-      }
-    } else if (Buffer.isBuffer(publicKey)) {
-      publicKeyBuffer = publicKey;
-    } else {
-      throw new Error(`${paramName} must be a string or Buffer`);
-    }
-
-    // Validate public key length
-    if (publicKeyBuffer.length !== 33 && publicKeyBuffer.length !== 65) {
-      throw new Error(
-        `Invalid ${paramName} length: ${publicKeyBuffer.length}. Expected 33 (compressed) or 65 (uncompressed) bytes`
-      );
-    }
-
-    return publicKeyBuffer;
-  }
 }

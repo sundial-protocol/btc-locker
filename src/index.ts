@@ -18,10 +18,16 @@ import {
   TimeUtils,
   ScriptUtils,
   TransactionUtils,
+  KeyUtils,
+  FeeUtils,
+  ValidationUtils,
+  Utils,
+} from "./utils";
+import {
   BTCLockerError,
   ValidationError,
   TimelockError,
-} from "./utils";
+} from "./errors";
 import type { NetworkType } from "./types";
 
 /**
@@ -54,6 +60,10 @@ export {
   TimeUtils,
   ScriptUtils,
   TransactionUtils,
+  KeyUtils,
+  FeeUtils,
+  ValidationUtils,
+  Utils,
   BTCLockerError,
   ValidationError,
   TimelockError,
@@ -74,6 +84,10 @@ export default {
   TimeUtils,
   ScriptUtils,
   TransactionUtils,
+  KeyUtils,
+  FeeUtils,
+  ValidationUtils,
+  Utils,
   BTCLockerError,
   ValidationError,
   TimelockError,
