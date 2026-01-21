@@ -65,6 +65,24 @@ export function setupTransactionCommands(program) {
     });
 
   /**
+   * Spend from escrow script command
+   */
+  txCommand
+    .command("escrow-spend")
+    .description("Spend Bitcoin from an escrow script (before or after deadline)")
+    .option("-a, --address <address>", "Escrow script address to spend from")
+    .option("-r, --redeem-script <script>", "Redeem script in hex")
+    .option("-k, --private-key <key>", "Private key for spending")
+    .option("-t, --to <address>", "Destination address")
+    .option("--after-deadline", "Spend after deadline (default: before deadline)")
+    .option("--fee <satoshis>", "Fee in satoshis", "1000")
+    .option("--dry-run", "Create transaction but don't broadcast")
+    .action(async (cmdOptions) => {
+      const parentOptions = program.opts();
+      await handleEscrowSpendCommand(cmdOptions, parentOptions);
+    });
+
+  /**
    * Dawn Protocol staking command
    */
   txCommand
@@ -1237,6 +1255,237 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
       }
     } catch (error) {
       console.log(chalk.red(`Failed to broadcast dawn withdrawal: ${error.message}`));
+    }
+
+  } catch (error) {
+    console.error(chalk.red(`Error: ${error.message}`));
+    if (parentOptions.verbose) {
+      console.error(error.stack);
+    }
+  }
+}
+
+/**
+ * Handle escrow spending command
+ */
+async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
+  let {
+    address: scriptAddress,
+    redeemScript,
+    privateKey,
+    to: destinationAddress,
+    afterDeadline,
+    fee: feeAmount = 1000,
+    dryRun,
+  } = cmdOptions;
+
+  const api = new BitcoinAPI(
+    parentOptions.network || "testnet",
+    parentOptions.verbose
+  );
+  const locker = await initLocker(parentOptions);
+
+  try {
+    // Interactive prompts if options not provided
+    if (!scriptAddress || !redeemScript || !privateKey || !destinationAddress) {
+      const answers = await inquirer.prompt([
+        {
+          type: "input",
+          name: "scriptAddress",
+          message: "Enter escrow script address:",
+          when: !scriptAddress,
+          validate: (input) => {
+            try {
+              bitcoin.address.toOutputScript(input, locker.network);
+              return true;
+            } catch {
+              return "Invalid Bitcoin address";
+            }
+          },
+        },
+        {
+          type: "input",
+          name: "redeemScript",
+          message: "Enter redeem script (hex):",
+          when: !redeemScript,
+          validate: (input) =>
+            /^[0-9a-fA-F]+$/.test(input) || "Invalid hex string",
+        },
+        {
+          type: "input",
+          name: "privateKey",
+          message: "Enter private key (hex):",
+          when: !privateKey,
+          validate: (input) =>
+            ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
+        },
+        {
+          type: "input",
+          name: "destinationAddress",
+          message: "Enter destination address:",
+          when: !destinationAddress,
+          validate: (input) => {
+            try {
+              bitcoin.address.toOutputScript(input, locker.network);
+              return true;
+            } catch {
+              return "Invalid Bitcoin address";
+            }
+          },
+        },
+        {
+          type: "confirm",
+          name: "afterDeadline",
+          message: "Spend after deadline? (No = spend before deadline)",
+          default: false,
+          when: afterDeadline === undefined,
+        },
+      ]);
+
+      scriptAddress = scriptAddress || answers.scriptAddress;
+      redeemScript = redeemScript || answers.redeemScript;
+      privateKey = privateKey || answers.privateKey;
+      destinationAddress = destinationAddress || answers.destinationAddress;
+      afterDeadline = afterDeadline !== undefined ? afterDeadline : answers.afterDeadline;
+    }
+
+    console.log(chalk.blue(`Checking UTXOs for ${scriptAddress}...`));
+
+    // Get UTXOs
+    let utxos;
+    try {
+      utxos = await api.getAddressUtxos(scriptAddress);
+    } catch (apiError) {
+      console.error(chalk.red(`Failed to get UTXOs: ${apiError.message}`));
+      return;
+    }
+
+    if (!utxos || !Array.isArray(utxos) || utxos.length === 0) {
+      console.log(chalk.yellow("⚠️  No UTXOs found at this address"));
+      return;
+    }
+
+    const confirmedUtxos = utxos.filter(u => u.status && u.status.confirmed);
+    if (confirmedUtxos.length === 0) {
+      console.log(chalk.yellow("⚠️  No confirmed UTXOs found at this address"));
+      return;
+    }
+
+    // Use the first confirmed UTXO
+    const utxo = confirmedUtxos[0];
+    const amount = utxo.value;
+    
+    console.log(chalk.blue("Creating escrow spending transaction..."));
+
+    // Parse script to create ScriptInfo object
+    const scriptInfo = {
+      redeemScript: redeemScript,
+      type: "time-escrow",
+      address: scriptAddress,
+    };
+
+    // Parse the script to extract locktime and public keys
+    try {
+      const scriptBuffer = Buffer.from(redeemScript, "hex");
+      const ops = bitcoin.script.decompile(scriptBuffer);
+      
+      if (ops && ops.length >= 7) {
+        // Extract locktime (should be at position 1 after OP_IF)
+        if (typeof ops[1] === "number") {
+          scriptInfo.locktime = ops[1];
+        } else if (Buffer.isBuffer(ops[1])) {
+          let locktimeValue = 0;
+          for (let i = 0; i < ops[1].length; i++) {
+            locktimeValue += ops[1][i] << (8 * i);
+          }
+          scriptInfo.locktime = locktimeValue;
+        }
+
+        // Find public keys in the script
+        // Structure: IF <locktime> CHECKLOCKTIMEVERIFY DROP <afterPubKey> CHECKSIG ELSE <beforePubKey> CHECKSIG ENDIF
+        for (let i = 0; i < ops.length; i++) {
+          if (Buffer.isBuffer(ops[i]) && ops[i].length === 33) {
+            // This is a public key (33 bytes)
+            if (!scriptInfo.afterPublicKey) {
+              // First pubkey found is the after-deadline key
+              scriptInfo.afterPublicKey = ops[i].toString("hex");
+            } else if (!scriptInfo.beforePublicKey) {
+              // Second pubkey found is the before-deadline key
+              scriptInfo.beforePublicKey = ops[i].toString("hex");
+              break;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn(chalk.yellow("Could not parse script details:", error.message));
+    }
+
+    // Create spending transaction
+    const spendingTx = await locker.createEscrowSpendingTransaction(
+      scriptInfo,
+      utxo.txid,
+      utxo.vout,
+      amount,
+      destinationAddress,
+      afterDeadline,
+      privateKey
+    );
+
+    const result = {
+      transaction: {
+        hex: spendingTx.txHex,
+        txid: spendingTx.txId,
+        size: Math.ceil(spendingTx.txHex.length / 2),
+        fee: feeAmount,
+        fee_rate: (feeAmount / Math.ceil(spendingTx.txHex.length / 2)).toFixed(2),
+      },
+      inputs: {
+        count: 1,
+        total_value: amount,
+        total_btc: TransactionUtils.satoshisToBTC(amount),
+      },
+      outputs: {
+        destination: destinationAddress,
+        value: amount - feeAmount,
+        value_btc: TransactionUtils.satoshisToBTC(amount - feeAmount),
+      },
+      spending_path: afterDeadline ? "After deadline" : "Before deadline",
+    };
+
+    displayResult(result, parentOptions, "Escrow Spending Transaction Created");
+
+    // Broadcast if not dry run
+    if (!dryRun) {
+      const { confirm } = await inquirer.prompt([
+        {
+          type: "confirm",
+          name: "confirm",
+          message: `Broadcast transaction spending ${TransactionUtils.satoshisToBTC(amount)} BTC with ${feeAmount} sat fee?`,
+          default: false,
+        },
+      ]);
+
+      if (!confirm) {
+        console.log(chalk.yellow("Transaction cancelled"));
+        return;
+      }
+
+      console.log(chalk.blue("Broadcasting transaction..."));
+
+      try {
+        const broadcastResult = await api.broadcastTransaction(spendingTx.txHex);
+        console.log(chalk.green("Transaction broadcasted successfully!"));
+        console.log(chalk.blue(`Transaction ID: ${broadcastResult.txid}`));
+        
+        if (parentOptions.network === "testnet") {
+          console.log(chalk.blue(`View transaction: https://mempool.space/testnet/tx/${broadcastResult.txid}`));
+        } else {
+          console.log(chalk.blue(`View transaction: https://mempool.space/tx/${broadcastResult.txid}`));
+        }
+      } catch (error) {
+        console.log(chalk.red(`Failed to broadcast transaction: ${error.message}`));
+      }
     }
 
   } catch (error) {

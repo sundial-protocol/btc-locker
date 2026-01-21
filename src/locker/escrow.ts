@@ -194,13 +194,15 @@ export class EscrowManager extends BTCLockerCore {
       const tx = new bitcoin.Transaction();
       tx.version = 2;
 
-      // Set locktime if spending after deadline
+      // Set locktime and sequence based on spending path
       if (spendAfterDeadline) {
         tx.locktime = scriptData.locktime!;
+        // Use sequence < 0xffffffff to enable locktime verification
+        tx.addInput(Buffer.from(utxoTxId, 'hex').reverse(), utxoIndex, 0xfffffffe);
+      } else {
+        // Use sequence 0xffffffff to disable locktime verification when spending before deadline
+        tx.addInput(Buffer.from(utxoTxId, 'hex').reverse(), utxoIndex, 0xffffffff);
       }
-
-      // Add input
-      tx.addInput(Buffer.from(utxoTxId, 'hex').reverse(), utxoIndex, 0xffffffff);
 
       // Add output (subtract a reasonable fee)
       const fee = 1000; // 1000 satoshis fee
@@ -225,9 +227,9 @@ export class EscrowManager extends BTCLockerCore {
       const redeemScript = Buffer.from(scriptData.redeemScript, "hex");
       const sigHash = tx.hashForSignature(0, redeemScript, hashType);
 
-      // Sign the transaction
-      const signature = keyPair.sign(sigHash);
-      const signatureWithHashType = Buffer.concat([signature, Buffer.from([hashType])]);
+      // Sign the transaction with proper DER encoding
+      const signature = keyPair.sign(Buffer.from(sigHash));
+      const signatureWithHashType = bitcoin.script.signature.encode(signature, hashType);
 
       // Create the unlocking script
       let scriptSig: Buffer;

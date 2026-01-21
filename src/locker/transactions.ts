@@ -110,12 +110,13 @@ export class TransactionManager extends BTCLockerCore {
       tx.locktime = locktime;
     }
 
-    // Add inputs
+    // Add inputs with appropriate sequence numbers
     inputs.forEach((utxo) => {
-      // For OP_CHECKLOCKTIMEVERIFY, the input sequence must be < 0xffffffff
       // Convert txid string to Buffer and reverse for correct byte order
       const txHash = Buffer.from(utxo.txid, "hex").reverse();
-      tx.addInput(txHash, utxo.vout, 0xfffffffe);
+      // If this is a timelock script (locktime exists and has passed validation above),
+      // use sequence < 0xffffffff to enable locktime checking
+      tx.addInput(txHash, utxo.vout, locktime ? 0xfffffffe : 0xffffffff);
     });
 
     // Add outputs
