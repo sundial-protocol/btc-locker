@@ -8,8 +8,15 @@ import { BTCLockerCore, getECC } from "./core";
 import { KeyUtils, ValidationUtils, ScriptUtils } from "../utils";
 import type { ScriptInfo } from "../types";
 
-interface EscrowSpendingTransaction {
+/**
+ * Escrow spending transaction result
+ * @interface EscrowSpendingTransaction
+ * @description Result of spending from an escrow script
+ */
+export interface EscrowSpendingTransaction {
+  /** Transaction in hexadecimal format */
   txHex: string;
+  /** Transaction ID (hash) */
   txId: string;
 }
 

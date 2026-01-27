@@ -28,7 +28,74 @@ import {
   ValidationError,
   TimelockError,
 } from "./errors";
+
+// Export all types and interfaces
+export type {
+  KeyPair,
+  ScriptInfo,
+  UTXO,
+  TransactionResult,
+  MultisigConfig,
+  TimelockConfig,
+  EscrowConfig,
+  DawnStakeConfig,
+  YieldConfig,
+  NetworkType,
+  ECCLib,
+  InitializedECC,
+} from "./types";
+
+export type {
+  SpendingTransactionParams,
+  FundingTransactionParams,
+  YieldDistributionParams,
+  YieldDistributionResult,
+  DawnStakingParams,
+  DawnStakingWithScriptParams,
+  DawnStakingCalculationParams,
+  DawnWithdrawalParams,
+  DawnWithdrawalResult,
+} from "./locker/index";
+
+// Export additional interfaces from individual modules
+export type { 
+  EscrowSpendingTransaction 
+} from "./locker/escrow";
+
+export type {
+  ExtendedKeyPair
+} from "./locker/keypair";
+
+export type {
+  DawnStakingResult,
+  DawnStakingWithScriptResult,
+  DawnStakingCalculationResult,
+  DawnStakingParams as DawnStakingParamsLocal,
+  DawnStakingWithScriptParams as DawnStakingWithScriptParamsLocal,
+  DawnStakingCalculationParams as DawnStakingCalculationParamsLocal,
+  DawnWithdrawalParams as DawnWithdrawalParamsLocal,
+  DawnWithdrawalResult as DawnWithdrawalResultLocal,
+  DawnStakingInput,
+  DawnWithdrawalInput
+} from "./locker/dawn-stake";
+
+export type {
+  SpendingTransactionParams as SpendingTransactionParamsLocal,
+  FundingTransactionParams as FundingTransactionParamsLocal,
+  TransactionOutput
+} from "./locker/transactions";
+
+export type {
+  YieldDistributionParams as YieldDistributionParamsLocal,
+  YieldDistributionResult as YieldDistributionResultLocal,
+  YieldInput
+} from "./locker/yield";
+
+// Import NetworkType for use in function
 import type { NetworkType } from "./types";
+
+// Export the EscrowManager class
+export { EscrowManager } from "./locker/escrow";
 
 /**
  * Factory function to create an initialized BTCLocker instance

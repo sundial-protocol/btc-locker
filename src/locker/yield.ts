@@ -7,32 +7,68 @@ import { BTCLockerCore, getECC } from "./core";
 import { KeyUtils, FeeUtils } from "../utils";
 import type { UTXO } from "../types";
 
-interface YieldInput extends UTXO {
+/**
+ * Yield input with transaction details
+ * @interface YieldInput
+ * @description UTXO input specifically for yield distribution operations
+ * @extends UTXO
+ */
+export interface YieldInput extends UTXO {
+  /** Transaction ID */
   txid: string;
+  /** Output index */
   vout: number;
+  /** Output value in satoshis */
   value: number;
 }
 
-interface YieldDistributionParams {
+/**
+ * Parameters for yield distribution
+ * @interface YieldDistributionParams
+ * @description Configuration for distributing yield from time-locked Bitcoin funds
+ */
+export interface YieldDistributionParams {
+  /** Array of unspent transaction outputs from timelock */
   inputs: YieldInput[];
+  /** Address of the timelock script */
   timelockAddress: string;
+  /** Amount to distribute in satoshis */
   amount: number;
+  /** Private key for signing the distribution transaction */
   privateKey: string;
+  /** Optional memo for the distribution */
   memo?: string;
+  /** Optional change address for remaining funds */
   changeAddress?: string;
+  /** Optional fee rate in satoshis per byte */
   feeRate?: number;
 }
 
-interface YieldDistributionResult {
+/**
+ * Result of yield distribution
+ * @interface YieldDistributionResult
+ * @description Transaction result with additional yield distribution metadata
+ */
+export interface YieldDistributionResult {
+  /** Bitcoin transaction object */
   transaction: bitcoin.Transaction;
+  /** Transaction in hexadecimal format */
   hex: string;
+  /** Transaction ID (hash) */
   txid: string;
+  /** Transaction size in bytes */
   size: number;
+  /** Transaction fee in satoshis */
   fee: number;
+  /** Memo associated with the yield distribution */
   memo: string;
+  /** Distribution details */
   distribution: {
+    /** Amount distributed in satoshis */
     amount: number;
+    /** Destination address for the distribution */
     destination: string;
+    /** Change amount in satoshis */
     change: number;
   };
 }

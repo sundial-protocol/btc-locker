@@ -6,25 +6,51 @@ import * as bitcoin from "bitcoinjs-lib";
 import { BIP32Factory } from "bip32";
 import { ECPairFactory } from "ecpair";
 
+/**
+ * Bitcoin key pair with private key, public key, and address
+ * @interface KeyPair
+ * @description Contains cryptographic key pair information for Bitcoin operations
+ */
 export interface KeyPair {
+  /** Private key in hexadecimal format */
   privateKey: string;
+  /** Public key in hexadecimal format */
   publicKey: string;
+  /** Bitcoin address derived from the public key */
   address: string;
 }
 
+/**
+ * Bitcoin script information and metadata
+ * @interface ScriptInfo
+ * @description Contains comprehensive information about Bitcoin scripts including timelock, multisig, and escrow details
+ */
 export interface ScriptInfo {
+  /** Redeem script in hexadecimal format */
   redeemScript: string;
+  /** Hash of the script */
   scriptHash: string;
+  /** Bitcoin address for the script */
   address: string;
+  /** Type of script (timelock, multisig, escrow, etc.) */
   type: string;
+  /** Optional locktime for timelock scripts */
   locktime?: number;
+  /** Optional sequence number for relative timelocks */
   sequence?: number;
+  /** Single public key for basic scripts */
   publicKey?: string;
+  /** Array of public keys for multisig scripts */
   publicKeys?: string[];
+  /** Number of required signatures for multisig (m-of-n) */
   m?: number;
+  /** Owner public key for ownership-based scripts */
   ownerPubKey?: string;
+  /** Penalty public key for penalty-based scripts */
   penaltyPubKey?: string;
+  /** Public key that can spend before locktime (escrow) */
   beforePublicKey?: string;
+  /** Public key that can spend after locktime (escrow) */
   afterPublicKey?: string;
 }
 
@@ -35,10 +61,19 @@ export interface UTXO {
   hex: string;
 }
 
+/**
+ * Bitcoin transaction result information
+ * @interface TransactionResult
+ * @description Contains the essential information about a created Bitcoin transaction
+ */
 export interface TransactionResult {
+  /** Transaction in hexadecimal format */
   hex: string;
+  /** Transaction ID (hash) */
   txid: string;
+  /** Transaction size in bytes */
   size: number;
+  /** Transaction fee in satoshis */
   fee: number;
 }
 
@@ -74,6 +109,11 @@ export interface YieldConfig {
   }>;
 }
 
+/**
+ * Bitcoin network type specification
+ * @typedef {('bitcoin' | 'testnet' | 'regtest' | bitcoin.Network)} NetworkType
+ * @description Supported Bitcoin network types for operations
+ */
 export type NetworkType = 'bitcoin' | 'testnet' | 'regtest' | bitcoin.Network;
 
 export interface ECCLib {

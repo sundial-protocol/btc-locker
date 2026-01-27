@@ -7,7 +7,14 @@ import { ECPairInterface } from "ecpair";
 import { BTCLockerCore, getECC } from "./core";
 import type { KeyPair } from "../types";
 
-interface ExtendedKeyPair extends KeyPair {
+/**
+ * Extended key pair with ECPair interface
+ * @interface ExtendedKeyPair
+ * @description Bitcoin key pair with additional ECPair interface for advanced operations
+ * @extends KeyPair
+ */
+export interface ExtendedKeyPair extends KeyPair {
+  /** ECPair interface for cryptographic operations */
   keyPair: ECPairInterface;
 }
 

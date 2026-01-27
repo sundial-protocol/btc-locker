@@ -6,8 +6,15 @@ import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore, getECC } from "./core";
 import type { UTXO, TransactionResult } from "../types";
 
-interface TransactionOutput {
+/**
+ * Transaction output specification
+ * @interface TransactionOutput
+ * @description Specifies destination address and value for transaction outputs
+ */
+export interface TransactionOutput {
+  /** Destination Bitcoin address */
   address: string;
+  /** Output value in satoshis */
   value: number;
 }
 
@@ -18,17 +25,35 @@ interface TransactionInput {
   hex: string;
 }
 
-interface SpendingTransactionParams {
+/**
+ * Parameters for creating spending transactions
+ * @interface SpendingTransactionParams
+ * @description Configuration for spending from time-locked Bitcoin scripts
+ */
+export interface SpendingTransactionParams {
+  /** Array of unspent transaction outputs to spend */
   inputs: UTXO[];
+  /** Output destinations and amounts */
   outputs: TransactionOutput[];
+  /** Redeem script in hexadecimal format */
   redeemScript: string;
+  /** Private keys for signing the transaction */
   privateKeys: string[];
+  /** Optional locktime for the transaction */
   locktime?: number;
 }
 
-interface FundingTransactionParams {
+/**
+ * Parameters for creating funding transactions
+ * @interface FundingTransactionParams
+ * @description Configuration for creating transactions that fund Bitcoin scripts
+ */
+export interface FundingTransactionParams {
+  /** Array of unspent transaction outputs to use as funding */
   inputs: UTXO[];
+  /** Output destinations and amounts */
   outputs: TransactionOutput[];
+  /** Private key for signing the funding transaction */
   privateKey: string;
 }
 

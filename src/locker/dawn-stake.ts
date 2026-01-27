@@ -8,93 +8,203 @@ import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore, getECC } from "./core";
 import type { UTXO, ScriptInfo } from "../types";
 
-interface DawnStakingInput extends UTXO {
+/**
+ * Dawn staking input with transaction details
+ * @interface DawnStakingInput
+ * @description UTXO input specifically for Dawn staking operations
+ * @extends UTXO
+ */
+export interface DawnStakingInput extends UTXO {
+  /** Transaction ID */
   txid: string;
+  /** Output index */
   vout: number;
+  /** Output value in satoshis */
   value: number;
 }
 
-interface DawnStakingParams {
+/**
+ * Parameters for Dawn staking transactions
+ * @interface DawnStakingParams
+ * @description Configuration for creating Dawn protocol staking transactions with dual outputs
+ */
+export interface DawnStakingParams {
+  /** Array of unspent transaction outputs to stake */
   inputs: DawnStakingInput[];
+  /** Escrow script address */
   escrowAddress: string;
+  /** Amount to send to escrow in satoshis */
   escrowAmount: number;
+  /** Timelock script address */
   timelockAddress: string;
+  /** Amount to send to timelock in satoshis */
   timelockAmount: number;
+  /** Optional change address for remaining funds */
   changeAddress?: string;
+  /** Private key for signing the staking transaction */
   privateKey: string;
+  /** Optional fee rate in satoshis per byte */
   feeRate?: number;
 }
 
-interface DawnStakingResult {
+/**
+ * Result of Dawn staking transaction
+ * @interface DawnStakingResult
+ * @description Transaction result with detailed output breakdown for Dawn staking
+ */
+export interface DawnStakingResult {
+  /** Transaction in hexadecimal format */
   hex: string;
+  /** Transaction ID (hash) */
   txid: string;
+  /** Transaction size in bytes */
   size: number;
+  /** Transaction fee in satoshis */
   fee: number;
+  /** Output breakdown */
   outputs: {
+    /** Amount sent to escrow in satoshis */
     escrowAmount: number;
+    /** Amount sent to timelock in satoshis */
     timelockAmount: number;
+    /** Optional change amount in satoshis */
     changeAmount?: number;
   };
 }
 
-interface DawnStakingWithScriptParams extends Omit<DawnStakingParams, 'timelockAddress'> {
+/**
+ * Parameters for Dawn staking with script data
+ * @interface DawnStakingWithScriptParams
+ * @description Configuration for creating Dawn staking transactions with provided timelock script information
+ * @extends Omit<DawnStakingParams, 'timelockAddress'>
+ */
+export interface DawnStakingWithScriptParams extends Omit<DawnStakingParams, 'timelockAddress'> {
+  /** Timelock script information object */
   timelockScript: ScriptInfo;
 }
 
-interface DawnStakingWithScriptResult extends DawnStakingResult {
+/**
+ * Result of Dawn staking transaction with script information
+ * @interface DawnStakingWithScriptResult
+ * @description Dawn staking transaction result with additional timelock script details
+ * @extends DawnStakingResult
+ */
+export interface DawnStakingWithScriptResult extends DawnStakingResult {
+  /** Timelock script details */
   timelockScript: {
+    /** Timelock script address */
     address: string;
+    /** Script type */
     type: string;
+    /** Optional locktime value */
     locktime?: number;
   };
 }
 
-interface DawnStakingCalculationParams {
+/**
+ * Parameters for Dawn staking amount calculation
+ * @interface DawnStakingCalculationParams
+ * @description Configuration for calculating optimal Dawn staking amounts and fees
+ */
+export interface DawnStakingCalculationParams {
+  /** Array of available inputs with their values */
   inputs: Array<{ value: number }>;
+  /** Desired amount for escrow output in satoshis */
   desiredEscrowAmount: number;
+  /** Desired amount for timelock output in satoshis */
   desiredTimelockAmount: number;
+  /** Whether to include change output in calculation */
   includeChange?: boolean;
+  /** Optional fee rate in satoshis per byte */
   feeRate?: number;
 }
 
-interface DawnStakingCalculationResult {
+/**
+ * Result of Dawn staking amount calculation
+ * @interface DawnStakingCalculationResult
+ * @description Calculation results for optimal Dawn staking amounts and feasibility
+ */
+export interface DawnStakingCalculationResult {
+  /** Total input value in satoshis */
   totalInputValue: number;
+  /** Estimated transaction fee in satoshis */
   estimatedFee: number;
+  /** Total required amount including fees in satoshis */
   totalRequired: number;
+  /** Calculated change amount in satoshis */
   changeAmount: number;
+  /** Whether the staking is feasible with available inputs */
   feasible: boolean;
+  /** Optional recommendation for optimization */
   recommendation?: string;
 }
 
-interface DawnWithdrawalInput {
+/**
+ * Dawn withdrawal input with redeem script
+ * @interface DawnWithdrawalInput
+ * @description Input for Dawn withdrawal operations including redeem script
+ */
+export interface DawnWithdrawalInput {
+  /** Transaction ID */
   txid: string;
+  /** Output index */
   vout: number;
+  /** Output value in satoshis */
   value: number;
+  /** Redeem script in hexadecimal format */
   redeemScript: string;
 }
 
-interface DawnWithdrawalParams {
+/**
+ * Parameters for Dawn withdrawal
+ * @interface DawnWithdrawalParams
+ * @description Configuration for withdrawing from both escrow and timelock Dawn staking outputs
+ */
+export interface DawnWithdrawalParams {
+  /** Array of escrow inputs to withdraw from */
   escrowInputs: DawnWithdrawalInput[];
+  /** Array of timelock inputs to withdraw from */
   timelockInputs: DawnWithdrawalInput[];
+  /** Destination address for withdrawn funds */
   destination: string;
+  /** Private key for signing escrow inputs */
   escrowPrivateKey: string;
+  /** Private key for signing timelock inputs */
   timelockPrivateKey: string;
+  /** Optional fixed fee amount in satoshis */
   feeAmount?: number;
-  api?: any; // Bitcoin API instance for fetching transaction data
+  /** Optional Bitcoin API instance for fetching transaction data */
+  api?: any;
 }
 
-interface DawnWithdrawalResult {
+/**
+ * Result of Dawn withdrawal
+ * @interface DawnWithdrawalResult
+ * @description Transaction result with detailed input and output information for Dawn withdrawal
+ */
+export interface DawnWithdrawalResult {
+  /** Transaction in hexadecimal format */
   hex: string;
+  /** Transaction ID (hash) */
   txid: string;
+  /** Transaction size in bytes */
   size: number;
+  /** Transaction fee in satoshis */
   fee: number;
+  /** Input details */
   inputs: {
+    /** Total value from escrow inputs in satoshis */
     escrowValue: number;
+    /** Total value from timelock inputs in satoshis */
     timelockValue: number;
+    /** Total input value in satoshis */
     totalValue: number;
   };
+  /** Output details */
   output: {
+    /** Destination address for withdrawn funds */
     destination: string;
+    /** Final output value after fees in satoshis */
     value: number;
   };
 }
