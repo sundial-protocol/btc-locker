@@ -5,16 +5,16 @@
 
 import https from "https";
 
-type NetworkType = "mainnet" | "testnet";
-type ApiProvider = "mempool" | "blockstream" | "blockcypher";
+export type NetworkType = "mainnet" | "testnet";
+export type ApiProvider = "mempool" | "blockstream" | "blockcypher";
 
-interface ApiUrls {
+export interface ApiUrls {
   [provider: string]: {
     [network: string]: string;
   };
 }
 
-interface AddressInfo {
+export interface AddressInfo {
   address: string;
   chain_stats: {
     funded_txo_count: number;
@@ -32,7 +32,7 @@ interface AddressInfo {
   };
 }
 
-interface UTXO {
+export interface BitcoinUTXO {
   txid: string;
   vout: number;
   value: number;
@@ -43,11 +43,11 @@ interface UTXO {
   };
 }
 
-interface FeeEstimates {
+export interface FeeEstimates {
   [blocks: number]: number;
 }
 
-interface BroadcastResult {
+export interface BroadcastResult {
   txid: string;
 }
 
@@ -205,7 +205,7 @@ export default class BitcoinAPI {
   /**
    * Get UTXOs for an address
    */
-  async getAddressUtxos(address: string): Promise<UTXO[]> {
+  async getAddressUtxos(address: string): Promise<BitcoinUTXO[]> {
     try {
       if (
         this.apiProvider === "mempool" ||

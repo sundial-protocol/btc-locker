@@ -28,6 +28,7 @@ import {
   ValidationError,
   TimelockError,
 } from "./errors";
+import BitcoinAPI from "./bitcoin-api";
 
 // Export all types and interfaces
 export type {
@@ -79,6 +80,17 @@ export type {
   YieldInput
 } from "./locker/yield";
 
+// Export BitcoinAPI types and interfaces
+export type {
+  NetworkType as BitcoinNetworkType,
+  ApiProvider,
+  ApiUrls,
+  AddressInfo,
+  BitcoinUTXO,
+  FeeEstimates,
+  BroadcastResult
+} from "./bitcoin-api";
+
 // Import NetworkType for use in function
 import type { NetworkType } from "./types";
 
@@ -112,6 +124,7 @@ export {
   TransactionManager,
   YieldDistributor,
   DawnStakingManager,
+  BitcoinAPI,
   TimeUtils,
   ScriptUtils,
   TransactionUtils,
@@ -135,6 +148,7 @@ export default {
   TransactionManager,
   YieldDistributor,
   DawnStakingManager,
+  BitcoinAPI,
   createBTCLocker,
   TimeUtils,
   ScriptUtils,

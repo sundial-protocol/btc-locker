@@ -13,8 +13,7 @@ import { EscrowManager } from "./escrow";
 import { DawnStakingManager } from "./dawn-stake";
 import { 
   KeyPair, 
-  ScriptInfo, 
-  UTXO, 
+  ScriptInfo,  
   TransactionResult, 
   NetworkType 
 } from "../types";
