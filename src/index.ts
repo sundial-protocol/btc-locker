@@ -45,18 +45,6 @@ export type {
   InitializedECC,
 } from "./types";
 
-export type {
-  SpendingTransactionParams,
-  FundingTransactionParams,
-  YieldDistributionParams,
-  YieldDistributionResult,
-  DawnStakingParams,
-  DawnStakingWithScriptParams,
-  DawnStakingCalculationParams,
-  DawnWithdrawalParams,
-  DawnWithdrawalResult,
-} from "./locker/index";
-
 // Export additional interfaces from individual modules
 export type { 
   EscrowSpendingTransaction 
@@ -70,24 +58,24 @@ export type {
   DawnStakingResult,
   DawnStakingWithScriptResult,
   DawnStakingCalculationResult,
-  DawnStakingParams as DawnStakingParamsLocal,
-  DawnStakingWithScriptParams as DawnStakingWithScriptParamsLocal,
-  DawnStakingCalculationParams as DawnStakingCalculationParamsLocal,
-  DawnWithdrawalParams as DawnWithdrawalParamsLocal,
-  DawnWithdrawalResult as DawnWithdrawalResultLocal,
+  DawnStakingParams,
+  DawnStakingWithScriptParams,
+  DawnStakingCalculationParams,
+  DawnWithdrawalParams,
+  DawnWithdrawalResult,
   DawnStakingInput,
   DawnWithdrawalInput
 } from "./locker/dawn-stake";
 
 export type {
-  SpendingTransactionParams as SpendingTransactionParamsLocal,
-  FundingTransactionParams as FundingTransactionParamsLocal,
+  SpendingTransactionParams,
+  FundingTransactionParams,
   TransactionOutput
 } from "./locker/transactions";
 
 export type {
-  YieldDistributionParams as YieldDistributionParamsLocal,
-  YieldDistributionResult as YieldDistributionResultLocal,
+  YieldDistributionParams,
+  YieldDistributionResult,
   YieldInput
 } from "./locker/yield";
 
