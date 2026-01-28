@@ -48,7 +48,9 @@ export type {
 
 // Export additional interfaces from individual modules
 export type { 
-  EscrowSpendingTransaction 
+  EscrowSpendingTransaction,
+  EscrowSpendingParams,
+  EscrowSpendingSigningParams
 } from "./locker/escrow";
 
 export type {
@@ -65,19 +67,26 @@ export type {
   DawnWithdrawalParams,
   DawnWithdrawalResult,
   DawnStakingInput,
-  DawnWithdrawalInput
+  DawnWithdrawalInput,
+  DawnStakingSigningParams,
+  DawnWithdrawalSigningParams
 } from "./locker/dawn-stake";
 
 export type {
   SpendingTransactionParams,
   FundingTransactionParams,
-  TransactionOutput
+  TransactionOutput,
+  TransactionSigningParams,
+  TransactionSubmissionParams,
+  SpendingTransactionSigningParams,
+  FundingTransactionSigningParams
 } from "./locker/transactions";
 
 export type {
   YieldDistributionParams,
   YieldDistributionResult,
-  YieldInput
+  YieldInput,
+  YieldDistributionSigningParams
 } from "./locker/yield";
 
 // Export BitcoinAPI types and interfaces

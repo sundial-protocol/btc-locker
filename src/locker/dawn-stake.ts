@@ -41,8 +41,6 @@ export interface DawnStakingParams {
   timelockAmount: number;
   /** Optional change address for remaining funds */
   changeAddress?: string;
-  /** Private key for signing the staking transaction */
-  privateKey: string;
   /** Optional fee rate in satoshis per byte */
   feeRate?: number;
 }
@@ -167,10 +165,6 @@ export interface DawnWithdrawalParams {
   timelockInputs: DawnWithdrawalInput[];
   /** Destination address for withdrawn funds */
   destination: string;
-  /** Private key for signing escrow inputs */
-  escrowPrivateKey: string;
-  /** Private key for signing timelock inputs */
-  timelockPrivateKey: string;
   /** Optional fixed fee amount in satoshis */
   feeAmount?: number;
   /** Optional Bitcoin API instance for fetching transaction data */
@@ -210,6 +204,47 @@ export interface DawnWithdrawalResult {
 }
 
 /**
+ * Parameters for signing a Dawn staking transaction
+ * @interface DawnStakingSigningParams
+ * @description Configuration for signing an unsigned Dawn staking PSBT
+ */
+export interface DawnStakingSigningParams {
+  /** Unsigned PSBT in base64 format */
+  unsignedPsbt: string;
+  /** Private key for signing in hex format */
+  privateKey: string;
+  /** Array of input UTXOs for witness data */
+  inputs: DawnStakingInput[];
+}
+
+/**
+ * Parameters for Dawn withdrawal transaction
+ * @interface DawnWithdrawalCreationParams
+ * @description Configuration for creating an unsigned Dawn withdrawal transaction
+ */
+export interface DawnWithdrawalCreationParams extends Omit<DawnWithdrawalParams, 'privateKey'> {
+  // All parameters except privateKey
+}
+
+/**
+ * Parameters for signing a Dawn withdrawal transaction  
+ * @interface DawnWithdrawalSigningParams
+ * @description Configuration for signing an unsigned Dawn withdrawal PSBT
+ */
+export interface DawnWithdrawalSigningParams {
+  /** Unsigned PSBT in base64 format */
+  unsignedPsbt: string;
+  /** Private key for signing escrow inputs in hex format */
+  escrowPrivateKey?: string;
+  /** Private key for signing timelock inputs in hex format */
+  timelockPrivateKey?: string;
+  /** Array of escrow inputs */
+  escrowInputs: DawnWithdrawalInput[];
+  /** Array of timelock inputs */
+  timelockInputs: DawnWithdrawalInput[];
+}
+
+/**
  * Dawn Protocol staking manager class
  * @class DawnStakingManager
  * @description Creates Bitcoin transactions for Dawn protocol staking that send funds
@@ -220,7 +255,7 @@ export class DawnStakingManager extends BTCLockerCore {
    * Create a Dawn staking transaction
    * @async
    * @param params - Dawn staking parameters
-   * @returns Dawn staking transaction details
+   * @returns Unsigned PSBT as base64 string
    * @throws If insufficient funds or invalid parameters
    * @example
    * const dawn = new DawnStakingManager();
@@ -233,9 +268,8 @@ export class DawnStakingManager extends BTCLockerCore {
    *   privateKey: '...'
    * });
    */
-  async createDawnStakingTransaction(params: DawnStakingParams): Promise<DawnStakingResult> {
+  async createDawnStakingTransaction(params: DawnStakingParams): Promise<string> {
     await this.ensureInitialized();
-    const { ECPair } = getECC();
     const {
       inputs,
       escrowAddress,
@@ -243,7 +277,6 @@ export class DawnStakingManager extends BTCLockerCore {
       timelockAddress,
       timelockAmount,
       changeAddress,
-      privateKey,
       feeRate = 10,
     } = params;
 
@@ -266,10 +299,6 @@ export class DawnStakingManager extends BTCLockerCore {
 
     if (!Number.isInteger(timelockAmount) || timelockAmount <= 0) {
       throw new Error("timelockAmount must be a positive integer");
-    }
-
-    if (typeof privateKey !== "string") {
-      throw new Error("privateKey must be a hex string");
     }
 
     // Calculate total input value
@@ -321,24 +350,16 @@ export class DawnStakingManager extends BTCLockerCore {
     }
 
     try {
-      // Create key pair for signing
-      const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, "hex"), {
-        network: this.network,
-      });
-
       // Create PSBT for transaction construction
       const psbt = new bitcoin.Psbt({ network: this.network });
 
-      // Add inputs
+      // Add inputs (using placeholder witnessUtxo - actual script will be added during signing)
       for (const input of inputs) {
         const inputData = {
           hash: input.txid,
           index: input.vout,
           witnessUtxo: {
-            script: bitcoin.payments.p2wpkh({
-              pubkey: keyPair.publicKey,
-              network: this.network,
-            }).output!,
+            script: Buffer.alloc(22), // Placeholder for P2WPKH script
             value: BigInt(input.value),
           },
         };
@@ -367,40 +388,8 @@ export class DawnStakingManager extends BTCLockerCore {
         });
       }
 
-      // Sign all inputs
-      for (let i = 0; i < inputs.length; i++) {
-        try {
-          psbt.signInput(i, keyPair);
-        } catch (error) {
-          throw new Error(`Failed to sign input ${i}: ${(error as Error).message}`);
-        }
-      }
-
-      // Finalize and extract transaction
-      psbt.finalizeAllInputs();
-      const transaction = psbt.extractTransaction();
-
-      // Calculate actual fee
-      const actualChangeAmount = changeAddress && changeAmount >= dustThreshold ? changeAmount : 0;
-      const actualFee = totalInputValue - escrowAmount - timelockAmount - actualChangeAmount;
-
-      const result: DawnStakingResult = {
-        hex: transaction.toHex(),
-        txid: transaction.getId(),
-        size: transaction.byteLength(),
-        fee: actualFee,
-        outputs: {
-          escrowAmount,
-          timelockAmount,
-        },
-      };
-
-      // Add change amount if it exists
-      if (actualChangeAmount > 0) {
-        result.outputs.changeAmount = actualChangeAmount;
-      }
-
-      return result;
+      // Return unsigned PSBT
+      return psbt.toBase64();
     } catch (error) {
       throw new Error(`Failed to create Dawn staking transaction: ${(error as Error).message}`);
     }
@@ -410,19 +399,18 @@ export class DawnStakingManager extends BTCLockerCore {
    * Create a Dawn staking transaction using timelock script data
    * @async
    * @param params - Dawn staking parameters with script data
-   * @returns Dawn staking transaction details with script info
+   * @returns Unsigned PSBT as base64 string
    * @example
    * const timelockScript = await locker.createTimelockScript(locktime, publicKey);
-   * const tx = await dawn.createDawnStakingTransactionWithScript({
+   * const unsignedPsbt = await dawn.createDawnStakingTransactionWithScript({
    *   inputs: [{ txid: '...', vout: 0, value: 500000 }],
    *   escrowAddress: '3ABC123...',
    *   escrowAmount: 100000,
    *   timelockScript: timelockScript,
-   *   timelockAmount: 200000,
-   *   privateKey: '...'
+   *   timelockAmount: 200000
    * });
    */
-  async createDawnStakingTransactionWithScript(params: DawnStakingWithScriptParams): Promise<DawnStakingWithScriptResult> {
+  async createDawnStakingTransactionWithScript(params: DawnStakingWithScriptParams): Promise<string> {
     const { timelockScript, ...otherParams } = params;
     
     // Validate timelock script
@@ -440,17 +428,7 @@ export class DawnStakingManager extends BTCLockerCore {
       timelockAddress: timelockScript.address
     };
 
-    const result = await this.createDawnStakingTransaction(txParams);
-
-    // Add script information to the result
-    return {
-      ...result,
-      timelockScript: {
-        address: timelockScript.address,
-        type: timelockScript.type || 'unknown',
-        locktime: timelockScript.locktime,
-      },
-    };
+    return await this.createDawnStakingTransaction(txParams);
   }
 
   /**
@@ -538,28 +516,23 @@ export class DawnStakingManager extends BTCLockerCore {
    * Create a Dawn withdrawal transaction that combines escrow and timelock inputs into a single output
    * @async
    * @param params - Dawn withdrawal parameters
-   * @returns Dawn withdrawal transaction details
+   * @returns Unsigned withdrawal PSBT as base64 string
    * @throws If insufficient funds or invalid parameters
    * @example
    * const dawn = new DawnStakingManager();
-   * const tx = await dawn.createDawnWithdrawalTransaction({
+   * const unsignedPsbt = await dawn.createDawnWithdrawalTransaction({
    *   escrowInputs: [{ txid: '...', vout: 0, value: 100000, redeemScript: '...' }],
    *   timelockInputs: [{ txid: '...', vout: 0, value: 200000, redeemScript: '...' }],
    *   destination: 'tb1q...',
-   *   escrowPrivateKey: '...',
-   *   timelockPrivateKey: '...',
    *   feeAmount: 2000
    * });
    */
-  async createDawnWithdrawalTransaction(params: DawnWithdrawalParams): Promise<DawnWithdrawalResult> {
+  async createDawnWithdrawalTransaction(params: DawnWithdrawalParams): Promise<string> {
     await this.ensureInitialized();
-    const { ECPair } = getECC();
     const {
       escrowInputs,
       timelockInputs,
       destination,
-      escrowPrivateKey,
-      timelockPrivateKey,
       feeAmount = 2000,
       api,
     } = params;
@@ -568,15 +541,6 @@ export class DawnStakingManager extends BTCLockerCore {
     if (escrowInputs.length === 0 && timelockInputs.length === 0) {
       throw new Error("No inputs provided for withdrawal");
     }
-
-    // Create key pairs from private keys (only if we need them)
-    const escrowKeyPair = escrowInputs.length > 0 ? ECPair.fromPrivateKey(Buffer.from(escrowPrivateKey, "hex"), {
-      network: this.network,
-    }) : null;
-    
-    const timelockKeyPair = timelockInputs.length > 0 ? ECPair.fromPrivateKey(Buffer.from(timelockPrivateKey, "hex"), {
-      network: this.network,
-    }) : null;
 
     // Calculate total values
     const escrowValue = escrowInputs.reduce((sum, input) => sum + input.value, 0);
@@ -749,111 +713,12 @@ export class DawnStakingManager extends BTCLockerCore {
       value: BigInt(outputValue),
     });
 
-    // Sign escrow inputs
-    if (escrowKeyPair && escrowInputs.length > 0) {
-      for (let i = 0; i < escrowInputs.length; i++) {
-        try {
-          psbt.signInput(i, escrowKeyPair);
-        } catch (error) {
-          throw new Error(`Failed to sign escrow input ${i}: ${(error as Error).message}`);
-        }
-      }
-    }
-
-    // Sign timelock inputs
-    if (timelockKeyPair && timelockInputs.length > 0) {
-      for (let i = 0; i < timelockInputs.length; i++) {
-        const inputIndex = escrowInputs.length + i;
-        try {
-          psbt.signInput(inputIndex, timelockKeyPair);
-        } catch (error) {
-          throw new Error(`Failed to sign timelock input ${inputIndex}: ${(error as Error).message}`);
-        }
-      }
-    }
-
-    // Finalize inputs with custom finalizers for conditional scripts
-    for (let i = 0; i < escrowInputs.length; i++) {
-      try {
-        // For escrow scripts, we need a custom finalizer to provide the correct stack
-        psbt.finalizeInput(i, (inputIndex: number, input: any) => {
-          const scriptSig = input.partialSig?.[0];
-          if (!scriptSig) {
-            throw new Error("Missing signature for escrow input");
-          }
-          
-          const redeemScript = input.redeemScript;
-          if (!redeemScript) {
-            throw new Error("Missing redeem script for escrow input");
-          }
-
-          // Dawn withdrawal always uses the "after deadline" path (OP_TRUE)
-          const scriptWitness = bitcoin.script.compile([
-            scriptSig.signature,
-            bitcoin.opcodes.OP_TRUE, // Always choose IF branch (after deadline)
-            redeemScript
-          ]);
-
-          return {
-            finalScriptSig: scriptWitness,
-            finalScriptWitness: undefined
-          };
-        });
-      } catch (error) {
-        throw new Error(`Failed to finalize escrow input ${i}: ${(error as Error).message}`);
-      }
-    }
-
-    // Finalize timelock inputs with custom finalizers
-    for (let i = 0; i < timelockInputs.length; i++) {
-      const inputIndex = escrowInputs.length + i;
-      try {
-        psbt.finalizeInput(inputIndex, (idx: number, input: any) => {
-          const scriptSig = input.partialSig?.[0];
-          if (!scriptSig) {
-            throw new Error("Missing signature for timelock input");
-          }
-          
-          const redeemScript = input.redeemScript;
-          if (!redeemScript) {
-            throw new Error("Missing redeem script for timelock input");
-          }
-
-          // For timelock scripts, provide signature and redeem script
-          const scriptWitness = bitcoin.script.compile([
-            scriptSig.signature,
-            redeemScript
-          ]);
-
-          return {
-            finalScriptSig: scriptWitness,
-            finalScriptWitness: undefined
-          };
-        });
-      } catch (error) {
-        throw new Error(`Failed to finalize timelock input ${inputIndex}: ${(error as Error).message}`);
-      }
-    }
-
-    // Extract the final transaction
-    const transaction = psbt.extractTransaction();
-
-    return {
-      hex: transaction.toHex(),
-      txid: transaction.getId(),
-      size: transaction.byteLength(),
-      fee: feeAmount,
-      inputs: {
-        escrowValue,
-        timelockValue,
-        totalValue: totalInputValue,
-      },
-      output: {
-        destination,
-        value: outputValue,
-      },
-    };
+    // Return unsigned PSBT
+    return psbt.toBase64();
   }
+
+
+
 }
 
 export default DawnStakingManager;

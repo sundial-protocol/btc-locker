@@ -147,4 +147,175 @@ export class BTCLockerCore {
     }
     return currentTime >= locktime;
   }
+
+  /**
+   * Sign any transaction PSBT with one or more private keys
+   * @param unsignedPsbt - Unsigned PSBT in base64 format
+   * @param privateKeys - Single private key or array of private keys for multiple inputs
+   * @param options - Optional signing options
+   * @returns Signed transaction hex
+   * @throws If signing fails
+   * @example
+   * // Single key for all inputs
+   * const signedHex = await locker.signTransaction(unsignedPsbt, privateKey);
+   * 
+   * // Multiple keys for multiple inputs
+   * const signedHex = await locker.signTransaction(unsignedPsbt, [escrowKey, timelockKey]);
+   */
+  async signTransaction(
+    unsignedPsbt: string, 
+    privateKeys: string | string[],
+    options?: { spendAfterDeadline?: boolean }
+  ): Promise<string> {
+    await this.ensureInitialized();
+    const { ECPair } = getECC();
+    
+    if (!unsignedPsbt || typeof unsignedPsbt !== 'string') {
+      throw new Error("unsignedPsbt is required and must be a string");
+    }
+
+    const keys = Array.isArray(privateKeys) ? privateKeys : [privateKeys];
+    if (keys.length === 0) {
+      throw new Error("At least one private key is required");
+    }
+
+    try {
+      const psbt = bitcoin.Psbt.fromBase64(unsignedPsbt, { network: this.network });
+      
+      // Create key pairs
+      const keyPairs = keys.map(key => {
+        if (!key || typeof key !== 'string') {
+          throw new Error("All private keys must be valid hex strings");
+        }
+        return ECPair.fromPrivateKey(Buffer.from(key, "hex"), { network: this.network });
+      });
+
+      // Sign each input with appropriate key
+      for (let i = 0; i < psbt.inputCount; i++) {
+        const keyPair = keyPairs[i] || keyPairs[0]; // Use per-input key or default to first key
+        const input = psbt.data.inputs[i];
+        
+        // Update witnessUtxo if needed for P2WPKH inputs
+        if (input.witnessUtxo && (!input.witnessUtxo.script || input.witnessUtxo.script.length === 0)) {
+          input.witnessUtxo.script = bitcoin.payments.p2wpkh({
+            pubkey: keyPair.publicKey,
+            network: this.network,
+          }).output!;
+        }
+        
+        try {
+          psbt.signInput(i, keyPair);
+        } catch (error) {
+          throw new Error(`Failed to sign input ${i}: ${(error as Error).message}`);
+        }
+      }
+
+      // Auto-finalize based on script structure
+      for (let i = 0; i < psbt.inputCount; i++) {
+        const input = psbt.data.inputs[i];
+        
+        if (input.redeemScript) {
+          // Custom finalization for scripts
+          const redeemScript = Buffer.from(input.redeemScript);
+          
+          // Auto-detect script type and apply appropriate finalization
+          if (this.hasConditionalLogic(redeemScript)) {
+            // Escrow-style script with conditional logic
+            psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
+              const signature = inputData.partialSig?.[0]?.signature;
+              if (!signature) {
+                throw new Error(`Missing signature for input ${inputIndex}`);
+              }
+              
+              const useAfterDeadline = options?.spendAfterDeadline !== false; // Default true
+              const scriptSig = bitcoin.script.compile([
+                signature,
+                useAfterDeadline ? bitcoin.opcodes.OP_TRUE : bitcoin.opcodes.OP_FALSE,
+                redeemScript
+              ]);
+              
+              return {
+                finalScriptSig: scriptSig,
+                finalScriptWitness: undefined
+              };
+            });
+          } else {
+            // Simple script or timelock script
+            psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
+              const signature = inputData.partialSig?.[0]?.signature;
+              if (!signature) {
+                throw new Error(`Missing signature for input ${inputIndex}`);
+              }
+              
+              const scriptSig = bitcoin.script.compile([
+                signature,
+                redeemScript
+              ]);
+              
+              return {
+                finalScriptSig: scriptSig,
+                finalScriptWitness: undefined
+              };
+            });
+          }
+        } else {
+          // Standard finalization
+          psbt.finalizeInput(i);
+        }
+      }
+      
+      const transaction = psbt.extractTransaction();
+      return transaction.toHex();
+    } catch (error) {
+      throw new Error(`Failed to sign transaction: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Check if a redeem script has conditional logic (IF/ELSE)
+   */
+  private hasConditionalLogic(redeemScript: Buffer): boolean {
+    return redeemScript.includes(bitcoin.opcodes.OP_IF) || 
+           redeemScript.includes(bitcoin.opcodes.OP_NOTIF);
+  }
+
+  /**
+   * Submit any signed transaction to the Bitcoin network
+   * @param transactionHex - Signed transaction in hex format
+   * @param options - Optional submission options
+   * @returns Transaction ID if submitted successfully
+   * @throws If submission fails
+   * @example
+   * const txid = await locker.submitTransaction('01000000...');
+   * 
+   * // With API for actual broadcast
+   * const txid = await locker.submitTransaction('01000000...', { api: bitcoinAPI });
+   */
+  async submitTransaction(transactionHex: string, options?: { api?: any }): Promise<string> {
+    if (!transactionHex || typeof transactionHex !== 'string') {
+      throw new Error("transactionHex is required and must be a string");
+    }
+
+    try {
+      // Parse transaction to validate and get txid
+      const transaction = bitcoin.Transaction.fromHex(transactionHex);
+      const txid = transaction.getId();
+
+      // Broadcast via API if provided
+      if (options?.api && typeof options.api.broadcastTransaction === 'function') {
+        try {
+          const broadcastResult = await options.api.broadcastTransaction(transactionHex);
+          return broadcastResult.txid || txid;
+        } catch (error) {
+          throw new Error(`Failed to broadcast transaction: ${(error as Error).message}`);
+        }
+      }
+
+      // For demo purposes, just log and return txid
+      console.log(`Transaction ready for broadcast: ${txid}`);
+      return txid;
+    } catch (error) {
+      throw new Error(`Failed to submit transaction: ${(error as Error).message}`);
+    }
+  }
 }

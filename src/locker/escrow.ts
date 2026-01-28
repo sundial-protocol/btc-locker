@@ -9,6 +9,44 @@ import { KeyUtils, ValidationUtils, ScriptUtils } from "../utils";
 import type { ScriptInfo } from "../types";
 
 /**
+ * Escrow transaction creation parameters
+ * @interface EscrowSpendingParams
+ * @description Parameters for creating an unsigned escrow spending transaction
+ */
+export interface EscrowSpendingParams {
+  /** Script data returned from createEscrowScript */
+  scriptData: ScriptInfo;
+  /** Transaction ID of the UTXO to spend */
+  utxoTxId: string;
+  /** Output index of the UTXO to spend */
+  utxoIndex: number;
+  /** Amount in satoshis to spend */
+  amount: number;
+  /** Address to send funds to */
+  outputAddress: string;
+  /** Whether to spend after deadline (true) or before (false) */
+  spendAfterDeadline: boolean;
+  /** Current time for validation (defaults to Date.now()) */
+  currentTime?: number;
+  /** Previous transaction buffer (for testing/validation) */
+  previousTransaction?: Buffer | null;
+}
+
+/**
+ * Escrow transaction signing parameters
+ * @interface EscrowSpendingSigningParams
+ * @description Parameters for signing an unsigned escrow transaction
+ */
+export interface EscrowSpendingSigningParams {
+  /** Unsigned transaction as base64 PSBT */
+  unsignedTransaction: string;
+  /** Private key corresponding to the appropriate public key */
+  privateKey: Buffer | string;
+  /** Whether this is spending after deadline (affects validation) */
+  spendAfterDeadline: boolean;
+}
+
+/**
  * Escrow spending transaction result
  * @interface EscrowSpendingTransaction
  * @description Result of spending from an escrow script
@@ -97,55 +135,45 @@ export class EscrowManager extends BTCLockerCore {
   }
 
   /**
-   * Create a spending transaction for the escrow script
+   * Create an unsigned escrow spending transaction
    * @async
-   * @param scriptData - Script data returned from createEscrowScript
-   * @param utxoTxId - Transaction ID of the UTXO to spend
-   * @param utxoIndex - Output index of the UTXO to spend
-   * @param amount - Amount in satoshis to spend
-   * @param outputAddress - Address to send funds to
-   * @param spendAfterDeadline - Whether to spend after deadline (true) or before (false)
-   * @param privateKey - Private key corresponding to the appropriate public key
-   * @param currentTime - Current time for validation (defaults to Date.now())
-   * @param previousTransaction - Previous transaction buffer (for testing/validation)
-   * @returns Transaction details
+   * @param params - Escrow spending parameters
+   * @returns Unsigned transaction as base64 PSBT
    * @throws If spending conditions are not met or transaction creation fails
    * @example
-   * // Spend before deadline
-   * const tx = await escrow.createEscrowSpendingTransaction(
+   * // Create unsigned transaction for spending before deadline
+   * const unsignedTx = await escrow.createEscrowSpendingTransaction({
    *   scriptData,
    *   utxoTxId,
-   *   0,
-   *   100000,
-   *   "tb1qaddr...",
-   *   false,
-   *   beforeUserPrivateKey
-   * );
+   *   utxoIndex: 0,
+   *   amount: 100000,
+   *   outputAddress: "tb1qaddr...",
+   *   spendAfterDeadline: false
+   * });
    * 
-   * // Spend after deadline
-   * const tx = await escrow.createEscrowSpendingTransaction(
+   * // Create unsigned transaction for spending after deadline
+   * const unsignedTx = await escrow.createEscrowSpendingTransaction({
    *   scriptData,
    *   utxoTxId,
-   *   0,
-   *   100000,
-   *   "tb1qaddr...",
-   *   true,
-   *   afterUserPrivateKey,
-   *   Date.now()
-   * );
+   *   utxoIndex: 0,
+   *   amount: 100000,
+   *   outputAddress: "tb1qaddr...",
+   *   spendAfterDeadline: true,
+   *   currentTime: Date.now()
+   * });
    */
-  async createEscrowSpendingTransaction(
-    scriptData: ScriptInfo,
-    utxoTxId: string,
-    utxoIndex: number,
-    amount: number,
-    outputAddress: string,
-    spendAfterDeadline: boolean,
-    privateKey: Buffer | string,
-    currentTime: number = Date.now(),
-    previousTransaction: Buffer | null = null
-  ): Promise<EscrowSpendingTransaction> {
+  async createEscrowSpendingTransaction(params: EscrowSpendingParams): Promise<string> {
     await this.ensureInitialized();
+    const { 
+      scriptData,
+      utxoTxId,
+      utxoIndex,
+      amount,
+      outputAddress,
+      spendAfterDeadline,
+      currentTime = Date.now(),
+      previousTransaction = null
+    } = params;
 
     // Validate inputs
     if (!scriptData || scriptData.type !== "time-escrow") {
@@ -168,48 +196,40 @@ export class EscrowManager extends BTCLockerCore {
       throw new Error("outputAddress must be a string");
     }
 
-    // Convert private key to ECPair using shared utility
-    let keyPair: any;
-    try {
-      const { ECPair } = getECC();
-      keyPair = KeyUtils.createKeyPair(privateKey, ECPair);
-    } catch (error) {
-      throw new Error(`Invalid private key: ${(error as Error).message}`);
-    }
-
-    // Validate timing and key correspondence
+    // Validate timing for after-deadline spending
     const currentTimeSeconds = Math.floor(currentTime / 1000);
-    const publicKeyHex = keyPair.publicKey.toString("hex");
-
-    if (spendAfterDeadline) {
-      if (currentTimeSeconds <= scriptData.locktime!) {
-        throw new Error(
-          `Cannot spend after deadline yet. Current time: ${currentTimeSeconds}, Deadline: ${scriptData.locktime}`
-        );
-      }
-      if (publicKeyHex !== scriptData.afterPublicKey) {
-        throw new Error(`Private key does not correspond to afterPublicKey. Expected: ${scriptData.afterPublicKey}, Got: ${publicKeyHex}`);
-      }
-    } else {
-      if (publicKeyHex !== scriptData.beforePublicKey) {
-        throw new Error(`Private key does not correspond to beforePublicKey. Expected: ${scriptData.beforePublicKey}, Got: ${publicKeyHex}`);
-      }
+    if (spendAfterDeadline && currentTimeSeconds <= scriptData.locktime!) {
+      throw new Error(
+        `Cannot spend after deadline yet. Current time: ${currentTimeSeconds}, Deadline: ${scriptData.locktime}`
+      );
     }
 
     try {
-      // Create the transaction manually for better control
-      const tx = new bitcoin.Transaction();
-      tx.version = 2;
+      // Create PSBT for unsigned transaction
+      const psbt = new bitcoin.Psbt({ network: this.network });
 
       // Set locktime and sequence based on spending path
       if (spendAfterDeadline) {
-        tx.locktime = scriptData.locktime!;
-        // Use sequence < 0xffffffff to enable locktime verification
-        tx.addInput(Buffer.from(utxoTxId, 'hex').reverse(), utxoIndex, 0xfffffffe);
-      } else {
-        // Use sequence 0xffffffff to disable locktime verification when spending before deadline
-        tx.addInput(Buffer.from(utxoTxId, 'hex').reverse(), utxoIndex, 0xffffffff);
+        psbt.locktime = scriptData.locktime!;
       }
+
+      // Add input
+      const sequence = spendAfterDeadline ? 0xfffffffe : 0xffffffff;
+      const redeemScript = Buffer.from(scriptData.redeemScript, "hex");
+      
+      psbt.addInput({
+        hash: utxoTxId,
+        index: utxoIndex,
+        sequence: sequence,
+        witnessUtxo: {
+          script: bitcoin.payments.p2sh({
+            redeem: { output: redeemScript },
+            network: this.network,
+          }).output!,
+          value: BigInt(amount),
+        },
+        redeemScript: redeemScript,
+      });
 
       // Add output (subtract a reasonable fee)
       const fee = 1000; // 1000 satoshis fee
@@ -227,45 +247,47 @@ export class EscrowManager extends BTCLockerCore {
         throw new Error(`Invalid output address: ${(error as Error).message}`);
       }
 
-      tx.addOutput(outputScript, BigInt(outputAmount));
+      psbt.addOutput({
+        script: outputScript,
+        value: BigInt(outputAmount),
+      });
 
-      // Create signature hash
-      const hashType = bitcoin.Transaction.SIGHASH_ALL;
-      const redeemScript = Buffer.from(scriptData.redeemScript, "hex");
-      const sigHash = tx.hashForSignature(0, redeemScript, hashType);
-
-      // Sign the transaction with proper DER encoding
-      const signature = keyPair.sign(Buffer.from(sigHash));
-      const signatureWithHashType = bitcoin.script.signature.encode(signature, hashType);
-
-      // Create the unlocking script
-      let scriptSig: Buffer;
-      if (spendAfterDeadline) {
-        // Script path: true branch (after deadline)
-        scriptSig = Buffer.from(bitcoin.script.compile([
-          signatureWithHashType,
-          bitcoin.opcodes.OP_TRUE, // Choose IF branch
-          redeemScript
-        ]));
-      } else {
-        // Script path: false branch (before deadline)
-        scriptSig = Buffer.from(bitcoin.script.compile([
-          signatureWithHashType,
-          bitcoin.opcodes.OP_FALSE, // Choose ELSE branch
-          redeemScript
-        ]));
-      }
-
-      // Set the input script
-      tx.setInputScript(0, scriptSig);
-
-      return {
-        txHex: tx.toHex(),
-        txId: tx.getId(),
-      };
+      // Return unsigned PSBT as base64
+      return psbt.toBase64();
     } catch (error) {
       throw new Error(`Failed to create spending transaction: ${(error as Error).message}`);
     }
+  }
+
+  /**
+   * Convenience method to sign and submit an escrow spending transaction
+   * @async
+   * @param signingParams - Escrow spending signing parameters
+   * @param memo - Optional memo for the transaction
+   * @param api - Optional Bitcoin API instance
+   * @returns Transaction result with escrow spending metadata
+   */
+  async signAndSubmitEscrowSpendingTransaction(
+    signingParams: EscrowSpendingSigningParams,
+    memo?: string,
+    api?: any
+  ): Promise<EscrowSpendingTransaction> {
+    const privateKeyString = typeof signingParams.privateKey === 'string' 
+      ? signingParams.privateKey 
+      : signingParams.privateKey.toString('hex');
+    
+    const signedTx = await this.signTransaction(
+      signingParams.unsignedTransaction, 
+      privateKeyString,
+      { spendAfterDeadline: signingParams.spendAfterDeadline }
+    );
+    
+    const txid = await this.submitTransaction(signedTx, { api });
+    
+    return {
+      txHex: signedTx,
+      txId: txid,
+    };
   }
 
   /**

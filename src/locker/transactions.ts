@@ -37,8 +37,6 @@ export interface SpendingTransactionParams {
   outputs: TransactionOutput[];
   /** Redeem script in hexadecimal format */
   redeemScript: string;
-  /** Private keys for signing the transaction */
-  privateKeys: string[];
   /** Optional locktime for the transaction */
   locktime?: number;
 }
@@ -53,8 +51,60 @@ export interface FundingTransactionParams {
   inputs: UTXO[];
   /** Output destinations and amounts */
   outputs: TransactionOutput[];
-  /** Private key for signing the funding transaction */
-  privateKey: string;
+}
+
+/**
+ * Parameters for signing transactions
+ * @interface TransactionSigningParams
+ * @description Configuration for signing unsigned transactions
+ */
+export interface TransactionSigningParams {
+  /** Unsigned transaction hex or PSBT */
+  unsignedTransaction: string;
+  /** Private keys for signing the transaction */
+  privateKeys: string[];
+  /** Optional redeem script for spending transactions */
+  redeemScript?: string;
+  /** Transaction type to determine signing method */
+  transactionType: 'funding' | 'spending';
+}
+
+/**
+ * Parameters for signing spending transactions
+ * @interface SpendingTransactionSigningParams
+ * @description Configuration for signing unsigned spending transactions
+ */
+export interface SpendingTransactionSigningParams {
+  /** Unsigned transaction hex or PSBT */
+  unsignedTransaction: string;
+  /** Private keys for signing the transaction */
+  privateKeys: string[];
+  /** Redeem script for spending transactions */
+  redeemScript: string;
+}
+
+/**
+ * Parameters for signing funding transactions
+ * @interface FundingTransactionSigningParams
+ * @description Configuration for signing unsigned funding transactions
+ */
+export interface FundingTransactionSigningParams {
+  /** Unsigned transaction hex or PSBT */
+  unsignedTransaction: string;
+  /** Private keys for signing the transaction */
+  privateKeys: string[];
+}
+
+/**
+ * Parameters for submitting signed transactions
+ * @interface TransactionSubmissionParams
+ * @description Configuration for submitting transactions to the network
+ */
+export interface TransactionSubmissionParams {
+  /** Signed transaction hex */
+  signedTransaction: string;
+  /** Optional API instance for broadcasting */
+  api?: any;
 }
 
 /**
@@ -63,24 +113,22 @@ export interface FundingTransactionParams {
  */
 export class TransactionManager extends BTCLockerCore {
   /**
-   * Create spending transaction for timelock scripts
+   * Create unsigned spending transaction for timelock scripts
    * @async
    * @param params - Transaction parameters
-   * @returns Transaction details object
+   * @returns Unsigned transaction hex
    * @throws If timelock hasn't expired or parameters are invalid
    * @example
    * const txManager = new TransactionManager();
-   * const tx = await txManager.createSpendingTransaction({
+   * const unsignedTx = await txManager.createSpendingTransaction({
    *   inputs: [{ txid: '...', vout: 0, value: 100000 }],
    *   outputs: [{ address: '...', value: 95000 }],
-   *   redeemScript: '...',
-   *   privateKeys: ['...']
+   *   redeemScript: '...'
    * });
    */
-  async createSpendingTransaction(params: SpendingTransactionParams): Promise<TransactionResult> {
+  async createSpendingTransaction(params: SpendingTransactionParams): Promise<string> {
     await this.ensureInitialized();
-    const { ECPair } = getECC();
-    const { inputs, outputs, redeemScript, privateKeys } = params;
+    const { inputs, outputs, redeemScript } = params;
 
     // First, check if this is a timelock script and if it has expired
     const redeemScriptBuffer = Buffer.from(redeemScript, "hex");
@@ -152,89 +200,38 @@ export class TransactionManager extends BTCLockerCore {
       );
     });
 
-    // Sign inputs
-    inputs.forEach((utxo, inputIndex) => {
-      // For simple timelock scripts, use the first private key
-      // For multisig or HODL scripts, this would need to be adjusted
-      const privateKey =
-        typeof privateKeys[0] === "string"
-          ? Buffer.from(privateKeys[0], "hex")
-          : Buffer.from(privateKeys[0]);
-
-      const keyPair = ECPair.fromPrivateKey(privateKey, {
-        network: this.network,
-      });
-      const redeemScriptBuf = Buffer.from(redeemScript, "hex");
-      const hashType = bitcoin.Transaction.SIGHASH_ALL;
-
-      // Create signature hash
-      const signatureHash = tx.hashForSignature(
-        inputIndex,
-        redeemScriptBuf,
-        hashType
-      );
-
-      // Sign with canonical DER encoding
-      const signature = keyPair.sign(Buffer.from(signatureHash));
-      const signatureWithHashType = bitcoin.script.signature.encode(
-        signature,
-        hashType
-      );
-
-      // Create scriptSig
-      const scriptSig = bitcoin.script.compile([
-        signatureWithHashType,
-        redeemScriptBuf,
-      ]);
-
-      // Set input script
-      tx.setInputScript(inputIndex, scriptSig);
-    });
-
-    // Convert to TransactionResult
-    const txHex = tx.toHex();
-    return {
-      hex: txHex,
-      txid: tx.getId(),
-      size: tx.virtualSize(),
-      fee: 0 // TODO: Calculate actual fee
-    };
+    // Return unsigned transaction hex
+    return tx.toHex();
   }
 
   /**
-   * Create a funding transaction to send Bitcoin to a timelock script
+   * Create an unsigned funding transaction to send Bitcoin to a timelock script
    * @async
    * @param params - Funding transaction parameters
-   * @returns Signed transaction object
-   * @throws If insufficient funds or invalid parameters
+   * @returns Unsigned PSBT base64 string
+   * @throws If invalid parameters
    * @example
    * const txManager = new TransactionManager();
-   * const tx = await txManager.createFundingTransaction({
+   * const unsignedPsbt = await txManager.createFundingTransaction({
    *   inputs: [{ txid: '...', vout: 0, value: 200000 }],
-   *   outputs: [{ address: '3...', value: 100000 }],
-   *   privateKey: '...'
+   *   outputs: [{ address: '3...', value: 100000 }]
    * });
    */
-  async createFundingTransaction(params: FundingTransactionParams): Promise<TransactionResult> {
+  async createFundingTransaction(params: FundingTransactionParams): Promise<string> {
     await this.ensureInitialized();
-    const { ECPair } = getECC();
-    const { inputs, outputs, privateKey } = params;
+    const { inputs, outputs } = params;
 
     const psbt = new bitcoin.Psbt({ network: this.network });
-    const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, "hex"), {
-      network: this.network,
-    });
 
-    // Add inputs
+    // Add inputs (without signing information for now)
     for (const input of inputs) {
+      // For funding transactions, we'll need the full transaction data
+      // This is a simplified version - in practice you'd need to fetch the full UTXO data
       const inputData = {
         hash: input.txid,
         index: input.vout,
         witnessUtxo: {
-          script: bitcoin.payments.p2wpkh({
-            pubkey: keyPair.publicKey,
-            network: this.network,
-          }).output!,
+          script: Buffer.alloc(0), // This would need to be filled with actual script
           value: BigInt(input.value),
         },
       };
@@ -250,27 +247,176 @@ export class TransactionManager extends BTCLockerCore {
       });
     }
 
-    // Sign all inputs
-    for (let i = 0; i < inputs.length; i++) {
+    // Return unsigned PSBT as base64
+    return psbt.toBase64();
+  }
+
+  /**
+   * Sign a transaction using legacy parameter interface
+   * @deprecated Use the generic signTransaction method instead
+   * @async
+   * @param params - Transaction signing parameters
+   * @returns Signed transaction hex
+   * @throws If signing fails
+   * @example
+   * const txManager = new TransactionManager();
+   * const signedTx = await txManager.signTransactionLegacy({
+   *   unsignedTransaction: 'unsigned_tx_hex_or_psbt_base64',
+   *   privateKeys: ['private_key_hex'],
+   *   transactionType: 'funding'
+   * });
+   */
+  async signTransactionLegacy(params: TransactionSigningParams): Promise<string> {
+    await this.ensureInitialized();
+    const { ECPair } = getECC();
+    const { unsignedTransaction, privateKeys, redeemScript, transactionType } = params;
+
+    if (transactionType === 'funding') {
+      // Handle PSBT signing for funding transactions
+      const psbt = bitcoin.Psbt.fromBase64(unsignedTransaction, { network: this.network });
+      
+      // Sign with the provided private keys
+      for (let i = 0; i < psbt.inputCount; i++) {
+        const privateKey = privateKeys[i] || privateKeys[0]; // Use first key if not enough keys provided
+        const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, "hex"), {
+          network: this.network,
+        });
+        
+        // Add witness UTXO script if missing
+        const input = psbt.data.inputs[i];
+        if (input.witnessUtxo && !input.witnessUtxo.script.length) {
+          input.witnessUtxo.script = bitcoin.payments.p2wpkh({
+            pubkey: keyPair.publicKey,
+            network: this.network,
+          }).output!;
+        }
+        
+        try {
+          psbt.signInput(i, keyPair);
+        } catch (error) {
+          console.warn(`Could not sign input ${i}:`, (error as Error).message);
+          throw error;
+        }
+      }
+      
+      psbt.finalizeAllInputs();
+      const tx = psbt.extractTransaction();
+      return tx.toHex();
+      
+    } else if (transactionType === 'spending') {
+      // Handle raw transaction signing for spending transactions
+      const tx = bitcoin.Transaction.fromHex(unsignedTransaction);
+      
+      if (!redeemScript) {
+        throw new Error("Redeem script is required for spending transactions");
+      }
+      
+      const redeemScriptBuf = Buffer.from(redeemScript, "hex");
+      
+      // Sign each input
+      for (let inputIndex = 0; inputIndex < tx.ins.length; inputIndex++) {
+        const privateKey = privateKeys[inputIndex] || privateKeys[0];
+        const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, "hex"), {
+          network: this.network,
+        });
+        
+        const hashType = bitcoin.Transaction.SIGHASH_ALL;
+        
+        // Create signature hash
+        const signatureHash = tx.hashForSignature(
+          inputIndex,
+          redeemScriptBuf,
+          hashType
+        );
+        
+        // Sign with canonical DER encoding
+        const signature = keyPair.sign(Buffer.from(signatureHash));
+        const signatureWithHashType = bitcoin.script.signature.encode(
+          signature,
+          hashType
+        );
+        
+        // Create scriptSig
+        const scriptSig = bitcoin.script.compile([
+          signatureWithHashType,
+          redeemScriptBuf,
+        ]);
+        
+        // Set input script
+        tx.setInputScript(inputIndex, scriptSig);
+      }
+      
+      return tx.toHex();
+    }
+    
+    throw new Error(`Unsupported transaction type: ${transactionType}`);
+  }
+
+  /**
+   * Submit a signed transaction to the Bitcoin network using legacy parameter interface
+   * @deprecated Use the generic submitTransaction method instead
+   * @async
+   * @param params - Transaction submission parameters
+   * @returns Transaction result with broadcast information
+   * @throws If submission fails
+   * @example
+   * const txManager = new TransactionManager();
+   * const result = await txManager.submitTransactionLegacy({
+   *   signedTransaction: 'signed_tx_hex',
+   *   api: bitcoinApiInstance
+   * });
+   */
+  async submitTransactionLegacy(params: TransactionSubmissionParams): Promise<TransactionResult> {
+    const { signedTransaction, api } = params;
+    
+    const tx = bitcoin.Transaction.fromHex(signedTransaction);
+    
+    let txid = tx.getId();
+    
+    // If API is provided, broadcast the transaction
+    if (api && typeof api.broadcastTransaction === 'function') {
       try {
-        psbt.signInput(i, keyPair);
+        const broadcastResult = await api.broadcastTransaction(signedTransaction);
+        txid = broadcastResult.txid || txid;
       } catch (error) {
-        console.warn(`Could not sign input ${i}:`, (error as Error).message);
-        throw error; // Re-throw to help with debugging
+        throw new Error(`Failed to broadcast transaction: ${(error as Error).message}`);
       }
     }
-
-    // Finalize and extract transaction
-    psbt.finalizeAllInputs();
-    const tx = psbt.extractTransaction();
     
-    // Convert to TransactionResult
-    const txHex = tx.toHex();
     return {
-      hex: txHex,
-      txid: tx.getId(),
+      hex: signedTransaction,
+      txid: txid,
       size: tx.virtualSize(),
-      fee: 0 // TODO: Calculate actual fee
+      fee: 0 // TODO: Calculate actual fee if inputs/outputs are known
     };
+  }
+
+  /**
+   * Convenience method to sign and submit a transaction in one call
+   * @async
+   * @param signingParams - Transaction signing parameters
+   * @param submissionParams - Transaction submission parameters (optional api)
+   * @returns Transaction result with broadcast information
+   * @example
+   * const txManager = new TransactionManager();
+   * const result = await txManager.signAndSubmitTransaction(
+   *   {
+   *     unsignedTransaction: 'unsigned_tx_hex',
+   *     privateKeys: ['private_key_hex'],
+   *     transactionType: 'funding'
+   *   },
+   *   { api: bitcoinApiInstance }
+   * );
+   */
+  async signAndSubmitTransaction(
+    signingParams: TransactionSigningParams,
+    submissionParams?: { api?: any }
+  ): Promise<TransactionResult> {
+    const signedTx = await this.signTransactionLegacy(signingParams);
+    
+    return this.submitTransactionLegacy({
+      signedTransaction: signedTx,
+      api: submissionParams?.api
+    });
   }
 }

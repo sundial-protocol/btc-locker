@@ -34,8 +34,6 @@ export interface YieldDistributionParams {
   timelockAddress: string;
   /** Amount to distribute in satoshis */
   amount: number;
-  /** Private key for signing the distribution transaction */
-  privateKey: string;
   /** Optional memo for the distribution */
   memo?: string;
   /** Optional change address for remaining funds */
@@ -74,49 +72,54 @@ export interface YieldDistributionResult {
 }
 
 /**
+ * Parameters for signing yield distribution transactions
+ * @interface YieldDistributionSigningParams
+ * @description Configuration for signing unsigned yield distribution transactions
+ */
+export interface YieldDistributionSigningParams {
+  /** Unsigned transaction hex or PSBT */
+  unsignedTransaction: string;
+  /** Private key for signing the distribution transaction */
+  privateKey: string;
+}
+
+/**
  * Yield distribution class for distributing yields to timelock addresses
  * @class YieldDistributor
  */
 export class YieldDistributor extends BTCLockerCore {
   /**
-   * Distribute yield back to a timelock script
+   * Create an unsigned yield distribution transaction
    * @async
    * @param params - Distribution parameters
-   * @returns Signed distribution transaction object
+   * @returns Unsigned PSBT base64 string
    * @throws If insufficient funds or invalid parameters
    * @example
    * const yieldDistributor = new YieldDistributor();
-   * const tx = await yieldDistributor.distributeYield({
+   * const unsignedPsbt = await yieldDistributor.distributeYield({
    *   inputs: [{ txid: '...', vout: 0, value: 50000 }],
    *   timelockAddress: '3...',
    *   amount: 45000,
-   *   privateKey: '...',
    *   memo: 'Quarterly yield distribution'
    * });
    */
-  async distributeYield(params: YieldDistributionParams): Promise<YieldDistributionResult> {
+  async distributeYield(params: YieldDistributionParams): Promise<string> {
     await this.ensureInitialized();
-    const { inputs, timelockAddress, amount, privateKey, memo } = params;
+    const { inputs, timelockAddress, amount, memo } = params;
 
     const psbt = new bitcoin.Psbt({ network: this.network });
-    // Create key pair using shared utility
-    const { ECPair } = getECC();
-    const keyPair = KeyUtils.createKeyPair(privateKey, ECPair, this.network);
 
     // Calculate total input value and change
     const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
     const changeResult = FeeUtils.calculateChange(totalInputValue, amount, FeeUtils.DEFAULT_FEE);
 
-    // Add inputs
+    // Add inputs (without signing information)
     for (const input of inputs) {
       const inputData = {
         hash: input.txid,
         index: input.vout,
         witnessUtxo: {
-          script: bitcoin.payments.p2wpkh({
-            pubkey: keyPair.publicKey,
-            network: this.network,
-          }).output!,
+          script: Buffer.alloc(0), // Will be filled during signing
           value: BigInt(input.value),
         },
       };
@@ -132,43 +135,55 @@ export class YieldDistributor extends BTCLockerCore {
 
     // Add change output if needed (above dust threshold)
     if (changeResult.isAboveDustThreshold) {
-      const sourceAddress = bitcoin.payments.p2wpkh({
-        pubkey: keyPair.publicKey,
-        network: this.network,
-      }).address!;
-
+      // Note: We can't determine the source address without the private key
+      // This will need to be handled during signing or passed as a parameter
       psbt.addOutput({
-        address: sourceAddress,
+        address: params.changeAddress || timelockAddress, // fallback to timelock address
         value: BigInt(changeResult.changeAmount),
       });
     }
 
-    // Sign all inputs
-    for (let i = 0; i < inputs.length; i++) {
-      try {
-        psbt.signInput(i, keyPair);
-      } catch (error) {
-        console.warn(`Could not sign input ${i}:`, (error as Error).message);
-        throw error; // Re-throw to help with debugging
-      }
-    }
+    // Return unsigned PSBT as base64
+    return psbt.toBase64();
+  }
 
-    // Finalize and extract transaction
-    psbt.finalizeAllInputs();
-    const transaction = psbt.extractTransaction();
+  /**
+   * Convenience method to sign and submit a yield distribution transaction
+   * @async
+   * @param signingParams - Yield distribution signing parameters
+   * @param memo - Optional memo for the distribution
+   * @param api - Optional Bitcoin API instance
+   * @returns Transaction result with yield distribution metadata
+   */
+  async signAndSubmitYieldDistribution(
+    signingParams: YieldDistributionSigningParams,
+    memo?: string,
+    api?: any
+  ): Promise<YieldDistributionResult> {
+    const signedTx = await this.signTransaction(
+      signingParams.unsignedTransaction, 
+      signingParams.privateKey
+    );
+    
+    const txid = await this.submitTransaction(signedTx, { api });
+    const tx = bitcoin.Transaction.fromHex(signedTx);
+    
+    // Build result with yield distribution metadata
+    const outputs = tx.outs;
+    const mainOutput = outputs[0];
+    const changeOutput = outputs.length > 1 ? outputs[1] : null;
 
-    // Return transaction with metadata
     return {
-      transaction,
-      hex: transaction.toHex(),
-      txid: transaction.getId(),
-      size: transaction.byteLength(),
-      fee: changeResult.adjustedFee,
+      transaction: tx,
+      hex: signedTx,
+      txid: txid,
+      size: tx.byteLength(),
+      fee: 0, // TODO: Calculate actual fee if needed
       memo: memo || "Yield distribution to timelock",
       distribution: {
-        amount,
-        destination: timelockAddress,
-        change: changeResult.changeAmount,
+        amount: Number(mainOutput.value),
+        destination: "unknown", // Would need to decode from script
+        change: changeOutput ? Number(changeOutput.value) : 0,
       },
     };
   }
