@@ -109,11 +109,10 @@ export function setupTransactionCommands(program) {
     .description("Withdraw funds from both escrow and timelock scripts")
     .option("-e, --escrow-address <address>", "Escrow script address to withdraw from")
     .option("--escrow-script <script>", "Escrow redeem script (hex)")
-    .option("--escrow-key <key>", "Private key for escrow script (hex)")
     .option("-t, --timelock-address <address>", "Timelock script address to withdraw from")
     .option("--timelock-script <script>", "Timelock redeem script (hex)")
-    .option("--timelock-key <key>", "Private key for timelock script (hex)")
-    .option("-d, --destination <address>", "Destination address for withdrawal")
+    .option("-k, --private-key <key>", "Private key for both scripts (hex)")
+    .option("-d, --destination <address>", "Destination address for withdrawal (calculated from private key if not provided)")
     .option("--fee <satoshis>", "Fee in satoshis", "2000")
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
@@ -252,11 +251,26 @@ async function handleLockCommand(cmdOptions, parentOptions) {
       );
     }
 
-    const lockingTx = await locker.createFundingTransaction({
+    // Create unsigned funding transaction
+    const unsignedPsbt = await locker.createFundingTransaction({
       inputs: txInputs,
       outputs: outputs,
-      privateKey: fromPrivateKey,
     });
+
+    // Sign the transaction
+    const signedTx = await locker.signTransaction(
+      unsignedPsbt,
+      fromPrivateKey
+    );
+
+    // Parse transaction details for display
+    const tx = bitcoin.Transaction.fromHex(signedTx);
+    const lockingTx = {
+      hex: signedTx,
+      txid: tx.getId(),
+      size: signedTx.length / 2,
+      fee: feeAmount // Use the calculated fee amount
+    };
 
     const result = {
       transaction: {
@@ -450,20 +464,39 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
 
       console.log(chalk.blue("Creating yield distribution transaction..."));
 
-      // Create the distribution transaction using the distributeYield method
+      // Create unsigned distribution transaction
       const txInputs = confirmedUtxos.map((utxo) => ({
         txid: utxo.txid,
         vout: utxo.vout,
         value: utxo.value,
       }));
 
-      const distributionResult = await locker.distributeYield({
+      const unsignedPsbt = await locker.distributeYield({
         inputs: txInputs,
         timelockAddress: toAddress,
         amount: amount,
-        privateKey: fromPrivateKey,
         memo: memo,
       });
+
+      // Sign the transaction
+      const signedTx = await locker.signTransaction(
+        unsignedPsbt,
+        fromPrivateKey
+      );
+
+      // Parse transaction details for display
+      const tx = bitcoin.Transaction.fromHex(signedTx);
+      const distributionResult = {
+        hex: signedTx,
+        txid: tx.getId(),
+        size: signedTx.length / 2,
+        fee: 1000, // Use default fee amount
+        distribution: {
+          amount: amount,
+          change: totalInputValue - amount - 1000
+        },
+        memo: memo
+      };
 
       const result = {
         transaction: {
@@ -692,7 +725,7 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
 
     console.log(chalk.blue("Creating spending transaction..."));
 
-    // Create the spending transaction
+    // Create unsigned spending transaction
     const txInputs = confirmedUtxos.map((utxo) => ({
       txid: utxo.txid,
       vout: utxo.vout,
@@ -712,7 +745,23 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
       privateKeys: emergencyKey ? [privateKey, emergencyKey] : [privateKey],
     };
 
-    const spendingTx = await locker.createSpendingTransaction(txParams);
+    const unsignedPsbt = await locker.createSpendingTransaction(txParams);
+
+    // Sign the transaction with appropriate keys
+    const privateKeys = emergencyKey ? [privateKey, emergencyKey] : privateKey;
+    const signedTx = await locker.signTransaction(
+      unsignedPsbt,
+      privateKeys
+    );
+
+    // Parse transaction details for display
+    const tx = bitcoin.Transaction.fromHex(signedTx);
+    const spendingTx = {
+      hex: signedTx,
+      txid: tx.getId(),
+      size: signedTx.length / 2,
+      fee: feeAmount
+    };
 
     const result = {
       transaction: {
@@ -938,17 +987,36 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
     console.log(chalk.gray(`  Estimated fee: ${calculation.estimatedFee} sats`));
     console.log(chalk.gray(`  Change: ${calculation.changeAmount} sats`));
 
-    // Create the Dawn staking transaction
-    const stakingTx = await locker.createDawnStakingTransaction({
+    // Create the unsigned Dawn staking transaction
+    const unsignedPsbt = await locker.createDawnStakingTransaction({
       inputs: txInputs,
       escrowAddress,
       escrowAmount,
       timelockAddress,
       timelockAmount,
       changeAddress: changeAddress && calculation.changeAmount >= 546 ? changeAddress : undefined,
-      privateKey: fromPrivateKey,
       feeRate
     });
+
+    // Sign the transaction
+    const signedTx = await locker.signTransaction(
+      unsignedPsbt,
+      fromPrivateKey
+    );
+
+    // Parse transaction details for display
+    const tx = bitcoin.Transaction.fromHex(signedTx);
+    const stakingTx = {
+      hex: signedTx,
+      txid: tx.getId(),
+      size: signedTx.length / 2,
+      fee: calculation.estimatedFee,
+      outputs: {
+        escrowAmount,
+        timelockAmount,
+        changeAmount: calculation.changeAmount
+      }
+    };
 
     // Display transaction details
     const result = {
@@ -1044,20 +1112,15 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
 
   let escrowAddress = cmdOptions.escrowAddress;
   let escrowScript = cmdOptions.escrowScript;
-  let escrowKey = cmdOptions.escrowKey;
   let timelockAddress = cmdOptions.timelockAddress;
   let timelockScript = cmdOptions.timelockScript;
-  let timelockKey = cmdOptions.timelockKey;
+  let privateKey = cmdOptions.privateKey;
   let destination = cmdOptions.destination;
   let feeAmount = parseInt(cmdOptions.fee);
 
   try {
-    // First check what addresses we have to work with
-    let needEscrowParams = !escrowAddress || !escrowScript || !escrowKey;
-    let needTimelockParams = !timelockAddress || !timelockScript || !timelockKey;
-    
     // Interactive prompts if options not provided
-    if (!destination || needEscrowParams || needTimelockParams) {
+    if (!escrowAddress || !escrowScript || !timelockAddress || !timelockScript || !privateKey) {
       const answers = await inquirer.prompt([
         {
           type: "input",
@@ -1076,14 +1139,6 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
         },
         {
           type: "input",
-          name: "escrowKey",
-          message: "Enter private key for escrow script (hex):",
-          when: () => !escrowKey,
-          validate: (input) =>
-            ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
-        },
-        {
-          type: "input",
           name: "timelockAddress",
           message: "Enter timelock script address to withdraw from:",
           when: () => !timelockAddress,
@@ -1099,29 +1154,35 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
         },
         {
           type: "input",
-          name: "timelockKey",
-          message: "Enter private key for timelock script (hex):",
-          when: () => !timelockKey,
+          name: "privateKey",
+          message: "Enter private key for both scripts (hex):",
+          when: () => !privateKey,
           validate: (input) =>
             ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
         },
         {
           type: "input",
           name: "destination",
-          message: "Enter destination address for withdrawal:",
+          message: "Enter destination address (press enter to use address derived from private key):",
           when: () => !destination,
           validate: (input) =>
-            ScriptUtils.isValidAddress(input, network) || "Invalid address",
+            !input || ScriptUtils.isValidAddress(input, network) || "Invalid address",
         },
       ]);
 
       escrowAddress = escrowAddress || answers.escrowAddress;
       escrowScript = escrowScript || answers.escrowScript;
-      escrowKey = escrowKey || answers.escrowKey;
       timelockAddress = timelockAddress || answers.timelockAddress;
       timelockScript = timelockScript || answers.timelockScript;
-      timelockKey = timelockKey || answers.timelockKey;
+      privateKey = privateKey || answers.privateKey;
       destination = destination || answers.destination;
+    }
+
+    // Calculate destination address from private key if not provided
+    if (!destination) {
+      const keyPair = await locker.generateKeyPairFromPrivateKey(privateKey);
+      destination = keyPair.address;
+      console.log(chalk.yellow(`Using destination address derived from private key: ${destination}`));
     }
 
     console.log(chalk.blue(`Checking UTXOs for escrow address: ${escrowAddress}...`));
@@ -1173,16 +1234,38 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
       redeemScript: timelockScript,
     })) : [];
 
-    // Create single dawn withdrawal transaction
-    const withdrawalResult = await locker.createDawnWithdrawalTransaction({
+    // Create unsigned dawn withdrawal transaction
+    const unsignedPsbt = await locker.createDawnWithdrawalTransaction({
       escrowInputs: dawnEscrowInputs,
       timelockInputs: dawnTimelockInputs,
       destination: destination,
-      escrowPrivateKey: escrowKey || "0000000000000000000000000000000000000000000000000000000000000001", // Dummy key if no escrow inputs
-      timelockPrivateKey: timelockKey || "0000000000000000000000000000000000000000000000000000000000000001", // Dummy key if no timelock inputs
       feeAmount: feeAmount,
       api: api, // Pass API instance for transaction fetching
     });
+
+    // Sign the transaction with the single private key
+    const signedTx = await locker.signTransaction(
+      unsignedPsbt,
+      privateKey
+    );
+
+    // Parse transaction details for display
+    const tx = bitcoin.Transaction.fromHex(signedTx);
+    const withdrawalResult = {
+      hex: signedTx,
+      txid: tx.getId(),
+      size: signedTx.length / 2,
+      fee: feeAmount,
+      inputs: {
+        escrowValue,
+        timelockValue,
+        totalValue: totalInputValue
+      },
+      output: {
+        destination: destination,
+        value: outputValue
+      }
+    };
 
     // Display results
     const result = {
@@ -1421,24 +1504,37 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
       console.warn(chalk.yellow("Could not parse script details:", error.message));
     }
 
-    // Create spending transaction
-    const spendingTx = await locker.createEscrowSpendingTransaction(
-      scriptInfo,
-      utxo.txid,
-      utxo.vout,
-      amount,
-      destinationAddress,
-      afterDeadline,
-      privateKey
+    // Create unsigned spending transaction
+    const unsignedPsbt = await locker.createEscrowSpendingTransaction({
+      scriptData: scriptInfo,
+      utxoTxId: utxo.txid,
+      utxoIndex: utxo.vout,
+      amount: amount,
+      outputAddress: destinationAddress,
+      spendAfterDeadline: afterDeadline,
+      currentTime: Date.now()
+    });
+
+    // Sign the transaction
+    const signedTx = await locker.signTransaction(
+      unsignedPsbt,
+      privateKey,
+      { spendAfterDeadline: afterDeadline }
     );
+
+    // Calculate transaction details for display
+    const tx = bitcoin.Transaction.fromHex(signedTx);
+    const txHex = signedTx;
+    const txId = tx.getId();
+    const size = Math.ceil(txHex.length / 2);
 
     const result = {
       transaction: {
-        hex: spendingTx.txHex,
-        txid: spendingTx.txId,
-        size: Math.ceil(spendingTx.txHex.length / 2),
+        hex: txHex,
+        txid: txId,
+        size: size,
         fee: feeAmount,
-        fee_rate: (feeAmount / Math.ceil(spendingTx.txHex.length / 2)).toFixed(2),
+        fee_rate: (feeAmount / size).toFixed(2),
       },
       inputs: {
         count: 1,
@@ -1474,7 +1570,7 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
       console.log(chalk.blue("Broadcasting transaction..."));
 
       try {
-        const broadcastResult = await api.broadcastTransaction(spendingTx.txHex);
+        const broadcastResult = await api.broadcastTransaction(txHex);
         console.log(chalk.green("Transaction broadcasted successfully!"));
         console.log(chalk.blue(`Transaction ID: ${broadcastResult.txid}`));
         

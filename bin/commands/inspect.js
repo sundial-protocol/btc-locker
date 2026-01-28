@@ -42,7 +42,7 @@ export function setupInspectCommands(program) {
       }
 
       locktime = parseInt(locktime);
-      const isExpired = locker.isTimelockExpired(locktime);
+      const isExpired = locker.timelockCreator.isTimelockExpired(locktime);
       const currentTime = Math.floor(Date.now() / 1000);
 
       const result = {

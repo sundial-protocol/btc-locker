@@ -80,16 +80,16 @@ export function setupBaseCommands(program) {
     });
 
   /**
-   * Interactive mode
+   * Interactive mode - Disabled for now
    */
-  program
-    .command("interactive")
-    .alias("i")
-    .description("Interactive mode for creating scripts")
-    .action(async () => {
-      const parentOptions = program.opts();
-      await handleInteractiveCommand({}, parentOptions);
-    });
+  //program
+  //  .command("interactive")
+  //  .alias("i")
+  //  .description("Interactive mode for creating scripts")
+  //  .action(async () => {
+  //    const parentOptions = program.opts();
+  //    await handleInteractiveCommand({}, parentOptions);
+  //  });
 }
 
 async function handleKeygenCommand(cmdOptions, parentOptions) {
@@ -144,6 +144,7 @@ async function handleKeygenCommand(cmdOptions, parentOptions) {
   }
 }
 
+// disabled for now
 async function handleInteractiveCommand(cmdOptions, parentOptions) {
   console.log(chalk.blue("🔒 BTC Locker Interactive Mode"));
   console.log(chalk.yellow(`Network: ${parentOptions.network}`));

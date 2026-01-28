@@ -135,20 +135,6 @@ export class BTCLockerCore {
   }
 
   /**
-   * Validate if a timelock has expired
-   * @param locktime - Locktime to check
-   * @param currentTime - Current timestamp (optional, defaults to now)
-   * @returns True if locktime has expired
-   */
-  isTimelockExpired(locktime: number, currentTime: number = Math.floor(Date.now() / 1000)): boolean {
-    if (locktime < 500000000) {
-      // Block height locktime
-      throw new Error("Block height validation requires current block height");
-    }
-    return currentTime >= locktime;
-  }
-
-  /**
    * Sign any transaction PSBT with one or more private keys
    * @param unsignedPsbt - Unsigned PSBT in base64 format
    * @param privateKeys - Single private key or array of private keys for multiple inputs
