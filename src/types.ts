@@ -54,11 +54,15 @@ export interface ScriptInfo {
   afterPublicKey?: string;
 }
 
+/**
+ * Basic Bitcoin UTXO (Unspent Transaction Output)
+ * @interface UTXO
+ * @description Core UTXO fields for transaction construction
+ */
 export interface UTXO {
   txid: string;
   vout: number;
   value: number;
-  hex: string;
 }
 
 /**

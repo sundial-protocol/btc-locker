@@ -26,7 +26,6 @@ export interface UTXO {
   txid: string;
   vout: number;
   value: number;
-  hex: string;
 }
 
 export interface TransactionResult {

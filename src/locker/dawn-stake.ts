@@ -5,23 +5,9 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore, getECC } from "./core";
+import { BTCLockerCore } from "./core";
 import type { UTXO, ScriptInfo } from "../types";
-
-/**
- * Dawn staking input with transaction details
- * @interface DawnStakingInput
- * @description UTXO input specifically for Dawn staking operations
- * @extends UTXO
- */
-export interface DawnStakingInput extends UTXO {
-  /** Transaction ID */
-  txid: string;
-  /** Output index */
-  vout: number;
-  /** Output value in satoshis */
-  value: number;
-}
+import BitcoinAPI, { ApiUTXO } from "../bitcoin-api";
 
 /**
  * Parameters for Dawn staking transactions
@@ -29,8 +15,12 @@ export interface DawnStakingInput extends UTXO {
  * @description Configuration for creating Dawn protocol staking transactions with dual outputs
  */
 export interface DawnStakingParams {
-  /** Array of unspent transaction outputs to stake */
-  inputs: DawnStakingInput[];
+  /** Array of unspent transaction outputs to stake (optional - will auto-select from address if not provided) */
+  inputs?: UTXO[];
+  /** Source address for automatic UTXO selection (required if inputs not provided) */
+  sourceAddress?: string;
+  /** Bitcoin API instance for fetching UTXOs (required if inputs not provided) */
+  api?: BitcoinAPI;
   /** Escrow script address */
   escrowAddress: string;
   /** Amount to send to escrow in satoshis */
@@ -105,8 +95,12 @@ export interface DawnStakingWithScriptResult extends DawnStakingResult {
  * @description Configuration for calculating optimal Dawn staking amounts and fees
  */
 export interface DawnStakingCalculationParams {
-  /** Array of available inputs with their values */
-  inputs: Array<{ value: number }>;
+  /** Array of available inputs with their values (optional - will fetch from address if not provided) */
+  inputs?: Array<{ value: number }>;
+  /** Source address for automatic UTXO fetching (required if inputs not provided) */
+  sourceAddress?: string;
+  /** Bitcoin API instance for fetching UTXOs (required if inputs not provided) */
+  api?: BitcoinAPI;
   /** Desired amount for escrow output in satoshis */
   desiredEscrowAmount: number;
   /** Desired amount for timelock output in satoshis */
@@ -138,31 +132,19 @@ export interface DawnStakingCalculationResult {
 }
 
 /**
- * Dawn withdrawal input with redeem script
- * @interface DawnWithdrawalInput
- * @description Input for Dawn withdrawal operations including redeem script
- */
-export interface DawnWithdrawalInput {
-  /** Transaction ID */
-  txid: string;
-  /** Output index */
-  vout: number;
-  /** Output value in satoshis */
-  value: number;
-  /** Redeem script in hexadecimal format */
-  redeemScript: string;
-}
-
-/**
  * Parameters for Dawn withdrawal
  * @interface DawnWithdrawalParams
  * @description Configuration for withdrawing from both escrow and timelock Dawn staking outputs
  */
 export interface DawnWithdrawalParams {
   /** Array of escrow inputs to withdraw from */
-  escrowInputs: DawnWithdrawalInput[];
+  escrowInputs: UTXO[];
+  /** Escrow redeem script in hexadecimal format */
+  escrowRedeemScript: string;
   /** Array of timelock inputs to withdraw from */
-  timelockInputs: DawnWithdrawalInput[];
+  timelockInputs: UTXO[];
+  /** Timelock redeem script in hexadecimal format */
+  timelockRedeemScript: string;
   /** Destination address for withdrawn funds */
   destination: string;
   /** Optional fixed fee amount in satoshis */
@@ -213,8 +195,8 @@ export interface DawnStakingSigningParams {
   unsignedPsbt: string;
   /** Private key for signing in hex format */
   privateKey: string;
-  /** Array of input UTXOs for witness data */
-  inputs: DawnStakingInput[];
+  /** Array of input UTXOs for witness data (optional - will be extracted from PSBT if not provided) */
+  inputs?: UTXO[];
 }
 
 /**
@@ -239,9 +221,13 @@ export interface DawnWithdrawalSigningParams {
   /** Private key for signing timelock inputs in hex format */
   timelockPrivateKey?: string;
   /** Array of escrow inputs */
-  escrowInputs: DawnWithdrawalInput[];
+  escrowInputs: UTXO[];
+  /** Escrow redeem script in hexadecimal format */
+  escrowRedeemScript: string;
   /** Array of timelock inputs */
-  timelockInputs: DawnWithdrawalInput[];
+  timelockInputs: UTXO[];
+  /** Timelock redeem script in hexadecimal format */
+  timelockRedeemScript: string;
 }
 
 /**
@@ -252,26 +238,71 @@ export interface DawnWithdrawalSigningParams {
  */
 export class DawnStakingManager extends BTCLockerCore {
   /**
+   * Select optimal UTXOs for a given target amount using a greedy algorithm
+   * @private
+   * @param availableUtxos - Array of available UTXOs
+   * @param targetAmount - Target amount needed (including fees)
+   * @returns Selected UTXOs that cover the target amount
+   */
+  private selectUtxos(availableUtxos: UTXO[], targetAmount: number): UTXO[] {
+    // Sort UTXOs by value (largest first for efficiency)
+    const sortedUtxos = [...availableUtxos].sort((a, b) => b.value - a.value);
+    
+    const selectedUtxos: UTXO[] = [];
+    let totalValue = 0;
+    
+    for (const utxo of sortedUtxos) {
+      selectedUtxos.push(utxo);
+      totalValue += utxo.value;
+      
+      if (totalValue >= targetAmount) {
+        break;
+      }
+    }
+    
+    if (totalValue < targetAmount) {
+      throw new Error(
+        `Insufficient funds in available UTXOs. Need: ${targetAmount}, Available: ${totalValue}, Shortage: ${targetAmount - totalValue}`
+      );
+    }
+    
+    return selectedUtxos;
+  }
+
+  /**
    * Create a Dawn staking transaction
    * @async
    * @param params - Dawn staking parameters
    * @returns Unsigned PSBT as base64 string
    * @throws If insufficient funds or invalid parameters
    * @example
+   * // Using specific inputs
    * const dawn = new DawnStakingManager();
    * const tx = await dawn.createDawnStakingTransaction({
    *   inputs: [{ txid: '...', vout: 0, value: 500000 }],
    *   escrowAddress: '3ABC123...',
    *   escrowAmount: 100000,
    *   timelockAddress: '3XYZ789...',
-   *   timelockAmount: 200000,
-   *   privateKey: '...'
+   *   timelockAmount: 200000
+   * });
+   * 
+   * // Using automatic UTXO fetching from address
+   * const api = new BitcoinAPI('testnet');
+   * const tx = await dawn.createDawnStakingTransaction({
+   *   sourceAddress: 'tb1q...',
+   *   api: api,
+   *   escrowAddress: '3ABC123...',
+   *   escrowAmount: 100000,
+   *   timelockAddress: '3XYZ789...',
+   *   timelockAmount: 200000
    * });
    */
   async createDawnStakingTransaction(params: DawnStakingParams): Promise<string> {
     await this.ensureInitialized();
     const {
-      inputs,
+      inputs: providedInputs,
+      sourceAddress,
+      api,
       escrowAddress,
       escrowAmount,
       timelockAddress,
@@ -280,9 +311,37 @@ export class DawnStakingManager extends BTCLockerCore {
       feeRate = 10,
     } = params;
 
-    // Validate parameters
-    if (!inputs || !Array.isArray(inputs) || inputs.length === 0) {
-      throw new Error("inputs must be a non-empty array");
+    // Validate that either inputs or sourceAddress+api are provided
+    if (!providedInputs && (!sourceAddress || !api)) {
+      throw new Error("Either inputs or both sourceAddress and api must be provided");
+    }
+
+    if (providedInputs && (!Array.isArray(providedInputs) || providedInputs.length === 0)) {
+      throw new Error("inputs must be a non-empty array when provided");
+    }
+
+    let inputs: UTXO[];
+    
+    if (providedInputs) {
+      // Use provided inputs
+      inputs = providedInputs;
+    } else {
+      // Fetch UTXOs from address and auto-select
+      const apiUtxos = await api!.getAddressUtxos(sourceAddress!);
+      const availableInputs = apiUtxos.map((apiUtxo: ApiUTXO) => apiUtxo.utxo);
+      
+      if (availableInputs.length === 0) {
+        throw new Error(`No confirmed UTXOs available at address ${sourceAddress}`);
+      }
+      
+      // First estimate required amount for input selection
+      const outputCount = changeAddress ? 3 : 2;
+      const estimatedInputCount = Math.min(availableInputs.length, 3); // Estimate 1-3 inputs
+      const estimatedSize = 10 + estimatedInputCount * 148 + outputCount * 34 + 20;
+      const estimatedFee = estimatedSize * feeRate;
+      const targetAmount = escrowAmount + timelockAmount + estimatedFee;
+      
+      inputs = this.selectUtxos(availableInputs, targetAmount);
     }
 
     if (typeof escrowAddress !== "string") {
@@ -402,8 +461,19 @@ export class DawnStakingManager extends BTCLockerCore {
    * @returns Unsigned PSBT as base64 string
    * @example
    * const timelockScript = await locker.createTimelockScript(locktime, publicKey);
+   * // Using specific inputs
    * const unsignedPsbt = await dawn.createDawnStakingTransactionWithScript({
    *   inputs: [{ txid: '...', vout: 0, value: 500000 }],
+   *   escrowAddress: '3ABC123...',
+   *   escrowAmount: 100000,
+   *   timelockScript: timelockScript,
+   *   timelockAmount: 200000
+   * });
+   * // Or using automatic UTXO fetching from address
+   * const api = new BitcoinAPI('testnet');
+   * const unsignedPsbt = await dawn.createDawnStakingTransactionWithScript({
+   *   sourceAddress: 'tb1q...',
+   *   api: api,
    *   escrowAddress: '3ABC123...',
    *   escrowAmount: 100000,
    *   timelockScript: timelockScript,
@@ -437,23 +507,67 @@ export class DawnStakingManager extends BTCLockerCore {
    * @param params - Calculation parameters
    * @returns Calculation results
    * @example
+   * // Using specific inputs
    * const calculation = await dawn.calculateDawnStakingAmounts({
    *   inputs: [{ value: 500000 }],
+   *   desiredEscrowAmount: 100000,
+   *   desiredTimelockAmount: 200000
+   * });
+   * // Using automatic UTXO fetching from address
+   * const api = new BitcoinAPI('testnet');
+   * const calculation = await dawn.calculateDawnStakingAmounts({
+   *   sourceAddress: 'tb1q...',
+   *   api: api,
    *   desiredEscrowAmount: 100000,
    *   desiredTimelockAmount: 200000
    * });
    */
   async calculateDawnStakingAmounts(params: DawnStakingCalculationParams): Promise<DawnStakingCalculationResult> {
     const {
-      inputs,
+      inputs: providedInputs,
+      sourceAddress,
+      api,
       desiredEscrowAmount,
       desiredTimelockAmount,
       includeChange = false,
       feeRate = 10,
     } = params;
 
-    if (!inputs || !Array.isArray(inputs)) {
-      throw new Error("inputs must be an array");
+    // Validate that either inputs or sourceAddress+api are provided
+    if (!providedInputs && (!sourceAddress || !api)) {
+      throw new Error("Either inputs or both sourceAddress and api must be provided");
+    }
+
+    let inputs: Array<{ value: number }>;
+    
+    if (providedInputs) {
+      if (!Array.isArray(providedInputs)) {
+        throw new Error("inputs must be an array when provided");
+      }
+      inputs = providedInputs;
+    } else {
+      // Fetch UTXOs from address
+      const apiUtxos = await api!.getAddressUtxos(sourceAddress!);
+      const availableInputs = apiUtxos.map((apiUtxo: ApiUTXO) => apiUtxo.utxo);
+      
+      if (availableInputs.length === 0) {
+        throw new Error(`No confirmed UTXOs available at address ${sourceAddress}`);
+      }
+      
+      // Auto-select from available UTXOs for calculation
+      const outputCount = includeChange ? 3 : 2;
+      const estimatedInputCount = Math.min(availableInputs.length, 3);
+      const estimatedSize = 10 + estimatedInputCount * 148 + outputCount * 34 + 20;
+      const estimatedFee = estimatedSize * feeRate;
+      const targetAmount = desiredEscrowAmount + desiredTimelockAmount + estimatedFee;
+      
+      try {
+        const selectedUtxos = this.selectUtxos(availableInputs, targetAmount);
+        inputs = selectedUtxos.map(utxo => ({ value: utxo.value }));
+      } catch (error) {
+        // If we can't select enough UTXOs, use all available for calculation
+        inputs = availableInputs.map(utxo => ({ value: utxo.value }));
+      }
     }
 
     if (!Number.isInteger(desiredEscrowAmount) || desiredEscrowAmount <= 0) {
@@ -531,7 +645,9 @@ export class DawnStakingManager extends BTCLockerCore {
     await this.ensureInitialized();
     const {
       escrowInputs,
+      escrowRedeemScript,
       timelockInputs,
+      timelockRedeemScript,
       destination,
       feeAmount = 2000,
       api,
@@ -558,38 +674,33 @@ export class DawnStakingManager extends BTCLockerCore {
     let maxLocktime = 0;
     const currentTime = Math.floor(Date.now() / 1000);
     
-    // Check escrow inputs
-    for (const input of escrowInputs) {
-      try {
-        const script = Buffer.from(input.redeemScript, 'hex');
-        if (script.length > 5 && script[0] === 0x63) { // OP_IF (escrow script)
-          // Extract timestamp (next 4 bytes after OP_IF and push opcode)
-          const timestampBytes = script.slice(2, 6);
-          const timestamp = timestampBytes.readUInt32LE(0);
-          
-          console.log(`Debug: Escrow - Current time: ${currentTime}, Script deadline: ${timestamp}`);
-          console.log(`Debug: Escrow - Current time human: ${new Date(currentTime * 1000).toISOString()}`);
-          console.log(`Debug: Escrow - Deadline human: ${new Date(timestamp * 1000).toISOString()}`);
-          
-          // Validate that we're past the deadline
-          if (currentTime < timestamp) {
-            throw new Error(`Cannot withdraw from escrow script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(timestamp * 1000).toISOString()}`);
-          }
-          
-          maxLocktime = Math.max(maxLocktime, timestamp);
+    try {
+      const script = Buffer.from(escrowRedeemScript, 'hex');
+      if (script.length > 5 && script[0] === 0x63) { // OP_IF (escrow script)
+        // Extract timestamp (next 4 bytes after OP_IF and push opcode)
+        const timestampBytes = script.slice(2, 6);
+        const timestamp = timestampBytes.readUInt32LE(0);
+        
+        console.log(`Debug: Escrow - Current time: ${currentTime}, Script deadline: ${timestamp}`);
+        console.log(`Debug: Escrow - Current time human: ${new Date(currentTime * 1000).toISOString()}`);
+        console.log(`Debug: Escrow - Deadline human: ${new Date(timestamp * 1000).toISOString()}`);
+        
+        // Validate that we're past the deadline
+        if (currentTime < timestamp) {
+          throw new Error(`Cannot withdraw from escrow script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(timestamp * 1000).toISOString()}`);
         }
-      } catch (parseError) {
-        // Re-throw validation errors, ignore parsing errors
-        if (parseError instanceof Error && parseError.message.includes('Cannot withdraw')) {
-          throw parseError;
-        }
+        
+        maxLocktime = Math.max(maxLocktime, timestamp);
+      }
+    } catch (parseError) {
+      // Re-throw validation errors, ignore parsing errors
+      if (parseError instanceof Error && parseError.message.includes('Cannot withdraw')) {
+        throw parseError;
       }
     }
 
-    // Check timelock inputs
-    for (const input of timelockInputs) {
       try {
-        const script = Buffer.from(input.redeemScript, 'hex');
+        const script = Buffer.from(timelockRedeemScript, 'hex');
         if (script.length > 4 && script[0] === 0x04) { // Push 4 bytes (timelock script)
           // Extract timestamp (next 4 bytes after push opcode)
           const timestampBytes = script.slice(1, 5);
@@ -612,7 +723,7 @@ export class DawnStakingManager extends BTCLockerCore {
           throw parseError;
         }
       }
-    }
+
 
     // Set transaction locktime if needed
     if (maxLocktime > 0) {
@@ -622,7 +733,7 @@ export class DawnStakingManager extends BTCLockerCore {
     // Add escrow inputs
     for (let i = 0; i < escrowInputs.length; i++) {
       const input = escrowInputs[i];
-      const redeemScript = Buffer.from(input.redeemScript, "hex");
+      const redeemScript = Buffer.from(escrowRedeemScript, "hex");
       
       let inputData;
       if (api) {
@@ -666,7 +777,7 @@ export class DawnStakingManager extends BTCLockerCore {
     // Add timelock inputs
     for (let i = 0; i < timelockInputs.length; i++) {
       const input = timelockInputs[i];
-      const redeemScript = Buffer.from(input.redeemScript, "hex");
+      const redeemScript = Buffer.from(timelockRedeemScript, "hex");
       
       let inputData;
       if (api) {

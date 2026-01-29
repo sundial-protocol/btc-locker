@@ -3,24 +3,16 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore, getECC } from "./core";
-import { KeyUtils, FeeUtils } from "../utils";
+import { BTCLockerCore } from "./core";
+import { FeeUtils } from "../utils";
 import type { UTXO } from "../types";
+import BitcoinAPI, { ApiUTXO } from "../bitcoin-api";
 
 /**
- * Yield input with transaction details
- * @interface YieldInput
- * @description UTXO input specifically for yield distribution operations
- * @extends UTXO
+ * Yield input type
+ * @description UTXO input for yield distribution operations
  */
-export interface YieldInput extends UTXO {
-  /** Transaction ID */
-  txid: string;
-  /** Output index */
-  vout: number;
-  /** Output value in satoshis */
-  value: number;
-}
+export type YieldInput = UTXO;
 
 /**
  * Parameters for yield distribution
@@ -28,8 +20,12 @@ export interface YieldInput extends UTXO {
  * @description Configuration for distributing yield from time-locked Bitcoin funds
  */
 export interface YieldDistributionParams {
-  /** Array of unspent transaction outputs from timelock */
-  inputs: YieldInput[];
+  /** Array of unspent transaction outputs from timelock (optional - will fetch from address if not provided) */
+  inputs?: YieldInput[];
+  /** Source address for automatic UTXO selection (required if inputs not provided) */
+  sourceAddress?: string;
+  /** Bitcoin API instance for fetching UTXOs (required if inputs not provided) */
+  api?: BitcoinAPI;
   /** Address of the timelock script */
   timelockAddress: string;
   /** Amount to distribute in satoshis */
@@ -105,7 +101,34 @@ export class YieldDistributor extends BTCLockerCore {
    */
   async distributeYield(params: YieldDistributionParams): Promise<string> {
     await this.ensureInitialized();
-    const { inputs, timelockAddress, amount, memo } = params;
+    const { 
+      inputs: providedInputs, 
+      sourceAddress,
+      api,
+      timelockAddress, 
+      amount, 
+      memo 
+    } = params;
+
+    // Validate that either inputs or sourceAddress+api are provided
+    if (!providedInputs && (!sourceAddress || !api)) {
+      throw new Error("Either inputs or both sourceAddress and api must be provided");
+    }
+
+    let inputs: YieldInput[];
+    
+    if (providedInputs) {
+      // Use provided inputs
+      inputs = providedInputs;
+    } else {
+      // Fetch UTXOs from address
+      const apiUtxos = await api!.getAddressUtxos(sourceAddress!);
+      inputs = apiUtxos.map((apiUtxo: ApiUTXO) => apiUtxo.utxo);
+      
+      if (inputs.length === 0) {
+        throw new Error(`No confirmed UTXOs available at address ${sourceAddress}`);
+      }
+    }
 
     const psbt = new bitcoin.Psbt({ network: this.network });
 

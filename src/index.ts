@@ -66,8 +66,6 @@ export type {
   DawnStakingCalculationParams,
   DawnWithdrawalParams,
   DawnWithdrawalResult,
-  DawnStakingInput,
-  DawnWithdrawalInput,
   DawnStakingSigningParams,
   DawnWithdrawalSigningParams
 } from "./locker/dawn-stake";
@@ -95,7 +93,7 @@ export type {
   ApiProvider,
   ApiUrls,
   AddressInfo,
-  BitcoinUTXO,
+  ApiUTXO,
   FeeEstimates,
   BroadcastResult
 } from "./bitcoin-api";

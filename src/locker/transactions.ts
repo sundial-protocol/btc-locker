@@ -18,13 +18,6 @@ export interface TransactionOutput {
   value: number;
 }
 
-interface TransactionInput {
-  txid: string;
-  vout: number;
-  value: number;
-  hex: string;
-}
-
 /**
  * Parameters for creating spending transactions
  * @interface SpendingTransactionParams

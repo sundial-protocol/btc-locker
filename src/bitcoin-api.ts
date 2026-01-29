@@ -4,6 +4,23 @@
  */
 
 import https from "https";
+import type { UTXO } from "./types";
+
+
+/**
+ * Bitcoin UTXO with API status information
+ * @interface ApiUTXO
+ * @description UTXO from Bitcoin API with confirmation status
+ * @extends UTXO
+ */
+export interface ApiUTXO {
+  utxo: UTXO;
+  status: {
+    confirmed: boolean;
+    block_height?: number;
+    block_hash?: string;
+  };
+}
 
 export type NetworkType = "mainnet" | "testnet";
 export type ApiProvider = "mempool" | "blockstream" | "blockcypher";
@@ -29,17 +46,6 @@ export interface AddressInfo {
     spent_txo_count: number;
     spent_txo_sum: number;
     tx_count: number;
-  };
-}
-
-export interface BitcoinUTXO {
-  txid: string;
-  vout: number;
-  value: number;
-  status: {
-    confirmed: boolean;
-    block_height?: number;
-    block_hash?: string;
   };
 }
 
@@ -205,7 +211,7 @@ export default class BitcoinAPI {
   /**
    * Get UTXOs for an address
    */
-  async getAddressUtxos(address: string): Promise<BitcoinUTXO[]> {
+  async getAddressUtxos(address: string): Promise<ApiUTXO[]> {
     try {
       if (
         this.apiProvider === "mempool" ||

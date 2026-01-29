@@ -289,13 +289,4 @@ export class EscrowManager extends BTCLockerCore {
       txId: txid,
     };
   }
-
-  /**
-   * Validate and convert a public key to Buffer format
-   * @private
-   * @param publicKey - Public key to validate
-   * @param paramName - Parameter name for error messages
-   * @returns Validated public key buffer
-   * @throws If public key is invalid
-   */
 }
