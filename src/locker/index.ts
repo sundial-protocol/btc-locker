@@ -13,8 +13,7 @@ import { EscrowManager } from "./escrow";
 import { DawnStakingManager } from "./dawn-stake";
 import { 
   KeyPair, 
-  ScriptInfo,  
-  TransactionResult, 
+  ScriptInfo,   
   NetworkType 
 } from "../types";
 import {
@@ -26,17 +25,12 @@ import {
   DawnStakingWithScriptParams,
   DawnStakingCalculationParams,
   DawnWithdrawalParams,
-  DawnWithdrawalResult,
-  DawnStakingResult,
-  DawnStakingWithScriptResult
 } from "./dawn-stake";
 import {
   YieldDistributionParams,
-  YieldDistributionResult
 } from "./yield";
 import {
   EscrowSpendingParams,
-  EscrowSpendingTransaction
 } from "./escrow";
 
 /**

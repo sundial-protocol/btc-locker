@@ -264,13 +264,11 @@ export class EscrowManager extends BTCLockerCore {
    * @async
    * @param signingParams - Escrow spending signing parameters
    * @param memo - Optional memo for the transaction
-   * @param api - Optional Bitcoin API instance
    * @returns Transaction result with escrow spending metadata
    */
   async signAndSubmitEscrowSpendingTransaction(
     signingParams: EscrowSpendingSigningParams,
     memo?: string,
-    api?: any
   ): Promise<EscrowSpendingTransaction> {
     const privateKeyString = typeof signingParams.privateKey === 'string' 
       ? signingParams.privateKey 
@@ -282,7 +280,7 @@ export class EscrowManager extends BTCLockerCore {
       { spendAfterDeadline: signingParams.spendAfterDeadline }
     );
     
-    const txid = await this.submitTransaction(signedTx, { api });
+    const txid = await this.submitTransaction(signedTx, { api: this.api });
     
     return {
       txHex: signedTx,

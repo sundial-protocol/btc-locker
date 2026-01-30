@@ -7,6 +7,7 @@ import { BIP32Factory } from "bip32";
 import { ECPairFactory } from "ecpair";
 import tinysecp from "@bitcoinerlab/secp256k1";
 import type { ECCLib, InitializedECC, NetworkType } from "../types";
+import BitcoinAPI from "../bitcoin-api";
 
 // ECC will be initialized asynchronously
 let ecc: ECCLib | null = null;
@@ -70,20 +71,23 @@ export function getECC(): InitializedECC {
 export class BTCLockerCore {
   public network: bitcoin.Network;
   public initialized: boolean;
+  public api: BitcoinAPI;
 
   /**
    * Create a new BTCLockerCore instance
    * @param network - Bitcoin network ('bitcoin', 'testnet', 'regtest') or network object
+   * @param api - Optional BitcoinAPI instance (will create default if not provided)
    * @example
    * // Using string network name
    * const core = new BTCLockerCore('testnet');
    * await core.init();
    *
-   * // Using network object
-   * const core = new BTCLockerCore(bitcoin.networks.testnet);
+   * // Using network object with custom API
+   * const api = new BitcoinAPI('testnet', 'mempool');
+   * const core = new BTCLockerCore(bitcoin.networks.testnet, api);
    * await core.init();
    */
-  constructor(network: NetworkType = bitcoin.networks.bitcoin) {
+  constructor(network: NetworkType = bitcoin.networks.bitcoin, api?: BitcoinAPI) {
     // Convert string network names to network objects
     if (typeof network === "string") {
       switch (network.toLowerCase()) {
@@ -105,6 +109,15 @@ export class BTCLockerCore {
     } else {
       this.network = network;
     }
+    
+    // Initialize API with network type
+    if (api) {
+      this.api = api;
+    } else {
+      const networkType = this.network === bitcoin.networks.bitcoin ? 'mainnet' : 'testnet';
+      this.api = new BitcoinAPI(networkType);
+    }
+    
     this.initialized = false;
   }
 
@@ -212,7 +225,7 @@ export class BTCLockerCore {
               if (!signature) {
                 throw new Error(`Missing signature for input ${inputIndex}`);
               }
-              
+              // check whether to use after-deadline spending path for escrow scripts
               const useAfterDeadline = options?.spendAfterDeadline !== false; // Default true
               const scriptSig = bitcoin.script.compile([
                 signature,
@@ -274,8 +287,8 @@ export class BTCLockerCore {
    * @example
    * const txid = await locker.submitTransaction('01000000...');
    * 
-   * // With API for actual broadcast
-   * const txid = await locker.submitTransaction('01000000...', { api: bitcoinAPI });
+   * // With custom API
+   * const txid = await locker.submitTransaction('01000000...', { api: customAPI });
    */
   async submitTransaction(transactionHex: string, options?: { api?: any }): Promise<string> {
     if (!transactionHex || typeof transactionHex !== 'string') {
@@ -287,10 +300,13 @@ export class BTCLockerCore {
       const transaction = bitcoin.Transaction.fromHex(transactionHex);
       const txid = transaction.getId();
 
-      // Broadcast via API if provided
-      if (options?.api && typeof options.api.broadcastTransaction === 'function') {
+      // Use provided API or fall back to instance API
+      const apiToUse = options?.api || this.api;
+      
+      // Broadcast via API if available
+      if (apiToUse && typeof apiToUse.broadcastTransaction === 'function') {
         try {
-          const broadcastResult = await options.api.broadcastTransaction(transactionHex);
+          const broadcastResult = await apiToUse.broadcastTransaction(transactionHex);
           return broadcastResult.txid || txid;
         } catch (error) {
           throw new Error(`Failed to broadcast transaction: ${(error as Error).message}`);

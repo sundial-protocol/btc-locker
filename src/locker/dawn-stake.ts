@@ -7,7 +7,7 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core";
 import type { UTXO, ScriptInfo } from "../types";
-import BitcoinAPI, { ApiUTXO } from "../bitcoin-api";
+import { ApiUTXO } from "../bitcoin-api";
 
 /**
  * Parameters for Dawn staking transactions
@@ -18,9 +18,7 @@ export interface DawnStakingParams {
   /** Array of unspent transaction outputs to stake (optional - will auto-select from address if not provided) */
   inputs?: UTXO[];
   /** Source address for automatic UTXO selection (required if inputs not provided) */
-  sourceAddress?: string;
-  /** Bitcoin API instance for fetching UTXOs (required if inputs not provided) */
-  api?: BitcoinAPI;
+  sourceAddress: string;
   /** Escrow script address */
   escrowAddress: string;
   /** Amount to send to escrow in satoshis */
@@ -98,9 +96,7 @@ export interface DawnStakingCalculationParams {
   /** Array of available inputs with their values (optional - will fetch from address if not provided) */
   inputs?: Array<{ value: number }>;
   /** Source address for automatic UTXO fetching (required if inputs not provided) */
-  sourceAddress?: string;
-  /** Bitcoin API instance for fetching UTXOs (required if inputs not provided) */
-  api?: BitcoinAPI;
+  sourceAddress: string;
   /** Desired amount for escrow output in satoshis */
   desiredEscrowAmount: number;
   /** Desired amount for timelock output in satoshis */
@@ -149,8 +145,6 @@ export interface DawnWithdrawalParams {
   destination: string;
   /** Optional fixed fee amount in satoshis */
   feeAmount?: number;
-  /** Optional Bitcoin API instance for fetching transaction data */
-  api?: any;
 }
 
 /**
@@ -287,10 +281,8 @@ export class DawnStakingManager extends BTCLockerCore {
    * });
    * 
    * // Using automatic UTXO fetching from address
-   * const api = new BitcoinAPI('testnet');
    * const tx = await dawn.createDawnStakingTransaction({
    *   sourceAddress: 'tb1q...',
-   *   api: api,
    *   escrowAddress: '3ABC123...',
    *   escrowAmount: 100000,
    *   timelockAddress: '3XYZ789...',
@@ -302,7 +294,6 @@ export class DawnStakingManager extends BTCLockerCore {
     const {
       inputs: providedInputs,
       sourceAddress,
-      api,
       escrowAddress,
       escrowAmount,
       timelockAddress,
@@ -310,11 +301,6 @@ export class DawnStakingManager extends BTCLockerCore {
       changeAddress,
       feeRate = 10,
     } = params;
-
-    // Validate that either inputs or sourceAddress+api are provided
-    if (!providedInputs && (!sourceAddress || !api)) {
-      throw new Error("Either inputs or both sourceAddress and api must be provided");
-    }
 
     if (providedInputs && (!Array.isArray(providedInputs) || providedInputs.length === 0)) {
       throw new Error("inputs must be a non-empty array when provided");
@@ -327,7 +313,7 @@ export class DawnStakingManager extends BTCLockerCore {
       inputs = providedInputs;
     } else {
       // Fetch UTXOs from address and auto-select
-      const apiUtxos = await api!.getAddressUtxos(sourceAddress!);
+      const apiUtxos = await this.api.getAddressUtxos(sourceAddress);
       const availableInputs = apiUtxos.map((apiUtxo: ApiUTXO) => apiUtxo.utxo);
       
       if (availableInputs.length === 0) {
@@ -470,10 +456,8 @@ export class DawnStakingManager extends BTCLockerCore {
    *   timelockAmount: 200000
    * });
    * // Or using automatic UTXO fetching from address
-   * const api = new BitcoinAPI('testnet');
    * const unsignedPsbt = await dawn.createDawnStakingTransactionWithScript({
    *   sourceAddress: 'tb1q...',
-   *   api: api,
    *   escrowAddress: '3ABC123...',
    *   escrowAmount: 100000,
    *   timelockScript: timelockScript,
@@ -509,15 +493,14 @@ export class DawnStakingManager extends BTCLockerCore {
    * @example
    * // Using specific inputs
    * const calculation = await dawn.calculateDawnStakingAmounts({
+   *   sourceAddress: 'tb1q...',
    *   inputs: [{ value: 500000 }],
    *   desiredEscrowAmount: 100000,
    *   desiredTimelockAmount: 200000
    * });
    * // Using automatic UTXO fetching from address
-   * const api = new BitcoinAPI('testnet');
    * const calculation = await dawn.calculateDawnStakingAmounts({
    *   sourceAddress: 'tb1q...',
-   *   api: api,
    *   desiredEscrowAmount: 100000,
    *   desiredTimelockAmount: 200000
    * });
@@ -526,17 +509,11 @@ export class DawnStakingManager extends BTCLockerCore {
     const {
       inputs: providedInputs,
       sourceAddress,
-      api,
       desiredEscrowAmount,
       desiredTimelockAmount,
       includeChange = false,
       feeRate = 10,
     } = params;
-
-    // Validate that either inputs or sourceAddress+api are provided
-    if (!providedInputs && (!sourceAddress || !api)) {
-      throw new Error("Either inputs or both sourceAddress and api must be provided");
-    }
 
     let inputs: Array<{ value: number }>;
     
@@ -547,7 +524,7 @@ export class DawnStakingManager extends BTCLockerCore {
       inputs = providedInputs;
     } else {
       // Fetch UTXOs from address
-      const apiUtxos = await api!.getAddressUtxos(sourceAddress!);
+      const apiUtxos = await this.api.getAddressUtxos(sourceAddress);
       const availableInputs = apiUtxos.map((apiUtxo: ApiUTXO) => apiUtxo.utxo);
       
       if (availableInputs.length === 0) {
@@ -650,7 +627,6 @@ export class DawnStakingManager extends BTCLockerCore {
       timelockRedeemScript,
       destination,
       feeAmount = 2000,
-      api,
     } = params;
 
     // Validate that we have at least one input
@@ -736,10 +712,10 @@ export class DawnStakingManager extends BTCLockerCore {
       const redeemScript = Buffer.from(escrowRedeemScript, "hex");
       
       let inputData;
-      if (api) {
+      if (this.api) {
         // Fetch full transaction for nonWitnessUtxo
         try {
-          const txHex = await api.getTransaction(input.txid);
+          const txHex = await this.api.getTransaction(input.txid);
           inputData = {
             hash: input.txid,
             index: input.vout,
@@ -780,10 +756,10 @@ export class DawnStakingManager extends BTCLockerCore {
       const redeemScript = Buffer.from(timelockRedeemScript, "hex");
       
       let inputData;
-      if (api) {
+      if (this.api) {
         // Fetch full transaction for nonWitnessUtxo
         try {
-          const txHex = await api.getTransaction(input.txid);
+          const txHex = await this.api.getTransaction(input.txid);
           inputData = {
             hash: input.txid,
             index: input.vout,
