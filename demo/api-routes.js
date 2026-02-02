@@ -96,13 +96,11 @@ router.post(
   ensureBTCLockerReady,
   asyncHandler(async (req, res) => {
     const { network = "testnet" } = req.body;
-    const bitcoin = require("bitcoinjs-lib");
-    const networkObj =
-      network === "mainnet"
-        ? bitcoin.networks.bitcoin
-        : bitcoin.networks.testnet;
+    
+    // Convert 'mainnet' to 'bitcoin' for consistency with NetworkType names
+    const networkName = network === "mainnet" ? "bitcoin" : network;
 
-    const locker = new BTCLocker(networkObj);
+    const locker = new BTCLocker(networkName);
     await locker.init();
 
     const keyPair = await locker.generateKeyPair();

@@ -7,6 +7,7 @@ import inquirer from "inquirer";
 import chalk from "chalk";
 import { ScriptUtils, TransactionUtils } from "../../dist/esm/index.js";
 import BitcoinAPI from "../../dist/esm/bitcoin-api.js";
+import { NETWORKS } from "../../dist/esm/utils/network.js";
 import { initLocker, displayResult } from "./shared.js";
 
 /**
@@ -123,12 +124,19 @@ export function setupTransactionCommands(program) {
 
 async function handleLockCommand(cmdOptions, parentOptions) {
   const locker = await initLocker(parentOptions);
-  const api = new BitcoinAPI(parentOptions.network);
+  
+  // Convert 'mainnet' to 'bitcoin' for consistency
+  const networkName = parentOptions.network === "mainnet" ? "bitcoin" : parentOptions.network;
+  const networkType = NETWORKS[networkName];
+  
+  if (!networkType) {
+    throw new Error(`Unsupported network: ${parentOptions.network}`);
+  }
+  
+  const api = new BitcoinAPI(networkType);
 
   // Get network for validation
-  const network = parentOptions.network === "mainnet" 
-    ? bitcoin.networks.bitcoin 
-    : bitcoin.networks.testnet;
+  const network = networkType.info;
 
   let fromPrivateKey = cmdOptions.fromKey;
   let toAddress = cmdOptions.to;

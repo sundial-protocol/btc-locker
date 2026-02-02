@@ -10,11 +10,9 @@ import { createBTCLocker } from "../../dist/esm/index.js";
  * Initialize BTCLocker instance based on network option
  */
 export async function initLocker(options) {
-  const network =
-    options.network === "mainnet"
-      ? bitcoin.networks.bitcoin
-      : bitcoin.networks.testnet;
-  return await createBTCLocker(network);
+  // Convert 'mainnet' to 'bitcoin' for consistency with NetworkType names
+  const networkName = options.network === "mainnet" ? "bitcoin" : options.network;
+  return await createBTCLocker(networkName);
 }
 
 /**

@@ -15,7 +15,7 @@ import {
   KeyPair, 
   ScriptInfo
 } from "../types";
-import type { NetworkType } from "../utils/network";
+import { NETWORKS, type NetworkType } from "../utils/network";
 import {
   SpendingTransactionParams,
   FundingTransactionParams
@@ -58,7 +58,11 @@ export class BTCLocker extends BTCLockerCore {
   public readonly escrowManager: EscrowManager;
   public readonly dawnStakingManager: DawnStakingManager;
 
-  constructor(network?: NetworkType) {
+  constructor(network?: NetworkType | string) {
+    if (typeof network === "string") {
+      network = NETWORKS[network] || NETWORKS.testnet;
+    }
+
     super(network);
 
     // Initialize component instances with the converted network object from parent
