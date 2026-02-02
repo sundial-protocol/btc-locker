@@ -113,12 +113,7 @@ export interface YieldConfig {
   }>;
 }
 
-/**
- * Bitcoin network type specification
- * @typedef {('bitcoin' | 'testnet' | 'regtest' | bitcoin.Network)} NetworkType
- * @description Supported Bitcoin network types for operations
- */
-export type NetworkType = 'bitcoin' | 'testnet' | 'regtest' | bitcoin.Network;
+
 
 export interface ECCLib {
   isPoint(p: Uint8Array): boolean;

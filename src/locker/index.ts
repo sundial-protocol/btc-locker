@@ -13,9 +13,9 @@ import { EscrowManager } from "./escrow";
 import { DawnStakingManager } from "./dawn-stake";
 import { 
   KeyPair, 
-  ScriptInfo,   
-  NetworkType 
+  ScriptInfo
 } from "../types";
+import type { NetworkType } from "../utils/network";
 import {
   SpendingTransactionParams,
   FundingTransactionParams
@@ -62,14 +62,14 @@ export class BTCLocker extends BTCLockerCore {
     super(network);
 
     // Initialize component instances with the converted network object from parent
-    this.keyPairGenerator = new KeyPairGenerator(this.network);
-    this.timelockCreator = new TimelockManager(this.network);
-    this.multisigCreator = new MultisigTimelockManager(this.network);
-    this.hodlCreator = new HodlScriptCreator(this.network);
-    this.transactionManager = new TransactionManager(this.network);
-    this.yieldDistributor = new YieldDistributor(this.network);
-    this.escrowManager = new EscrowManager(this.network);
-    this.dawnStakingManager = new DawnStakingManager(this.network);
+    this.keyPairGenerator = new KeyPairGenerator(network);
+    this.timelockCreator = new TimelockManager(network);
+    this.multisigCreator = new MultisigTimelockManager(network);
+    this.hodlCreator = new HodlScriptCreator(network);
+    this.transactionManager = new TransactionManager(network);
+    this.yieldDistributor = new YieldDistributor(network);
+    this.escrowManager = new EscrowManager(network);
+    this.dawnStakingManager = new DawnStakingManager(network);
   }
 
   /**

@@ -41,10 +41,13 @@ export type {
   EscrowConfig,
   DawnStakeConfig,
   YieldConfig,
-  NetworkType,
   ECCLib,
   InitializedECC,
 } from "./types";
+
+// Export NetworkType from utils/network
+export type { NetworkType } from "./utils/network";
+export { NETWORKS } from "./utils/network";
 
 // Export additional interfaces from individual modules
 export type { 
@@ -89,7 +92,6 @@ export type {
 
 // Export BitcoinAPI types and interfaces
 export type {
-  NetworkType as BitcoinNetworkType,
   ApiProvider,
   ApiUrls,
   AddressInfo,
@@ -99,24 +101,23 @@ export type {
 } from "./bitcoin-api";
 
 // Import NetworkType for use in function
-import type { NetworkType } from "./types";
+import type { NetworkType } from "./utils/network";
+import { NETWORKS } from "./utils/network";
 
 // Export the EscrowManager class
 export { EscrowManager } from "./locker/escrow";
 
 /**
  * Factory function to create an initialized BTCLocker instance
- * @param network - Network ('bitcoin', 'testnet', 'regtest', or network object)
+ * @param network - Network ('bitcoin', 'testnet', 'regtest')
  * @returns Initialized BTCLocker instance
  * @example
  * // Using string network name
  * const locker = await createBTCLocker('testnet');
- *
- * // Using network object
- * const locker = await createBTCLocker(bitcoin.networks.testnet);
  */
-export async function createBTCLocker(network: NetworkType = "testnet"): Promise<BTCLocker> {
-  const locker = new BTCLocker(network);
+export async function createBTCLocker(network: string = "testnet"): Promise<BTCLocker> {
+  const networkType = NETWORKS[network] || NETWORKS.testnet;
+  const locker = new BTCLocker(networkType);
   await locker.init();
   return locker;
 }

@@ -6,7 +6,9 @@ import * as bitcoin from "bitcoinjs-lib";
 import { BIP32Factory } from "bip32";
 import { ECPairFactory } from "ecpair";
 import tinysecp from "@bitcoinerlab/secp256k1";
-import type { ECCLib, InitializedECC, NetworkType } from "../types";
+import type { ECCLib, InitializedECC } from "../types";
+import type { NetworkType } from "../utils/network";
+import { NETWORKS } from "../utils/network";
 import BitcoinAPI from "../bitcoin-api";
 
 // ECC will be initialized asynchronously
@@ -87,35 +89,14 @@ export class BTCLockerCore {
    * const core = new BTCLockerCore(bitcoin.networks.testnet, api);
    * await core.init();
    */
-  constructor(network: NetworkType = bitcoin.networks.bitcoin, api?: BitcoinAPI) {
-    // Convert string network names to network objects
-    if (typeof network === "string") {
-      switch (network.toLowerCase()) {
-        case "bitcoin":
-        case "mainnet":
-          this.network = bitcoin.networks.bitcoin;
-          break;
-        case "testnet":
-          this.network = bitcoin.networks.testnet;
-          break;
-        case "regtest":
-          this.network = bitcoin.networks.regtest;
-          break;
-        default:
-          throw new Error(
-            `Unknown network: ${network}. Use 'bitcoin', 'testnet', 'regtest', or a network object.`
-          );
-      }
-    } else {
-      this.network = network;
-    }
+  constructor(network: NetworkType = NETWORKS.bitcoin, api?: BitcoinAPI) {
+    this.network = network.info;
     
     // Initialize API with network type
     if (api) {
       this.api = api;
     } else {
-      const networkType = this.network === bitcoin.networks.bitcoin ? 'mainnet' : 'testnet';
-      this.api = new BitcoinAPI(networkType);
+      this.api = new BitcoinAPI(network);
     }
     
     this.initialized = false;

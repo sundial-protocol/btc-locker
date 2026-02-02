@@ -5,6 +5,7 @@
 
 import https from "https";
 import type { UTXO } from "./types";
+import type { NetworkType } from "./utils/network";
 
 
 /**
@@ -22,7 +23,6 @@ export interface ApiUTXO {
   };
 }
 
-export type NetworkType = "mainnet" | "testnet";
 export type ApiProvider = "mempool" | "blockstream" | "blockcypher";
 
 export interface ApiUrls {
@@ -63,25 +63,30 @@ export default class BitcoinAPI {
   private baseUrls: ApiUrls;
   private baseUrl: string;
 
-  constructor(network: NetworkType = "testnet", apiProvider: ApiProvider = "mempool") {
+  constructor(network: NetworkType, apiProvider: ApiProvider = "mempool") {
+    // Validate network support
+    if (network.name === "regtest") {
+      throw new Error("Regtest network is not supported. Use 'bitcoin' or 'testnet' instead.");
+    }
+    
     this.network = network;
     this.apiProvider = apiProvider;
     this.baseUrls = {
       mempool: {
-        mainnet: "https://mempool.space/api",
-        testnet: "https://mempool.space/testnet/api",
+        bitcoin: "https://mempool.space/api",
+        testnet: "https://mempool.space/testnet/api"
       },
       blockstream: {
-        mainnet: "https://blockstream.info/api",
-        testnet: "https://blockstream.info/testnet/api",
+        bitcoin: "https://blockstream.info/api",
+        testnet: "https://blockstream.info/testnet/api"
       },
       blockcypher: {
-        mainnet: "https://api.blockcypher.com/v1/btc/main",
-        testnet: "https://api.blockcypher.com/v1/btc/test3",
-      },
+        bitcoin: "https://api.blockcypher.com/v1/btc/main",
+        testnet: "https://api.blockcypher.com/v1/btc/test3"
+      }
     };
 
-    this.baseUrl = this.baseUrls[apiProvider][network];
+    this.baseUrl = this.baseUrls[this.apiProvider][this.network.name];
   }
 
   /**
