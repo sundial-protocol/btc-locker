@@ -8,6 +8,7 @@ import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core";
 import type { UTXO, ScriptInfo } from "../types";
 import { ApiUTXO } from "../bitcoin-api";
+import ScriptUtils from "../utils/scripts";
 
 /**
  * Parameters for Dawn staking transactions
@@ -141,12 +142,16 @@ export interface DawnStakingCalculationResult {
  * @description Configuration for withdrawing from both escrow and timelock Dawn staking outputs
  */
 export interface DawnWithdrawalParams {
-  /** Array of escrow inputs to withdraw from */
-  escrowInputs: UTXO[];
+  /** Array of escrow inputs to withdraw from (optional - will fetch all UTXOs from escrow address if not provided) */
+  escrowInputs?: UTXO[];
+  /** Escrow script address (optional - will be calculated from escrowRedeemScript if not provided) */
+  escrowAddress?: string;
   /** Escrow redeem script in hexadecimal format */
   escrowRedeemScript: string;
-  /** Array of timelock inputs to withdraw from */
-  timelockInputs: UTXO[];
+  /** Array of timelock inputs to withdraw from (optional - will fetch all UTXOs from timelock address if not provided) */
+  timelockInputs?: UTXO[];
+  /** Timelock script address (optional - will be calculated from timelockRedeemScript if not provided) */
+  timelockAddress?: string;
   /** Timelock redeem script in hexadecimal format */
   timelockRedeemScript: string;
   /** Destination address for withdrawn funds */
@@ -228,12 +233,12 @@ export interface DawnWithdrawalSigningParams {
   escrowPrivateKey?: string;
   /** Private key for signing timelock inputs in hex format */
   timelockPrivateKey?: string;
-  /** Array of escrow inputs */
-  escrowInputs: UTXO[];
+  /** Array of escrow inputs (optional - will be extracted from PSBT if not provided) */
+  escrowInputs?: UTXO[];
   /** Escrow redeem script in hexadecimal format */
   escrowRedeemScript: string;
-  /** Array of timelock inputs */
-  timelockInputs: UTXO[];
+  /** Array of timelock inputs (optional - will be extracted from PSBT if not provided) */
+  timelockInputs?: UTXO[];
   /** Timelock redeem script in hexadecimal format */
   timelockRedeemScript: string;
 }
@@ -669,10 +674,21 @@ export class DawnStakingManager extends BTCLockerCore {
    * @returns Unsigned withdrawal PSBT as base64 string
    * @throws If insufficient funds or invalid parameters
    * @example
+   * // Using specific inputs
    * const dawn = new DawnStakingManager();
    * const unsignedPsbt = await dawn.createDawnWithdrawalTransaction({
-   *   escrowInputs: [{ txid: '...', vout: 0, value: 100000, redeemScript: '...' }],
-   *   timelockInputs: [{ txid: '...', vout: 0, value: 200000, redeemScript: '...' }],
+   *   escrowInputs: [{ txid: '...', vout: 0, value: 100000 }],
+   *   escrowRedeemScript: '...',
+   *   timelockInputs: [{ txid: '...', vout: 0, value: 200000 }],
+   *   timelockRedeemScript: '...',
+   *   destination: 'tb1q...',
+   *   feeAmount: 2000
+   * });
+   * 
+   * // Using automatic UTXO fetching from calculated script addresses
+   * const unsignedPsbt = await dawn.createDawnWithdrawalTransaction({
+   *   escrowRedeemScript: '...',
+   *   timelockRedeemScript: '...',
    *   destination: 'tb1q...',
    *   feeAmount: 2000
    * });
@@ -680,9 +696,11 @@ export class DawnStakingManager extends BTCLockerCore {
   async createDawnWithdrawalTransaction(params: DawnWithdrawalParams): Promise<string> {
     await this.ensureInitialized();
     const {
-      escrowInputs,
+      escrowInputs: providedEscrowInputs,
+      escrowAddress: providedEscrowAddress,
       escrowRedeemScript,
-      timelockInputs,
+      timelockInputs: providedTimelockInputs,
+      timelockAddress: providedTimelockAddress,
       timelockRedeemScript,
       destination,
       feeAmount = 2000,
@@ -699,9 +717,37 @@ export class DawnStakingManager extends BTCLockerCore {
       throw new Error("feeAddress is required when protocolFeeAmount is provided");
     }
 
+    // Calculate script addresses if not provided
+    let escrowAddress = providedEscrowAddress ?? ScriptUtils.createScriptAddress(Buffer.from(escrowRedeemScript, "hex"), this.network);
+    let timelockAddress = providedTimelockAddress ?? ScriptUtils.createScriptAddress(Buffer.from(timelockRedeemScript, "hex"), this.network);
+
+    // Fetch UTXOs if not provided
+    let escrowInputs: UTXO[] = providedEscrowInputs || [];
+    let timelockInputs: UTXO[] = providedTimelockInputs || [];
+
+    if (!providedEscrowInputs) {
+      try {
+        const apiUtxos = await this.api.getAddressUtxos(escrowAddress);
+        const confirmedUtxos = apiUtxos.filter((apiUtxo: ApiUTXO) => apiUtxo.status?.confirmed);
+        escrowInputs = confirmedUtxos.map((apiUtxo: ApiUTXO) => apiUtxo.utxo || apiUtxo);
+      } catch (error) {
+        throw new Error(`Failed to fetch escrow UTXOs from ${escrowAddress}: ${(error as Error).message}`);
+      }
+    }
+
+    if (!providedTimelockInputs) {
+      try {
+        const apiUtxos = await this.api.getAddressUtxos(timelockAddress);
+        const confirmedUtxos = apiUtxos.filter((apiUtxo: ApiUTXO) => apiUtxo.status?.confirmed);
+        timelockInputs = confirmedUtxos.map((apiUtxo: ApiUTXO) => apiUtxo.utxo || apiUtxo);
+      } catch (error) {
+        throw new Error(`Failed to fetch timelock UTXOs from ${timelockAddress}: ${(error as Error).message}`);
+      }
+    }
+
     // Validate that we have at least one input
     if (escrowInputs.length === 0 && timelockInputs.length === 0) {
-      throw new Error("No inputs provided for withdrawal");
+      throw new Error("No confirmed UTXOs available for withdrawal from either escrow or timelock addresses");
     }
 
     // Calculate total values
