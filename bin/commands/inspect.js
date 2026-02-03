@@ -8,6 +8,7 @@ import chalk from "chalk";
 import { initLocker, displayResult } from "./shared.js";
 import { ScriptUtils } from "../../dist/esm/index.js";
 import BitcoinAPI from "../../dist/esm/bitcoin-api.js";
+import { NETWORKS } from "../../dist/esm/utils/network.js";
 
 /**
  * Setup inspect commands
@@ -85,12 +86,19 @@ export function setupInspectCommands(program) {
     )
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
-      const api = new BitcoinAPI(parentOptions.network, cmdOptions.api);
+      
+      // Convert 'mainnet' to 'bitcoin' for consistency
+      const networkName = parentOptions.network === "mainnet" ? "bitcoin" : parentOptions.network;
+      const networkType = NETWORKS[networkName];
+      
+      if (!networkType) {
+        throw new Error(`Unsupported network: ${parentOptions.network}`);
+      }
+      
+      const api = new BitcoinAPI(networkType, cmdOptions.api);
       
       // Get network for validation
-      const network = parentOptions.network === "mainnet" 
-        ? bitcoin.networks.bitcoin 
-        : bitcoin.networks.testnet;
+      const network = networkType.info;
 
       let address = cmdOptions.address;
 

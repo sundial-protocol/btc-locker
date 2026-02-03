@@ -176,7 +176,9 @@ export class BTCLockerCore {
         const input = psbt.data.inputs[i];
         
         // Update witnessUtxo if needed for P2WPKH inputs
-        if (input.witnessUtxo && (!input.witnessUtxo.script || input.witnessUtxo.script.length === 0)) {
+        if (input.witnessUtxo && (!input.witnessUtxo.script || 
+            input.witnessUtxo.script.length === 0 || 
+            input.witnessUtxo.script.every(byte => byte === 0))) {
           input.witnessUtxo.script = bitcoin.payments.p2wpkh({
             pubkey: keyPair.publicKey,
             network: this.network,

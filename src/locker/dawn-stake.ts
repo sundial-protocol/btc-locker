@@ -31,6 +31,10 @@ export interface DawnStakingParams {
   changeAddress?: string;
   /** Optional fee rate in satoshis per byte */
   feeRate?: number;
+  /** Optional fee address for protocol fees */
+  feeAddress?: string;
+  /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
+  protocolFeeAmount?: number;
 }
 
 /**
@@ -53,6 +57,8 @@ export interface DawnStakingResult {
     escrowAmount: number;
     /** Amount sent to timelock in satoshis */
     timelockAmount: number;
+    /** Optional protocol fee amount in satoshis */
+    protocolFeeAmount?: number;
     /** Optional change amount in satoshis */
     changeAmount?: number;
   };
@@ -105,6 +111,8 @@ export interface DawnStakingCalculationParams {
   includeChange?: boolean;
   /** Optional fee rate in satoshis per byte */
   feeRate?: number;
+  /** Optional protocol fee amount in satoshis */
+  protocolFeeAmount?: number;
 }
 
 /**
@@ -145,6 +153,10 @@ export interface DawnWithdrawalParams {
   destination: string;
   /** Optional fixed fee amount in satoshis */
   feeAmount?: number;
+  /** Optional fee address for protocol fees */
+  feeAddress?: string;
+  /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
+  protocolFeeAmount?: number;
 }
 
 /**
@@ -171,11 +183,13 @@ export interface DawnWithdrawalResult {
     totalValue: number;
   };
   /** Output details */
-  output: {
+  outputs: {
     /** Destination address for withdrawn funds */
     destination: string;
     /** Final output value after fees in satoshis */
-    value: number;
+    destinationValue: number;
+    /** Optional protocol fee amount in satoshis */
+    protocolFeeAmount?: number;
   };
 }
 
@@ -300,10 +314,21 @@ export class DawnStakingManager extends BTCLockerCore {
       timelockAmount,
       changeAddress,
       feeRate = 10,
+      feeAddress,
+      protocolFeeAmount,
     } = params;
 
     if (providedInputs && (!Array.isArray(providedInputs) || providedInputs.length === 0)) {
       throw new Error("inputs must be a non-empty array when provided");
+    }
+
+    // Validate fee parameters
+    if (feeAddress && !protocolFeeAmount) {
+      throw new Error("protocolFeeAmount is required when feeAddress is provided");
+    }
+
+    if (protocolFeeAmount && !feeAddress) {
+      throw new Error("feeAddress is required when protocolFeeAmount is provided");
     }
 
     let inputs: UTXO[];
@@ -320,12 +345,16 @@ export class DawnStakingManager extends BTCLockerCore {
         throw new Error(`No confirmed UTXOs available at address ${sourceAddress}`);
       }
       
+      // Calculate number of outputs (2 required + optional protocol fee + optional change)
+      let outputCount = 2;
+      if (protocolFeeAmount && feeAddress) outputCount++;
+      if (changeAddress) outputCount++;
+      
       // First estimate required amount for input selection
-      const outputCount = changeAddress ? 3 : 2;
       const estimatedInputCount = Math.min(availableInputs.length, 3); // Estimate 1-3 inputs
       const estimatedSize = 10 + estimatedInputCount * 148 + outputCount * 34 + 20;
       const estimatedFee = estimatedSize * feeRate;
-      const targetAmount = escrowAmount + timelockAmount + estimatedFee;
+      const targetAmount = escrowAmount + timelockAmount + (protocolFeeAmount || 0) + estimatedFee;
       
       inputs = this.selectUtxos(availableInputs, targetAmount);
     }
@@ -354,8 +383,10 @@ export class DawnStakingManager extends BTCLockerCore {
       return sum + input.value;
     }, 0);
 
-    // Determine number of outputs (2 required + 1 optional change)
-    const outputCount = changeAddress ? 3 : 2;
+    // Calculate number of outputs (2 required + optional protocol fee + optional change)
+    let outputCount = 2;
+    if (protocolFeeAmount && feeAddress) outputCount++;
+    if (changeAddress) outputCount++;
     
     // Estimate transaction size for fee calculation
     // Base size + (inputs * 148) + (outputs * 34) + some overhead
@@ -363,12 +394,12 @@ export class DawnStakingManager extends BTCLockerCore {
     const estimatedFee = estimatedSize * feeRate;
 
     // Calculate total required amount
-    const totalRequiredAmount = escrowAmount + timelockAmount + estimatedFee;
+    const totalRequiredAmount = escrowAmount + timelockAmount + (protocolFeeAmount || 0) + estimatedFee;
     const changeAmount = totalInputValue - totalRequiredAmount;
 
     if (changeAmount < 0) {
       throw new Error(
-        `Insufficient funds. Total: ${totalInputValue}, Required: ${totalRequiredAmount} (Escrow: ${escrowAmount}, Timelock: ${timelockAmount}, Fee: ${estimatedFee}), Shortage: ${Math.abs(changeAmount)}`
+        `Insufficient funds. Total: ${totalInputValue}, Required: ${totalRequiredAmount} (Escrow: ${escrowAmount}, Timelock: ${timelockAmount}${protocolFeeAmount ? `, Protocol Fee: ${protocolFeeAmount}` : ''}, Network Fee: ${estimatedFee}), Shortage: ${Math.abs(changeAmount)}`
       );
     }
 
@@ -384,6 +415,12 @@ export class DawnStakingManager extends BTCLockerCore {
     if (timelockAmount < dustThreshold) {
       throw new Error(
         `Timelock amount ${timelockAmount} is below dust threshold ${dustThreshold}`
+      );
+    }
+
+    if (protocolFeeAmount && protocolFeeAmount < dustThreshold) {
+      throw new Error(
+        `Protocol fee amount ${protocolFeeAmount} is below dust threshold ${dustThreshold}`
       );
     }
 
@@ -404,7 +441,7 @@ export class DawnStakingManager extends BTCLockerCore {
           hash: input.txid,
           index: input.vout,
           witnessUtxo: {
-            script: Buffer.alloc(22), // Placeholder for P2WPKH script
+            script: Buffer.alloc(0), // Empty buffer - will be filled during signing
             value: BigInt(input.value),
           },
         };
@@ -425,7 +462,15 @@ export class DawnStakingManager extends BTCLockerCore {
         value: BigInt(timelockAmount),
       });
 
-      // 3. Change output (if specified and above dust threshold)
+      // 3. Protocol fee output (if specified)
+      if (feeAddress && protocolFeeAmount && protocolFeeAmount >= dustThreshold) {
+        psbt.addOutput({
+          address: feeAddress,
+          value: BigInt(protocolFeeAmount),
+        });
+      }
+
+      // 4. Change output (if specified and above dust threshold)
       if (changeAddress && changeAmount >= dustThreshold) {
         psbt.addOutput({
           address: changeAddress,
@@ -513,6 +558,7 @@ export class DawnStakingManager extends BTCLockerCore {
       desiredTimelockAmount,
       includeChange = false,
       feeRate = 10,
+      protocolFeeAmount = 0,
     } = params;
 
     let inputs: Array<{ value: number }>;
@@ -531,12 +577,16 @@ export class DawnStakingManager extends BTCLockerCore {
         throw new Error(`No confirmed UTXOs available at address ${sourceAddress}`);
       }
       
+      // Calculate number of outputs (2 required + optional protocol fee + optional change)
+      let outputCount = 2;
+      if (protocolFeeAmount > 0) outputCount++;
+      if (includeChange) outputCount++;
+      
       // Auto-select from available UTXOs for calculation
-      const outputCount = includeChange ? 3 : 2;
       const estimatedInputCount = Math.min(availableInputs.length, 3);
       const estimatedSize = 10 + estimatedInputCount * 148 + outputCount * 34 + 20;
       const estimatedFee = estimatedSize * feeRate;
-      const targetAmount = desiredEscrowAmount + desiredTimelockAmount + estimatedFee;
+      const targetAmount = desiredEscrowAmount + desiredTimelockAmount + protocolFeeAmount + estimatedFee;
       
       try {
         const selectedUtxos = this.selectUtxos(availableInputs, targetAmount);
@@ -558,13 +608,17 @@ export class DawnStakingManager extends BTCLockerCore {
     // Calculate total input value
     const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
 
-    // Estimate transaction size (2 or 3 outputs)
-    const outputCount = includeChange ? 3 : 2;
+    // Calculate number of outputs (2 required + optional protocol fee + optional change)
+    let outputCount = 2;
+    if (protocolFeeAmount > 0) outputCount++;
+    if (includeChange) outputCount++;
+    
+    // Estimate transaction size
     const estimatedSize = 10 + inputs.length * 148 + outputCount * 34 + 20;
     const estimatedFee = estimatedSize * feeRate;
 
     const dustThreshold = 546;
-    const totalRequired = desiredEscrowAmount + desiredTimelockAmount + estimatedFee;
+    const totalRequired = desiredEscrowAmount + desiredTimelockAmount + protocolFeeAmount + estimatedFee;
     const changeAmount = totalInputValue - totalRequired;
 
     let feasible = true;
@@ -579,6 +633,11 @@ export class DawnStakingManager extends BTCLockerCore {
     if (desiredTimelockAmount < dustThreshold) {
       feasible = false;
       recommendation += `Timelock amount ${desiredTimelockAmount} below dust threshold ${dustThreshold}. `;
+    }
+
+    if (protocolFeeAmount > 0 && protocolFeeAmount < dustThreshold) {
+      feasible = false;
+      recommendation += `Protocol fee amount ${protocolFeeAmount} below dust threshold ${dustThreshold}. `;
     }
 
     // Check if sufficient funds
@@ -627,7 +686,18 @@ export class DawnStakingManager extends BTCLockerCore {
       timelockRedeemScript,
       destination,
       feeAmount = 2000,
+      feeAddress,
+      protocolFeeAmount,
     } = params;
+
+    // Validate fee parameters
+    if (feeAddress && !protocolFeeAmount) {
+      throw new Error("protocolFeeAmount is required when feeAddress is provided");
+    }
+
+    if (protocolFeeAmount && !feeAddress) {
+      throw new Error("feeAddress is required when protocolFeeAmount is provided");
+    }
 
     // Validate that we have at least one input
     if (escrowInputs.length === 0 && timelockInputs.length === 0) {
@@ -638,10 +708,15 @@ export class DawnStakingManager extends BTCLockerCore {
     const escrowValue = escrowInputs.reduce((sum, input) => sum + input.value, 0);
     const timelockValue = timelockInputs.reduce((sum, input) => sum + input.value, 0);
     const totalInputValue = escrowValue + timelockValue;
-    const outputValue = totalInputValue - feeAmount;
+    const totalFees = feeAmount + (protocolFeeAmount || 0);
+    const destinationValue = totalInputValue - totalFees;
 
-    if (outputValue <= 546) { // Dust threshold
-      throw new Error("Output amount would be below dust threshold after fees");
+    if (destinationValue <= 546) { // Dust threshold
+      throw new Error("Destination output amount would be below dust threshold after fees");
+    }
+
+    if (protocolFeeAmount && protocolFeeAmount < 546) {
+      throw new Error(`Protocol fee amount ${protocolFeeAmount} is below dust threshold 546`);
     }
 
     const psbt = new bitcoin.Psbt({ network: this.network });
@@ -794,18 +869,23 @@ export class DawnStakingManager extends BTCLockerCore {
       psbt.addInput(inputData);
     }
 
-    // Add single output to destination
+    // Add destination output
     psbt.addOutput({
       address: destination,
-      value: BigInt(outputValue),
+      value: BigInt(destinationValue),
     });
+
+    // Add protocol fee output if specified
+    if (feeAddress && protocolFeeAmount && protocolFeeAmount >= 546) {
+      psbt.addOutput({
+        address: feeAddress,
+        value: BigInt(protocolFeeAmount),
+      });
+    }
 
     // Return unsigned PSBT
     return psbt.toBase64();
   }
-
-
-
 }
 
 export default DawnStakingManager;

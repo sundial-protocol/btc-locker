@@ -96,6 +96,8 @@ export function setupTransactionCommands(program) {
     .option("--timelock-amount <satoshis>", "Amount to send to timelock (satoshis)")
     .option("-c, --change-address <address>", "Change address (optional)")
     .option("--fee-rate <rate>", "Fee rate in sat/byte", "10")
+    .option("--fee-address <address>", "Protocol fee address (optional)")
+    .option("--protocol-fee-amount <satoshis>", "Protocol fee amount in satoshis (required if fee-address is provided)")
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
@@ -115,6 +117,8 @@ export function setupTransactionCommands(program) {
     .option("-k, --private-key <key>", "Private key for both scripts (hex)")
     .option("-d, --destination <address>", "Destination address for withdrawal (calculated from private key if not provided)")
     .option("--fee <satoshis>", "Fee in satoshis", "2000")
+    .option("--fee-address <address>", "Protocol fee address (optional)")
+    .option("--protocol-fee-amount <satoshis>", "Protocol fee amount in satoshis (required if fee-address is provided)")
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
@@ -372,12 +376,19 @@ async function handleLockCommand(cmdOptions, parentOptions) {
 
 async function handleDistributeCommand(cmdOptions, parentOptions) {
     const locker = await initLocker(parentOptions);
-    const api = new BitcoinAPI(parentOptions.network);
+    
+    // Convert 'mainnet' to 'bitcoin' for consistency
+    const networkName = parentOptions.network === "mainnet" ? "bitcoin" : parentOptions.network;
+    const networkType = NETWORKS[networkName];
+    
+    if (!networkType) {
+      throw new Error(`Unsupported network: ${parentOptions.network}`);
+    }
+    
+    const api = new BitcoinAPI(networkType);
 
     // Get network for validation
-    const network = parentOptions.network === "mainnet" 
-      ? bitcoin.networks.bitcoin 
-      : bitcoin.networks.testnet;
+    const network = networkType.info;
 
     let fromPrivateKey = cmdOptions.fromKey;
     let toAddress = cmdOptions.to;
@@ -620,12 +631,19 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
 
 async function handleSpendCommand(cmdOptions, parentOptions) {
   const locker = await initLocker(parentOptions);
-  const api = new BitcoinAPI(parentOptions.network);
+  
+  // Convert 'mainnet' to 'bitcoin' for consistency
+  const networkName = parentOptions.network === "mainnet" ? "bitcoin" : parentOptions.network;
+  const networkType = NETWORKS[networkName];
+  
+  if (!networkType) {
+    throw new Error(`Unsupported network: ${parentOptions.network}`);
+  }
+  
+  const api = new BitcoinAPI(networkType);
 
   // Get network for validation
-  const network = parentOptions.network === "mainnet" 
-    ? bitcoin.networks.bitcoin 
-    : bitcoin.networks.testnet;
+  const network = networkType.info;
 
   let scriptAddress = cmdOptions.address;
   let redeemScript = cmdOptions.script;
@@ -853,12 +871,19 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
 
 async function handleDawnStakeCommand(cmdOptions, parentOptions) {
   const locker = await initLocker(parentOptions);
-  const api = new BitcoinAPI(parentOptions.network);
+  
+  // Convert 'mainnet' to 'bitcoin' for consistency
+  const networkName = parentOptions.network === "mainnet" ? "bitcoin" : parentOptions.network;
+  const networkType = NETWORKS[networkName];
+  
+  if (!networkType) {
+    throw new Error(`Unsupported network: ${parentOptions.network}`);
+  }
+  
+  const api = new BitcoinAPI(networkType);
   
   // Get network for validation
-  const network = parentOptions.network === "mainnet" 
-    ? bitcoin.networks.bitcoin 
-    : bitcoin.networks.testnet;
+  const network = networkType.info;
 
   let fromPrivateKey = cmdOptions.fromKey;
   let escrowAddress = cmdOptions.escrowAddress;
@@ -867,6 +892,19 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
   let timelockAmount = cmdOptions.timelockAmount ? parseInt(cmdOptions.timelockAmount) : null;
   let changeAddress = cmdOptions.changeAddress;
   let feeRate = parseInt(cmdOptions.feeRate);
+  let feeAddress = cmdOptions.feeAddress;
+  let protocolFeeAmount = cmdOptions.protocolFeeAmount ? parseInt(cmdOptions.protocolFeeAmount) : null;
+
+  // Validate fee parameters
+  if (feeAddress && !protocolFeeAmount) {
+    console.error(chalk.red("Error: --protocol-fee-amount is required when --fee-address is provided"));
+    return;
+  }
+
+  if (protocolFeeAmount && !feeAddress) {
+    console.error(chalk.red("Error: --fee-address is required when --protocol-fee-amount is provided"));
+    return;
+  }
 
   try {
     // Interactive prompts if options not provided
@@ -924,6 +962,24 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
           validate: (input) =>
             !input || ScriptUtils.isValidAddress(input, network) || "Invalid address",
         },
+        {
+          type: "input",
+          name: "feeAddress",
+          message: "Enter protocol fee address (optional, press enter to skip):",
+          when: () => !feeAddress,
+          validate: (input) =>
+            !input || ScriptUtils.isValidAddress(input, network) || "Invalid address",
+        },
+        {
+          type: "input",
+          name: "protocolFeeAmount",
+          message: "Enter protocol fee amount in satoshis (required if fee address provided):",
+          when: (answers) => (answers.feeAddress || feeAddress) && !protocolFeeAmount,
+          validate: (input) => {
+            const amount = parseInt(input);
+            return (!isNaN(amount) && amount > 0) || "Amount must be a positive integer";
+          },
+        },
       ]);
 
       fromPrivateKey = fromPrivateKey || answers.fromPrivateKey;
@@ -932,6 +988,8 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
       timelockAddress = timelockAddress || answers.timelockAddress;
       timelockAmount = timelockAmount || parseInt(answers.timelockAmount);
       changeAddress = changeAddress || answers.changeAddress || undefined;
+      feeAddress = feeAddress || answers.feeAddress || undefined;
+      protocolFeeAmount = protocolFeeAmount || (answers.protocolFeeAmount ? parseInt(answers.protocolFeeAmount) : undefined);
     }
 
     // Generate key pair from private key
@@ -964,12 +1022,13 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
     const totalInputValue = txInputs.reduce((sum, input) => sum + input.value, 0);
 
     // Check if we have sufficient funds
-    const totalRequired = escrowAmount + timelockAmount;
-    const estimatedFee = (10 + txInputs.length * 148 + (changeAddress ? 3 : 2) * 34 + 20) * feeRate;
+    const totalRequired = escrowAmount + timelockAmount + (protocolFeeAmount || 0);
+    const outputCount = 2 + (protocolFeeAmount ? 1 : 0) + (changeAddress ? 1 : 0);
+    const estimatedFee = (10 + txInputs.length * 148 + outputCount * 34 + 20) * feeRate;
 
     if (totalInputValue < totalRequired + estimatedFee) {
       throw new Error(
-        `Insufficient funds. Have: ${totalInputValue} sats, Need: ${totalRequired + estimatedFee} sats (${totalRequired} + ${estimatedFee} fee)`
+        `Insufficient funds. Have: ${totalInputValue} sats, Need: ${totalRequired + estimatedFee} sats (${totalRequired} outputs + ${estimatedFee} network fee)`
       );
     }
 
@@ -981,7 +1040,8 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
       desiredEscrowAmount: escrowAmount,
       desiredTimelockAmount: timelockAmount,
       includeChange: !!changeAddress,
-      feeRate
+      feeRate,
+      protocolFeeAmount: protocolFeeAmount || 0
     });
 
     if (!calculation.feasible) {
@@ -1003,7 +1063,9 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
       timelockAddress,
       timelockAmount,
       changeAddress: changeAddress && calculation.changeAmount >= 546 ? changeAddress : undefined,
-      feeRate
+      feeRate,
+      feeAddress,
+      protocolFeeAmount
     });
 
     // Sign the transaction
@@ -1070,6 +1132,10 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
       console.log(chalk.green(`  → Escrow: ${TransactionUtils.satoshisToBTC(stakingTx.outputs.escrowAmount)} BTC to ${escrowAddress}`));
       console.log(chalk.green(`  → Timelock: ${TransactionUtils.satoshisToBTC(stakingTx.outputs.timelockAmount)} BTC to ${timelockAddress}`));
       
+      if (protocolFeeAmount && feeAddress) {
+        console.log(chalk.green(`  → Protocol Fee: ${TransactionUtils.satoshisToBTC(protocolFeeAmount)} BTC to ${feeAddress}`));
+      }
+      
       if (stakingTx.outputs.changeAmount > 0) {
         console.log(chalk.green(`  → Change: ${TransactionUtils.satoshisToBTC(stakingTx.outputs.changeAmount)} BTC to ${changeAddress}`));
       }
@@ -1111,12 +1177,19 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
 
 async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
   const locker = await initLocker(parentOptions);
-  const api = new BitcoinAPI(parentOptions.network);
+  
+  // Convert 'mainnet' to 'bitcoin' for consistency
+  const networkName = parentOptions.network === "mainnet" ? "bitcoin" : parentOptions.network;
+  const networkType = NETWORKS[networkName];
+  
+  if (!networkType) {
+    throw new Error(`Unsupported network: ${parentOptions.network}`);
+  }
+  
+  const api = new BitcoinAPI(networkType);
   
   // Get network for validation
-  const network = parentOptions.network === "mainnet" 
-    ? bitcoin.networks.bitcoin 
-    : bitcoin.networks.testnet;
+  const network = networkType.info;
 
   let escrowAddress = cmdOptions.escrowAddress;
   let escrowScript = cmdOptions.escrowScript;
@@ -1125,6 +1198,19 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
   let privateKey = cmdOptions.privateKey;
   let destination = cmdOptions.destination;
   let feeAmount = parseInt(cmdOptions.fee);
+  let feeAddress = cmdOptions.feeAddress;
+  let protocolFeeAmount = cmdOptions.protocolFeeAmount ? parseInt(cmdOptions.protocolFeeAmount) : null;
+
+  // Validate fee parameters
+  if (feeAddress && !protocolFeeAmount) {
+    console.error(chalk.red("Error: --protocol-fee-amount is required when --fee-address is provided"));
+    return;
+  }
+
+  if (protocolFeeAmount && !feeAddress) {
+    console.error(chalk.red("Error: --fee-address is required when --protocol-fee-amount is provided"));
+    return;
+  }
 
   try {
     // Interactive prompts if options not provided
@@ -1176,6 +1262,24 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
           validate: (input) =>
             !input || ScriptUtils.isValidAddress(input, network) || "Invalid address",
         },
+        {
+          type: "input",
+          name: "feeAddress",
+          message: "Enter protocol fee address (optional, press enter to skip):",
+          when: () => !feeAddress,
+          validate: (input) =>
+            !input || ScriptUtils.isValidAddress(input, network) || "Invalid address",
+        },
+        {
+          type: "input",
+          name: "protocolFeeAmount",
+          message: "Enter protocol fee amount in satoshis (required if fee address provided):",
+          when: (answers) => (answers.feeAddress || feeAddress) && !protocolFeeAmount,
+          validate: (input) => {
+            const amount = parseInt(input);
+            return (!isNaN(amount) && amount > 0) || "Amount must be a positive integer";
+          },
+        },
       ]);
 
       escrowAddress = escrowAddress || answers.escrowAddress;
@@ -1184,6 +1288,8 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
       timelockScript = timelockScript || answers.timelockScript;
       privateKey = privateKey || answers.privateKey;
       destination = destination || answers.destination;
+      feeAddress = feeAddress || answers.feeAddress || undefined;
+      protocolFeeAmount = protocolFeeAmount || (answers.protocolFeeAmount ? parseInt(answers.protocolFeeAmount) : undefined);
     }
 
     // Calculate destination address from private key if not provided
@@ -1213,10 +1319,11 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
     const escrowValue = confirmedEscrowUtxos.reduce((sum, utxo) => sum + utxo.value, 0);
     const timelockValue = confirmedTimelockUtxos.reduce((sum, utxo) => sum + utxo.value, 0);
     const totalInputValue = escrowValue + timelockValue;
-    const outputValue = totalInputValue - feeAmount;
+    const totalFees = feeAmount + (protocolFeeAmount || 0);
+    const destinationValue = totalInputValue - totalFees;
 
-    if (outputValue <= 546) { // Dust threshold
-      console.log(chalk.red("Output amount would be below dust threshold after fees"));
+    if (destinationValue <= 546) { // Dust threshold
+      console.log(chalk.red("Destination output amount would be below dust threshold after fees"));
       return;
     }
 
@@ -1224,8 +1331,11 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
     console.log(chalk.gray(`  Escrow balance: ${escrowValue} sats (${TransactionUtils.satoshisToBTC(escrowValue)} BTC)`));
     console.log(chalk.gray(`  Timelock balance: ${timelockValue} sats (${TransactionUtils.satoshisToBTC(timelockValue)} BTC)`));
     console.log(chalk.gray(`  Total input: ${totalInputValue} sats (${TransactionUtils.satoshisToBTC(totalInputValue)} BTC)`));
-    console.log(chalk.gray(`  Fee: ${feeAmount} sats`));
-    console.log(chalk.gray(`  Output: ${outputValue} sats (${TransactionUtils.satoshisToBTC(outputValue)} BTC)`));
+    console.log(chalk.gray(`  Network fee: ${feeAmount} sats`));
+    if (protocolFeeAmount && feeAddress) {
+      console.log(chalk.gray(`  Protocol fee: ${protocolFeeAmount} sats to ${feeAddress}`));
+    }
+    console.log(chalk.gray(`  Destination output: ${destinationValue} sats (${TransactionUtils.satoshisToBTC(destinationValue)} BTC)`));
 
     // Prepare inputs for the dawn withdrawal method
     const dawnEscrowInputs = confirmedEscrowUtxos.length > 0 ? confirmedEscrowUtxos.map(utxo => ({
@@ -1245,9 +1355,13 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
     // Create unsigned dawn withdrawal transaction
     const unsignedPsbt = await locker.createDawnWithdrawalTransaction({
       escrowInputs: dawnEscrowInputs,
+      escrowRedeemScript: escrowScript,
       timelockInputs: dawnTimelockInputs,
+      timelockRedeemScript: timelockScript,
       destination: destination,
       feeAmount: feeAmount,
+      feeAddress,
+      protocolFeeAmount,
       api: api, // Pass API instance for transaction fetching
     });
 
@@ -1269,9 +1383,10 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
         timelockValue,
         totalValue: totalInputValue
       },
-      output: {
+      outputs: {
         destination: destination,
-        value: outputValue
+        destinationValue: destinationValue,
+        protocolFeeAmount: protocolFeeAmount || undefined
       }
     };
 
@@ -1302,11 +1417,19 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
         },
       },
       output: {
-        destination: withdrawalResult.output.destination,
-        value: withdrawalResult.output.value,
-        value_btc: TransactionUtils.satoshisToBTC(withdrawalResult.output.value),
+        destination: withdrawalResult.outputs.destination,
+        value: withdrawalResult.outputs.destinationValue,
+        value_btc: TransactionUtils.satoshisToBTC(withdrawalResult.outputs.destinationValue),
       },
     };
+
+    if (protocolFeeAmount && feeAddress) {
+      result.protocol_fee = {
+        address: feeAddress,
+        amount: protocolFeeAmount,
+        amount_btc: TransactionUtils.satoshisToBTC(protocolFeeAmount),
+      };
+    }
 
     displayResult(result, parentOptions, "Dawn Withdrawal Transaction Created");
 
@@ -1370,10 +1493,15 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
     dryRun,
   } = cmdOptions;
 
-  const api = new BitcoinAPI(
-    parentOptions.network || "testnet",
-    parentOptions.verbose
-  );
+  // Convert 'mainnet' to 'bitcoin' for consistency
+  const networkName = parentOptions.network === "mainnet" ? "bitcoin" : parentOptions.network;
+  const networkType = NETWORKS[networkName];
+  
+  if (!networkType) {
+    throw new Error(`Unsupported network: ${parentOptions.network}`);
+  }
+  
+  const api = new BitcoinAPI(networkType);
   const locker = await initLocker(parentOptions);
 
   try {
