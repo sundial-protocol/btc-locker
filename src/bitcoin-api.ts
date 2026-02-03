@@ -154,15 +154,15 @@ export default class BitcoinAPI {
         let body = "";
         res.on("data", (chunk) => (body += chunk));
         res.on("end", () => {
-          try {
-            const result = body ? JSON.parse(body) : {};
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              const result = body ? JSON.parse(body) : {};
               resolve(result);
-            } else {
-              reject(new Error(`API Error ${res.statusCode}: ${body}`));
+            } catch (error) {
+              reject(new Error(`Parse Error: ${(error as Error).message}`));
             }
-          } catch (error) {
-            reject(new Error(`Parse Error: ${(error as Error).message}`));
+          } else {
+            reject(new Error(`API Error ${res.statusCode}: ${body}`));
           }
         });
       });
