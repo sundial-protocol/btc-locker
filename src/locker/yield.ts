@@ -123,7 +123,7 @@ export class YieldDistributor extends BTCLockerCore {
     } else {
       // Fetch UTXOs from address
       const apiUtxos = await api!.getAddressUtxos(sourceAddress!);
-      inputs = apiUtxos.map((apiUtxo: ApiUTXO) => apiUtxo.utxo);
+      inputs = apiUtxos.filter(utxo => utxo.status.confirmed);
       
       if (inputs.length === 0) {
         throw new Error(`No confirmed UTXOs available at address ${sourceAddress}`);

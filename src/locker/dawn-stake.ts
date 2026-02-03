@@ -344,7 +344,7 @@ export class DawnStakingManager extends BTCLockerCore {
     } else {
       // Fetch UTXOs from address and auto-select
       const apiUtxos = await this.api.getAddressUtxos(sourceAddress);
-      const availableInputs = apiUtxos.map((apiUtxo: ApiUTXO) => apiUtxo.utxo);
+      const availableInputs = apiUtxos.filter(utxo => utxo.status.confirmed);
       
       if (availableInputs.length === 0) {
         throw new Error(`No confirmed UTXOs available at address ${sourceAddress}`);
@@ -576,7 +576,7 @@ export class DawnStakingManager extends BTCLockerCore {
     } else {
       // Fetch UTXOs from address
       const apiUtxos = await this.api.getAddressUtxos(sourceAddress);
-      const availableInputs = apiUtxos.map((apiUtxo: ApiUTXO) => apiUtxo.utxo);
+      const availableInputs = apiUtxos.filter(utxo => utxo.status.confirmed);
       
       if (availableInputs.length === 0) {
         throw new Error(`No confirmed UTXOs available at address ${sourceAddress}`);
@@ -729,7 +729,7 @@ export class DawnStakingManager extends BTCLockerCore {
       try {
         const apiUtxos = await this.api.getAddressUtxos(escrowAddress);
         const confirmedUtxos = apiUtxos.filter((apiUtxo: ApiUTXO) => apiUtxo.status?.confirmed);
-        escrowInputs = confirmedUtxos.map((apiUtxo: ApiUTXO) => apiUtxo.utxo || apiUtxo);
+        escrowInputs = confirmedUtxos;
       } catch (error) {
         throw new Error(`Failed to fetch escrow UTXOs from ${escrowAddress}: ${(error as Error).message}`);
       }
@@ -739,7 +739,7 @@ export class DawnStakingManager extends BTCLockerCore {
       try {
         const apiUtxos = await this.api.getAddressUtxos(timelockAddress);
         const confirmedUtxos = apiUtxos.filter((apiUtxo: ApiUTXO) => apiUtxo.status?.confirmed);
-        timelockInputs = confirmedUtxos.map((apiUtxo: ApiUTXO) => apiUtxo.utxo || apiUtxo);
+        timelockInputs = confirmedUtxos;
       } catch (error) {
         throw new Error(`Failed to fetch timelock UTXOs from ${timelockAddress}: ${(error as Error).message}`);
       }

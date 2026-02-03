@@ -14,8 +14,7 @@ import type { NetworkType } from "./utils/network";
  * @description UTXO from Bitcoin API with confirmation status
  * @extends UTXO
  */
-export interface ApiUTXO {
-  utxo: UTXO;
+export interface ApiUTXO extends UTXO {
   status: {
     confirmed: boolean;
     block_height?: number;
@@ -222,7 +221,19 @@ export default class BitcoinAPI {
         this.apiProvider === "mempool" ||
         this.apiProvider === "blockstream"
       ) {
-        return await this.makeRequest(`/address/${address}/utxo`);
+        const rawUtxos = await this.makeRequest(`/address/${address}/utxo`);
+        
+        // Return flat UTXO structure with status attached
+        return rawUtxos.map((rawUtxo: any) => ({
+          txid: rawUtxo.txid,
+          vout: rawUtxo.vout,
+          value: rawUtxo.value,
+          status: rawUtxo.status || {
+            confirmed: rawUtxo.status?.confirmed || false,
+            block_height: rawUtxo.status?.block_height,
+            block_hash: rawUtxo.status?.block_hash
+          }
+        }));
       } else if (this.apiProvider === "blockcypher") {
         const result = await this.makeRequest(
           `/addrs/${address}?unspentOnly=true&includeScript=true`
@@ -242,7 +253,20 @@ export default class BitcoinAPI {
       }
       throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(`Failed to get UTXOs: ${(error as Error).message}`);
+      const errorMsg = (error as Error).message;
+      
+      // If using mempool and network error occurs, try blockstream as fallback
+      if (this.apiProvider === "mempool" && (errorMsg.includes("invalid network") || errorMsg.includes("API Error 400"))) {
+        console.warn(`Mempool API failed for ${address}, trying Blockstream as fallback...`);
+        try {
+          const fallbackApi = new BitcoinAPI(this.network, "blockstream");
+          return await fallbackApi.getAddressUtxos(address);
+        } catch (fallbackError) {
+          throw new Error(`Failed to get UTXOs (tried multiple APIs): ${errorMsg}; Fallback: ${(fallbackError as Error).message}`);
+        }
+      }
+      
+      throw new Error(`Failed to get UTXOs: ${errorMsg}`);
     }
   }
 
