@@ -84,17 +84,25 @@ export default class ScriptUtils {
    */
   static createScriptAddress(redeemScript: Buffer, network: bitcoin.Network): string {
     try {
-      const scriptHash = bitcoin.crypto.hash160(redeemScript);
-      const address = bitcoin.payments.p2sh({
-        hash: scriptHash,
-        network: network,
-      }).address;
-
-      if (!address) {
-        throw new Error("Failed to generate address from script");
+      if (!redeemScript || redeemScript.length === 0) {
+        throw new Error("Invalid redeem script: empty or undefined");
+      }
+      
+      if (!network) {
+        throw new Error("Invalid network: network parameter is undefined");
       }
 
-      return address;
+      const scriptHash = bitcoin.crypto.hash160(redeemScript);
+      const payment = bitcoin.payments.p2sh({
+        hash: scriptHash,
+        network: network,
+      });
+
+      if (!payment || !payment.address) {
+        throw new Error("Failed to generate address from script - payment object or address is undefined");
+      }
+
+      return payment.address;
     } catch (error) {
       throw new Error(`Failed to create script address: ${(error as Error).message}`);
     }
