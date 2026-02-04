@@ -5,8 +5,6 @@
 import { BTCLockerCore } from "./core";
 import { KeyPairGenerator } from "./keypair";
 import { TimelockManager } from "./timelock";
-import { MultisigTimelockManager } from "./multisig";
-import { HodlScriptCreator } from "./hodl";
 import { TransactionManager } from "./transactions";
 import { YieldDistributor } from "./yield";
 import { EscrowManager } from "./escrow";
@@ -51,8 +49,6 @@ import {
 export class BTCLocker extends BTCLockerCore {
   public readonly keyPairGenerator: KeyPairGenerator;
   public readonly timelockCreator: TimelockManager;
-  public readonly multisigCreator: MultisigTimelockManager;
-  public readonly hodlCreator: HodlScriptCreator;
   public readonly transactionManager: TransactionManager;
   public readonly yieldDistributor: YieldDistributor;
   public readonly escrowManager: EscrowManager;
@@ -68,8 +64,6 @@ export class BTCLocker extends BTCLockerCore {
     // Initialize component instances with the converted network object from parent
     this.keyPairGenerator = new KeyPairGenerator(network);
     this.timelockCreator = new TimelockManager(network);
-    this.multisigCreator = new MultisigTimelockManager(network);
-    this.hodlCreator = new HodlScriptCreator(network);
     this.transactionManager = new TransactionManager(network);
     this.yieldDistributor = new YieldDistributor(network);
     this.escrowManager = new EscrowManager(network);
@@ -91,8 +85,6 @@ export class BTCLocker extends BTCLockerCore {
     await Promise.all([
       this.keyPairGenerator.init(),
       this.timelockCreator.init(),
-      this.multisigCreator.init(),
-      this.hodlCreator.init(),
       this.transactionManager.init(),
       this.yieldDistributor.init(),
       this.escrowManager.init(),
@@ -163,64 +155,6 @@ export class BTCLocker extends BTCLockerCore {
     return this.timelockCreator.createRelativeTimelockScript(
       sequence,
       publicKey
-    );
-  }
-
-  /**
-   * Create a multisig timelock script
-   * @async
-   * @param {number} locktime - Unix timestamp or block height for timelock
-   * @param {number} m - Required number of signatures (M-of-N multisig)
-   * @param {Array<Buffer|string>} publicKeys - Array of public keys (buffers or hex strings)
-   * @returns {Promise<ScriptInfo>} Script details object
-   * @throws {Error} If parameters are invalid or insufficient public keys provided
-   * @example
-   * const locker = new BTCLocker();
-   * const script = await locker.createMultisigTimelockScript(
-   *   1640995200, // locktime
-   *   2,           // require 2 signatures
-   *   [pubKey1, pubKey2, pubKey3] // 3 total keys
-   * );
-   * console.log(script.address);
-   */
-  async createMultisigTimelockScript(
-    locktime: number, 
-    m: number, 
-    publicKeys: Array<Buffer | string>
-  ): Promise<ScriptInfo> {
-    return this.multisigCreator.createMultisigTimelockScript(
-      locktime,
-      m,
-      publicKeys
-    );
-  }
-
-  /**
-   * Create a HODL script with emergency escape mechanism
-   * @async
-   * @param {number} locktime - Unix timestamp or block height for the HODL period
-   * @param {Buffer|string} ownerPubKey - Owner's public key (normal spending after locktime)
-   * @param {Buffer|string} penaltyPubKey - Emergency escape public key (immediate spending)
-   * @returns {Promise<ScriptInfo>} Script details object
-   * @throws {Error} If parameters are invalid
-   * @example
-   * const locker = new BTCLocker();
-   * const script = await locker.createHodlScript(
-   *   1640995200,    // locktime
-   *   ownerPubKey,   // normal spending key
-   *   escapePubKey   // emergency escape key
-   * );
-   * console.log(script.address);
-   */
-  async createHodlScript(
-    locktime: number, 
-    ownerPubKey: Buffer | string, 
-    penaltyPubKey: Buffer | string
-  ): Promise<ScriptInfo> {
-    return this.hodlCreator.createHodlScript(
-      locktime,
-      ownerPubKey,
-      penaltyPubKey
     );
   }
 
@@ -476,8 +410,6 @@ export class BTCLocker extends BTCLockerCore {
 export { BTCLockerCore } from "./core";
 export { KeyPairGenerator } from "./keypair";
 export { TimelockManager } from "./timelock";
-export { MultisigTimelockManager } from "./multisig";
-export { HodlScriptCreator } from "./hodl";
 export { TransactionManager } from "./transactions";
 export { YieldDistributor } from "./yield";
 export { EscrowManager } from "./escrow";

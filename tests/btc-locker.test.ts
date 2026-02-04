@@ -11,7 +11,7 @@ describe("BTCLocker", () => {
   let locker: BTCLocker;
 
   beforeEach(async () => {
-    locker = new BTCLocker(bitcoin.networks.testnet);
+    locker = new BTCLocker("testnet");
     await locker.init();
   });
 
@@ -34,7 +34,7 @@ describe("BTCLocker", () => {
     });
 
     test("should accept network objects", async () => {
-      const networkLocker = new BTCLocker(bitcoin.networks.testnet);
+      const networkLocker = new BTCLocker('testnet');
       await networkLocker.init();
       expect(networkLocker.network).toBe(bitcoin.networks.testnet);
     });
@@ -127,51 +127,6 @@ describe("BTCLocker", () => {
       await expect(
         locker.createTimelockScript(locktime, "invalid_public_key")
       ).rejects.toThrow();
-    });
-  });
-
-  describe("Multisig Timelock Scripts", () => {
-    test("should create multisig timelock script", async () => {
-      const locktime = Math.floor(Date.now() / 1000) + 3600;
-      const keyPair1: KeyPair = await locker.generateKeyPair();
-      const keyPair2: KeyPair = await locker.generateKeyPair();
-      const keyPair3: KeyPair = await locker.generateKeyPair();
-
-      const scriptInfo: ScriptInfo = await locker.createMultisigTimelockScript(
-        locktime,
-        2,
-        [keyPair1.publicKey, keyPair2.publicKey, keyPair3.publicKey]
-      );
-
-      expect(scriptInfo).toHaveProperty("redeemScript");
-      expect(scriptInfo).toHaveProperty("scriptHash");
-      expect(scriptInfo).toHaveProperty("address");
-      expect(scriptInfo.locktime).toBe(locktime);
-      expect(scriptInfo.m).toBe(2);
-      expect(scriptInfo.publicKeys).toHaveLength(3);
-      expect(scriptInfo.type).toBe("multisig-timelock");
-    });
-  });
-
-  describe("HODL Scripts", () => {
-    test("should create HODL script", async () => {
-      const locktime = Math.floor(Date.now() / 1000) + 3600;
-      const ownerKeyPair: KeyPair = await locker.generateKeyPair();
-      const penaltyKeyPair: KeyPair = await locker.generateKeyPair();
-
-      const scriptInfo: ScriptInfo = await locker.createHodlScript(
-        locktime,
-        ownerKeyPair.publicKey,
-        penaltyKeyPair.publicKey
-      );
-
-      expect(scriptInfo).toHaveProperty("redeemScript");
-      expect(scriptInfo).toHaveProperty("scriptHash");
-      expect(scriptInfo).toHaveProperty("address");
-      expect(scriptInfo.locktime).toBe(locktime);
-      expect(scriptInfo.ownerPubKey).toBe(ownerKeyPair.publicKey);
-      expect(scriptInfo.penaltyPubKey).toBe(penaltyKeyPair.publicKey);
-      expect(scriptInfo.type).toBe("hodl");
     });
   });
 

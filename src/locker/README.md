@@ -4,65 +4,55 @@
 
 ```
 src/locker/
-├── core.js           # Core initialization and shared utilities
-├── keypair.js        # Key pair generation functionality
-├── timelock.js       # Simple and relative timelock script creation
-├── multisig.js       # Multisig timelock script creation
-├── escrow.js         # Time-based escrow scripts (dual-party withdrawals)
-├── hodl.js           # HODL script with emergency escape
-├── transactions.js   # Transaction creation and spending
-├── yield.js          # Yield distribution functionality
-└── index.js          # Combined BTCLocker class and exports
+├── core.ts           # Core initialization and shared utilities
+├── keypair.ts        # Key pair generation functionality
+├── timelock.ts       # Simple and relative timelock script creation
+├── escrow.ts         # Time-based escrow scripts (dual-party withdrawals)
+├── dawn-stake.ts     # Dawn staking script functionality
+├── transactions.ts   # Transaction creation and spending
+├── yield.ts          # Yield distribution functionality
+└── index.ts          # Combined BTCLocker class and exports
 ```
 
 ## Components
 
-### 1. BTCLockerCore (`core.js`)
+### 1. BTCLockerCore (`core.ts`)
 
 - ECC library initialization
 - Base class with common functionality
 - Timelock validation utilities
 - Shared network configuration
 
-### 2. KeyPairGenerator (`keypair.js`)
+### 2. KeyPairGenerator (`keypair.ts`)
 
 - Generate new Bitcoin key pairs
 - Create key pairs from existing private keys
 - Address derivation
 
-### 3. TimelockScriptCreator (`timelock.js`)
+### 3. TimelockScriptCreator (`timelock.ts`)
 
 - Simple timelock scripts (absolute time)
 - Relative timelock scripts (CSV)
 - Input validation and script compilation
 
-### 4. MultisigTimelockCreator (`multisig.js`)
-
-- M-of-N multisig timelock scripts
-- Public key management
-- Multisig script compilation
-
-### 5. EscrowManager (`escrow.js`)
+### 4. EscrowManager (`escrow.ts`)
 
 - Time-based escrow scripts with dual-party access
 - Before-deadline withdrawals by first party
 - After-deadline withdrawals by second party
 - Conditional script execution
 
-### 6. HodlScriptCreator (`hodl.js`)
+### 5. DawnStakingManager (`dawn-stake.ts`)
+- Dawn staking script creation
+- Stake deposit and withdrawal handling
 
-- HODL scripts with emergency escape
-- Conditional script paths
-- Owner and penalty key management
-
-### 7. TransactionManager (`transactions.js`)
-
+### 6. TransactionManager (`transactions.ts`)
 - Spending transaction creation
 - Funding transaction creation
 - PSBT and raw transaction handling
 - Timelock expiry validation
 
-### 8. YieldDistributor (`yield.js`)
+### 7. YieldDistributor (`yield.ts`)
 
 - Yield distribution to timelock addresses
 - Change calculation and dust handling

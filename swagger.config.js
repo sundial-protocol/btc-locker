@@ -43,14 +43,6 @@ const options = {
         description: "Timelock script creation (absolute and relative)",
       },
       {
-        name: "Multisig",
-        description: "Multisig timelock script operations",
-      },
-      {
-        name: "HODL",
-        description: "HODL scripts with emergency escape mechanisms",
-      },
-      {
         name: "Transactions",
         description: "Transaction creation and spending operations",
       },
@@ -117,48 +109,6 @@ const options = {
               example: 1640995200,
             },
           },
-        },
-        MultisigTimelockScript: {
-          allOf: [
-            { $ref: "#/components/schemas/TimelockScript" },
-            {
-              type: "object",
-              properties: {
-                m: {
-                  type: "integer",
-                  description: "Required number of signatures",
-                  example: 2,
-                },
-                n: {
-                  type: "integer",
-                  description: "Total number of public keys",
-                  example: 3,
-                },
-              },
-            },
-          ],
-        },
-        HodlScript: {
-          allOf: [
-            { $ref: "#/components/schemas/TimelockScript" },
-            {
-              type: "object",
-              properties: {
-                ownerPubKey: {
-                  type: "string",
-                  description: "Owner public key in hex format",
-                  example:
-                    "03a40291efea7e0dcbacd37c192062d3cae101e9d21cd320c9e9f6ad6a7cac5a8c",
-                },
-                penaltyPubKey: {
-                  type: "string",
-                  description: "Emergency escape public key in hex format",
-                  example:
-                    "02f55e8f3bb415351e1d522cae820e9f9ca9a6a5a1ddda9bd44db6654cdc5e2eef",
-                },
-              },
-            },
-          ],
         },
         UTXO: {
           type: "object",

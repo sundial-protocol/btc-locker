@@ -13,8 +13,7 @@ This library has two main interfaces:
 
 - **Simple Timelock Scripts**: Lock funds until a specific date/time
 - **Relative Timelock Scripts**: Lock funds for a specific duration from transaction confirmation
-- **Multisig Timelock Scripts**: Require multiple signatures + timelock
-- **HODL Scripts**: Long-term locking with emergency escape mechanism
+- **Dawn Staking Scripts**: Lock and Unlock funds with Sundial Protocol's Dawn staking mechanism
 - **Browser & Node.js Compatible**: Works in both environments
 - **TypeScript Support**: Full type definitions included
 - **Comprehensive Examples**: Ready-to-use examples for all script types
@@ -58,26 +57,6 @@ const script = locker.createTimelockScript(locktime, keyPair.publicKey);
 
 console.log("Send Bitcoin to:", script.address);
 console.log("Funds locked until:", new Date(locktime * 1000));
-```
-
-### Multisig Timelock Example
-
-```javascript
-// Generate multiple key pairs
-const keyPair1 = locker.generateKeyPair();
-const keyPair2 = locker.generateKeyPair();
-const keyPair3 = locker.generateKeyPair();
-
-// Create 2-of-3 multisig timelock (lock for 1 month)
-const locktime = TimeUtils.addDuration(TimeUtils.DURATIONS.MONTH);
-const publicKeys = [keyPair1.publicKey, keyPair2.publicKey, keyPair3.publicKey];
-const multisigScript = locker.createMultisigTimelockScript(
-  locktime,
-  2,
-  publicKeys
-);
-
-console.log("2-of-3 Multisig address:", multisigScript.address);
 ```
 
 ## API Documentation

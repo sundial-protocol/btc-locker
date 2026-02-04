@@ -113,18 +113,6 @@ btc-locker timelock
 # Then enter: "1 week" when prompted
 ```
 
-### Multisig Timelock
-
-```bash
-btc-locker multisig --time 1765064511 --required 2 --pubkeys "key1,key2,key3"
-```
-
-### HODL Script
-
-```bash
-btc-locker hodl --time 1765064511 --owner 02eb121c... --emergency 03f9308a...
-```
-
 ## Utilities
 
 ```bash

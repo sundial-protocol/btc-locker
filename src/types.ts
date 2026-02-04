@@ -23,7 +23,7 @@ export interface KeyPair {
 /**
  * Bitcoin script information and metadata
  * @interface ScriptInfo
- * @description Contains comprehensive information about Bitcoin scripts including timelock, multisig, and escrow details
+ * @description Contains comprehensive information about Bitcoin scripts including timelock and escrow details
  */
 export interface ScriptInfo {
   /** Redeem script in hexadecimal format */
@@ -32,7 +32,7 @@ export interface ScriptInfo {
   scriptHash: string;
   /** Bitcoin address for the script */
   address: string;
-  /** Type of script (timelock, multisig, escrow, etc.) */
+  /** Type of script (timelock, escrow, etc.) */
   type: string;
   /** Optional locktime for timelock scripts */
   locktime?: number;
@@ -40,14 +40,8 @@ export interface ScriptInfo {
   sequence?: number;
   /** Single public key for basic scripts */
   publicKey?: string;
-  /** Array of public keys for multisig scripts */
-  publicKeys?: string[];
-  /** Number of required signatures for multisig (m-of-n) */
-  m?: number;
   /** Owner public key for ownership-based scripts */
   ownerPubKey?: string;
-  /** Penalty public key for penalty-based scripts */
-  penaltyPubKey?: string;
   /** Public key that can spend before locktime (escrow) */
   beforePublicKey?: string;
   /** Public key that can spend after locktime (escrow) */
@@ -79,11 +73,6 @@ export interface TransactionResult {
   size: number;
   /** Transaction fee in satoshis */
   fee: number;
-}
-
-export interface MultisigConfig {
-  m: number;
-  publicKeys: string[];
 }
 
 export interface TimelockConfig {

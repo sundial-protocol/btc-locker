@@ -63,14 +63,6 @@ The server provides a comprehensive REST API with the following endpoints:
 - `POST /api/timelock/create` - Create absolute timelock scripts
 - `POST /api/timelock/relative` - Create relative timelock scripts (CSV)
 
-#### Multisig Operations
-
-- `POST /api/multisig/create` - Create M-of-N multisig timelock scripts
-
-#### HODL Scripts
-
-- `POST /api/hodl/create` - Create HODL scripts with emergency escape
-
 #### Transaction Management
 
 - `POST /api/transactions/funding` - Create funding transactions

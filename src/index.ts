@@ -8,8 +8,6 @@ import BTCLocker, {
   BTCLockerCore,
   KeyPairGenerator,
   TimelockManager,
-  MultisigTimelockManager,
-  HodlScriptCreator,
   TransactionManager,
   YieldDistributor,
   DawnStakingManager,
@@ -36,7 +34,6 @@ export type {
   ScriptInfo,
   UTXO,
   TransactionResult,
-  MultisigConfig,
   TimelockConfig,
   EscrowConfig,
   DawnStakeConfig,
@@ -100,8 +97,6 @@ export type {
   BroadcastResult
 } from "./bitcoin-api";
 
-// Import NetworkType for use in function
-import type { NetworkType } from "./utils/network";
 import { NETWORKS } from "./utils/network";
 
 // Export the EscrowManager class
@@ -127,8 +122,6 @@ export {
   BTCLockerCore,
   KeyPairGenerator,
   TimelockManager,
-  MultisigTimelockManager,
-  HodlScriptCreator,
   TransactionManager,
   YieldDistributor,
   DawnStakingManager,
@@ -151,8 +144,6 @@ export default {
   BTCLockerCore,
   KeyPairGenerator,
   TimelockManager,
-  MultisigTimelockManager,
-  HodlScriptCreator,
   TransactionManager,
   YieldDistributor,
   DawnStakingManager,

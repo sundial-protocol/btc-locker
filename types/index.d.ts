@@ -46,16 +46,6 @@ export declare class BTCLocker {
     sequence: number,
     publicKey: string | Buffer
   ): ScriptInfo;
-  createMultisigTimelockScript(
-    locktime: number,
-    m: number,
-    publicKeys: (string | Buffer)[]
-  ): ScriptInfo;
-  createHodlScript(
-    locktime: number,
-    ownerPubKey: string | Buffer,
-    penaltyPubKey: string | Buffer
-  ): ScriptInfo;
   createSpendingTransaction(
     scriptInfo: ScriptInfo,
     utxos: UTXO[],

@@ -158,8 +158,6 @@ async function handleInteractiveCommand(cmdOptions, parentOptions) {
       choices: [
         { name: "Generate new key pair", value: "keygen" },
         { name: "Create timelock script", value: "scripts:timelock" },
-        { name: "Create multisig timelock script", value: "scripts:multisig" },
-        { name: "Create HODL script", value: "scripts:hodl" },
         { name: "Lock funds in timelock script", value: "lock" },
         { name: "Distribute yield to timelock script", value: "distribute" },
         { name: "Check timelock status", value: "check" },

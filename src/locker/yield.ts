@@ -6,7 +6,7 @@ import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core";
 import { FeeUtils } from "../utils";
 import type { UTXO } from "../types";
-import BitcoinAPI, { ApiUTXO } from "../bitcoin-api";
+import BitcoinAPI from "../bitcoin-api";
 
 /**
  * Yield input type
