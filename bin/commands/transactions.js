@@ -687,12 +687,6 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
           ScriptUtils.isValidAddress(input, network) || "Invalid address",
       },
       {
-        type: "confirm",
-        name: "needEmergencyKey",
-        message: "Is this a HODL script requiring emergency key?",
-        when: () => !emergencyKey,
-      },
-      {
         type: "input",
         name: "emergencyKey",
         message: "Enter emergency private key (hex):",
