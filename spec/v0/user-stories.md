@@ -72,10 +72,10 @@ flowchart LR
     O3 --> Result
     O4 --> Result
 
-    classDef actor fill:#3f35fe
+    classDef actor fill:#0c5f97
     classDef methodStep fill:#966D05
-    classDef result fill:#4caf50,color:#fff
-    classDef input fill:#f33c12,color:#fff
+    classDef result fill:#118a12
+    classDef input fill:#ac502a,color:#fff
     classDef method fill:#F6B020,color:#000
 
     class Wallet,Input,Backend actor
@@ -111,7 +111,37 @@ export interface EscrowSpendingParams {
 ```
 
 ```mermaid
+flowchart LR
+    Wallet(Provider Wallet) --> PKH[Provider Pubkey]
+    Input(Provider Input) --> User
 
+    PKH --> Backend(Backend Storage)
+    PKH --> MkTx{Create Escrow Spending Transaction}
+    User --> Backend
+
+    Backend --> RedeemScript[Escrow Redeem Script]
+    RedeemScript --> MkTx
+
+    MkTx --> Selection[Input Selection]
+    Selection --> Creation[Create Outputs]
+
+    Creation --> O1["Output 1: Withdrawal Output | Amount: Total amount from escrow minus fees"]
+    Creation --> O2["Output 2: Gas | Amount: gas fee provided to block producer"]
+
+    O1 --> Result[Result: Unsigned PSBT]
+    O2 --> Result
+
+    classDef actor fill:#0c5f97
+    classDef methodStep fill:#966D05
+    classDef result fill:#118a12
+    classDef input fill:#ac502a,color:#fff
+    classDef method fill:#F6B020,color:#000
+
+    class Wallet,Input,Backend actor
+    class Selection,Creation,O1,O2 methodStep
+    class Result result
+    class MkTx method
+    class PKH,User,RedeemScript input
 ```
 
 ## Yield Provider Distributes Rewards
