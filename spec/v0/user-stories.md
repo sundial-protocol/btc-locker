@@ -120,9 +120,12 @@ flowchart LR
     User --> Backend
 
     Backend --> RedeemScript[Escrow Redeem Script]
+    Backend -.-> EscrowAddress(Escrow Address)
     RedeemScript --> MkTx
 
     MkTx --> Selection[Input Selection]
+    MkTx -.-> EscrowAddress
+    EscrowAddress --> Selection
     Wallet --> Selection
     Selection --> Creation[Create Outputs]
 
@@ -142,7 +145,7 @@ flowchart LR
     class Selection,Creation,O1,O2 methodStep
     class Result result
     class MkTx method
-    class PKH,User,RedeemScript input
+    class PKH,User,RedeemScript,EscrowAddress input
 ```
 
 ## Yield Provider Distributes Rewards
@@ -176,7 +179,7 @@ flowchart LR
     Input(Provider Input) --> User
     Input --> Amount[Distribution Amount]
 
-    Amount --> MkTx{Create Yield Distribution Transaction}
+    Amount --> MkTx{distributeYield}
     User --> Backend(Backend Storage)
 
     Backend --> P2SH[Timelock P2SH Address]
@@ -239,5 +242,40 @@ export interface DawnWithdrawalParams {
 ```
 
 ```mermaid
+flowchart LR
+    Input(User Input) --> Provider[Selected Yield Provider]
+    Wallet(User Wallet) --> PKH[User Pubkey]
+
+
+    PKH --> Backend(Backend Storage)
+    Provider --> Backend
+
+    Backend --> RedeemScript[Escrow, Timelock Redeem Scripts]
+    Backend -.-> Addresses(Timelock, Escrow Addresses)
+    RedeemScript --> MkTx{createDawnWithdrawalTransaction}
+
+    MkTx --> Selection[Input Selection]
+    MkTx -.-> Addresses
+    Addresses --> Selection
+    Wallet --> Selection
+    Selection --> Creation[Create Outputs]
+
+    Creation --> O1["Output 1: Withdrawal Output | Amount: Total amount from escrow minus fees"]
+    Creation --> O2["Output 2: Gas | Amount: gas fee provided to block producer"]
+
+    O1 --> Result[Result: Unsigned PSBT]
+    O2 --> Result
+
+    classDef actor fill:#0c5f97
+    classDef methodStep fill:#966D05
+    classDef result fill:#118a12
+    classDef input fill:#ac502a,color:#fff
+    classDef method fill:#F6B020,color:#000
+
+    class Wallet,Input,Backend actor
+    class Selection,Creation,O1,O2 methodStep
+    class Result result
+    class MkTx method
+    class PKH,Provider,RedeemScript,Addresses input
 
 ```
