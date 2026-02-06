@@ -50,7 +50,7 @@ flowchart LR
     MkEscrow --> EscrowP2SH[Escrow P2SH Address]
     MkEscrow --> EscrowScript[Escrow Redeem Script]
 
-    TimelockP2SH --> Tx{Create Dawn Staking Transaction}
+    TimelockP2SH --> Tx{createDawnStakingTransaction}
     EscrowP2SH --> Tx
 
     TimelockScript -.-> Backend(Backend Storage)
@@ -79,10 +79,10 @@ flowchart LR
     classDef method fill:#F6B020,color:#000
 
     class Wallet,Input,Backend actor
-    class TimelockP2SH,EscrowP2SH,O1,O2,O3,O4,Selection,Evaluate,Creation methodStep
+    class O1,O2,O3,O4,Selection,Evaluate,Creation methodStep
     class EscrowScript,TimelockScript,Result result
     class MkTimelock,MkEscrow,Tx method
-    class UserPkh,Duration,YieldPartner input
+    class UserPkh,Duration,YieldPartner,TimelockP2SH,EscrowP2SH, input
 ```
 
 ## Yield Provider Withdraws Stake
@@ -112,17 +112,18 @@ export interface EscrowSpendingParams {
 
 ```mermaid
 flowchart LR
-    Wallet(Provider Wallet) --> PKH[Provider Pubkey]
     Input(Provider Input) --> User
+    Wallet(Provider Wallet) --> PKH[Provider Pubkey]
 
     PKH --> Backend(Backend Storage)
-    PKH --> MkTx{Create Escrow Spending Transaction}
+    PKH --> MkTx{createEscrowSpendingTransaction}
     User --> Backend
 
     Backend --> RedeemScript[Escrow Redeem Script]
     RedeemScript --> MkTx
 
     MkTx --> Selection[Input Selection]
+    Wallet --> Selection
     Selection --> Creation[Create Outputs]
 
     Creation --> O1["Output 1: Withdrawal Output | Amount: Total amount from escrow minus fees"]
@@ -170,7 +171,42 @@ export interface YieldDistributionParams {
 ```
 
 ```mermaid
+flowchart LR
+    Wallet(Provider Wallet)
+    Input(Provider Input) --> User
+    Input --> Amount[Distribution Amount]
 
+    Amount --> MkTx{Create Yield Distribution Transaction}
+    User --> Backend(Backend Storage)
+
+    Backend --> P2SH[Timelock P2SH Address]
+    P2SH --> MkTx
+
+    MkTx --> Selection[Input Selection]
+    Wallet --> Selection
+    Selection --> Creation[Create Outputs]
+
+    Creation --> O1["Output 1: Distribution Output | Amount: distributionAmount sats to timelock address"]
+    Creation --> O2["Output 2: Protocol Fee | Amount: fee sent to Sundial fee address (if applicable)"]
+    Creation --> O3["Output 3: Gas | Amount: gas fee provided to block producer"]
+    Creation --> O4["Output 4: Change Address | Amount: remaining sats minus fees"]
+
+    O1 --> Result[Result: Unsigned PSBT]
+    O2 --> Result
+    O3 --> Result
+    O4 --> Result
+
+    classDef actor fill:#0c5f97
+    classDef methodStep fill:#966D05
+    classDef result fill:#118a12
+    classDef input fill:#ac502a,color:#fff
+    classDef method fill:#F6B020,color:#000
+
+    class Wallet,Input,Backend actor
+    class Selection,Creation,O1,O2,O3,O4 methodStep
+    class Result result
+    class MkTx method
+    class Amount,User,P2SH input
 ```
 
 ## User Withdraws Stake and Rewards
