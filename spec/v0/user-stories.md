@@ -1,4 +1,5 @@
 # User Stories of Staking Flow
+
 The full v0 user stories for the staking flow. This is pre-server, so we assume discoverability and tracking via tx metadata (To be implemented)
 
 ## User Deposits Stake
@@ -6,6 +7,7 @@ The full v0 user stories for the staking flow. This is pre-server, so we assume 
 Uses DawnStakingManager's createDawnStakingTransaction to create a new staking transaction, which sends outputs to the Escrow and Timelock addresses.
 
 Parameters:
+
 ```ts
 export interface DawnStakingParams {
   /** Array of unspent transaction outputs to stake (optional - will auto-select from address if not provided) */
@@ -32,43 +34,59 @@ export interface DawnStakingParams {
 ```
 
 ```mermaid
-flowchart TD
-    A[User Wallet]
-    
-    A -->| Pubkey | E[Create Timelock Script]
-    E --> H[Timelock P2SH Address]
-    
-    A -->| Pubkey | I[Create Escrow Script with Deadline]
-    I --> L[Escrow P2SH Address]
-    
-    H --> M[Create Dawn Staking Transaction]
-    L --> M
-    
-    M --> N[Input Selection]
-    N --> O["User's UTXOs as Inputs"]
-    
-    O --> P[Create Outputs]
-    P --> Q["Output 1: Escrow Address | Amount: escrowAmount sats"]
-    P --> R["Output 2: Timelock Address | Amount: timelockAmount sats"]
-    P --> S["Output 3: Change Address | Amount: remaining sats minus fees"]
-    P --> T["Output 4: Protocol Fee | Amount: protocolFeeAmount sats | if specified"]
-    
-    Q --> U[Result: Unsigned PSBT]
-    R --> U
-    S --> U
-    T --> U
-    
-    U --> V[Transaction Summary]
-    V --> W["Escrow Script: User withdraws before deadline | Escrow Script: Yield Provider withdraws after deadline | Timelock Script: User withdraws after locktime | Funds distributed across two addresses"]
-    
-    style A fill:#e1f5fe
-    style H fill:#ffeb3b
-    style L fill:#ffeb3b
-    style U fill:#4caf50,color:#fff
-    style W fill:#e8f5e8
+flowchart LR
+    Wallet(User Wallet) --> UserPkh[User Pubkey]
+    Input(User Inputs) --> Duration[Staking Duration, Amounts]
+    Input --> YieldPartner[Selected Yield Partner]
+
+    UserPkh --> MkTimelock{Create Timelock Script}
+    Duration --> MkTimelock
+    Duration --> MkEscrow{Create Escrow Script}
+    YieldPartner --> MkEscrow
+    UserPkh --> MkEscrow
+
+    MkTimelock --> TimelockScript[Timelock Redeem Script]
+    MkTimelock --> TimelockP2SH[Timelock P2SH Address]
+    MkEscrow --> EscrowP2SH[Escrow P2SH Address]
+    MkEscrow --> EscrowScript[Escrow Redeem Script]
+
+    TimelockP2SH --> Tx{Create Dawn Staking Transaction}
+    EscrowP2SH --> Tx
+
+    TimelockScript -.-> Backend(Backend Storage)
+    EscrowScript -.-> Backend
+
+    Tx --> Selection[Input Selection]
+    Wallet --> Selection
+
+    Selection --> Evaluate["Evaluate Inputs and Calculate Amounts"]
+
+    Evaluate --> Creation[Create Outputs]
+    Creation --> O1["Output 1: Escrow Address | Amount: escrowAmount sats"]
+    Creation --> O2["Output 2: Timelock Address | Amount: timelockAmount sats"]
+    Creation --> O3["Output 3: Gas | Amount: gas fee provided to block producer"]
+    Creation --> O4["Output 4: Change Address | Amount: remaining sats minus fees"]
+
+    O1 --> Result[Result: Unsigned PSBT]
+    O2 --> Result
+    O3 --> Result
+    O4 --> Result
+
+    classDef actor fill:#3f35fe
+    classDef methodStep fill:#966D05
+    classDef result fill:#4caf50,color:#fff
+    classDef input fill:#f33c12,color:#fff
+    classDef method fill:#F6B020,color:#000
+
+    class Wallet,Input,Backend actor
+    class TimelockP2SH,EscrowP2SH,O1,O2,O3,O4,Selection,Evaluate,Creation methodStep
+    class EscrowScript,TimelockScript,Result result
+    class MkTimelock,MkEscrow,Tx method
+    class UserPkh,Duration,YieldPartner input
 ```
 
 ## Yield Provider Withdraws Stake
+
 Uses EscrowManager's createEscrowSpendingTransaction to create a transaction that spends from the escrow output
 
 ```ts
@@ -95,7 +113,6 @@ export interface EscrowSpendingParams {
 ```mermaid
 
 ```
-
 
 ## Yield Provider Distributes Rewards
 
