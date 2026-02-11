@@ -114,6 +114,10 @@ export function setupTransactionCommands(program) {
       "--protocol-fee-amount <satoshis>",
       "Protocol fee amount in satoshis (required if fee-address is provided)",
     )
+    .option(
+      "--metadata <string>",
+      "Optional metadata to include in transaction (max 80 bytes)",
+    )
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
@@ -897,6 +901,7 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
+  let metadata = cmdOptions.metadata;
 
   // Validate fee parameters
   if (feeAddress && !protocolFeeAmount) {
@@ -1004,6 +1009,20 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
             );
           },
         },
+        {
+          type: "input",
+          name: "metadata",
+          message:
+            "Enter optional metadata for transaction (max 80 bytes, press enter to skip):",
+          when: () => !metadata,
+          validate: (input) => {
+            if (!input) return true; // Optional field
+            return (
+              Buffer.byteLength(input, "utf8") <= 80 ||
+              "Metadata must be 80 bytes or less"
+            );
+          },
+        },
       ]);
 
       fromPrivateKey = fromPrivateKey || answers.fromPrivateKey;
@@ -1018,6 +1037,7 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
         (answers.protocolFeeAmount
           ? parseInt(answers.protocolFeeAmount)
           : undefined);
+      metadata = metadata || answers.metadata || undefined;
     }
 
     // Generate key pair from private key
@@ -1109,6 +1129,7 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
       feeRate,
       feeAddress,
       protocolFeeAmount,
+      metadata,
     });
 
     // Sign the transaction
@@ -1201,6 +1222,10 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
           `Total Fee: ${TransactionUtils.satoshisToBTC(stakingTx.fee)} BTC (${(stakingTx.fee / stakingTx.size).toFixed(2)} sat/byte)`,
         ),
       );
+
+      if (metadata) {
+        console.log(chalk.gray(`📝 Metadata: ${metadata}`));
+      }
     }
 
     if (!cmdOptions.dryRun) {
