@@ -30,8 +30,8 @@ export interface YieldDistributionParams {
   timelockAddress: string;
   /** Amount to distribute in satoshis */
   amount: number;
-  /** Optional memo for the distribution */
-  memo?: string;
+  /** Optional metadata for the distribution */
+  metadata?: string;
   /** Optional change address for remaining funds */
   changeAddress?: string;
   /** Optional fee rate in satoshis per byte */
@@ -54,8 +54,8 @@ export interface YieldDistributionResult {
   size: number;
   /** Transaction fee in satoshis */
   fee: number;
-  /** Memo associated with the yield distribution */
-  memo: string;
+  /** Metadata associated with the yield distribution */
+  metadata: string;
   /** Distribution details */
   distribution: {
     /** Amount distributed in satoshis */
@@ -96,37 +96,41 @@ export class YieldDistributor extends BTCLockerCore {
    *   inputs: [{ txid: '...', vout: 0, value: 50000 }],
    *   timelockAddress: '3...',
    *   amount: 45000,
-   *   memo: 'Quarterly yield distribution'
+   *   metadata: 'Quarterly yield distribution'
    * });
    */
   async distributeYield(params: YieldDistributionParams): Promise<string> {
     await this.ensureInitialized();
-    const { 
-      inputs: providedInputs, 
+    const {
+      inputs: providedInputs,
       sourceAddress,
       api,
-      timelockAddress, 
-      amount, 
-      memo 
+      timelockAddress,
+      amount,
+      metadata,
     } = params;
 
     // Validate that either inputs or sourceAddress+api are provided
     if (!providedInputs && (!sourceAddress || !api)) {
-      throw new Error("Either inputs or both sourceAddress and api must be provided");
+      throw new Error(
+        "Either inputs or both sourceAddress and api must be provided",
+      );
     }
 
     let inputs: YieldInput[];
-    
+
     if (providedInputs) {
       // Use provided inputs
       inputs = providedInputs;
     } else {
       // Fetch UTXOs from address
       const apiUtxos = await api!.getAddressUtxos(sourceAddress!);
-      inputs = apiUtxos.filter(utxo => utxo.status.confirmed);
-      
+      inputs = apiUtxos.filter((utxo) => utxo.status.confirmed);
+
       if (inputs.length === 0) {
-        throw new Error(`No confirmed UTXOs available at address ${sourceAddress}`);
+        throw new Error(
+          `No confirmed UTXOs available at address ${sourceAddress}`,
+        );
       }
     }
 
@@ -134,7 +138,11 @@ export class YieldDistributor extends BTCLockerCore {
 
     // Calculate total input value and change
     const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
-    const changeResult = FeeUtils.calculateChange(totalInputValue, amount, FeeUtils.DEFAULT_FEE);
+    const changeResult = FeeUtils.calculateChange(
+      totalInputValue,
+      amount,
+      FeeUtils.DEFAULT_FEE,
+    );
 
     // Add inputs (without signing information)
     for (const input of inputs) {
@@ -174,23 +182,23 @@ export class YieldDistributor extends BTCLockerCore {
    * Convenience method to sign and submit a yield distribution transaction
    * @async
    * @param signingParams - Yield distribution signing parameters
-   * @param memo - Optional memo for the distribution
+   * @param metadata - Optional metadata for the distribution
    * @param api - Optional Bitcoin API instance
    * @returns Transaction result with yield distribution metadata
    */
   async signAndSubmitYieldDistribution(
     signingParams: YieldDistributionSigningParams,
-    memo?: string,
-    api?: any
+    metadata?: string,
+    api?: any,
   ): Promise<YieldDistributionResult> {
     const signedTx = await this.signTransaction(
-      signingParams.unsignedTransaction, 
-      signingParams.privateKey
+      signingParams.unsignedTransaction,
+      signingParams.privateKey,
     );
-    
+
     const txid = await this.submitTransaction(signedTx, { api });
     const tx = bitcoin.Transaction.fromHex(signedTx);
-    
+
     // Build result with yield distribution metadata
     const outputs = tx.outs;
     const mainOutput = outputs[0];
@@ -202,7 +210,7 @@ export class YieldDistributor extends BTCLockerCore {
       txid: txid,
       size: tx.byteLength(),
       fee: 0, // TODO: Calculate actual fee if needed
-      memo: memo || "Yield distribution to timelock",
+      metadata: metadata || "Yield distribution to timelock",
       distribution: {
         amount: Number(mainOutput.value),
         destination: "unknown", // Would need to decode from script

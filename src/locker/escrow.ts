@@ -82,13 +82,26 @@ export class EscrowManager extends BTCLockerCore {
    * );
    * console.log(script.address);
    */
-  async createEscrowScript(deadline: number, beforePublicKey: Buffer | string, afterPublicKey: Buffer | string): Promise<ScriptInfo> {
+  async createEscrowScript(
+    deadline: number,
+    beforePublicKey: Buffer | string,
+    afterPublicKey: Buffer | string,
+  ): Promise<ScriptInfo> {
     await this.ensureInitialized();
 
     // Validate inputs using shared utilities
-    const deadlineNumber = ValidationUtils.validateLocktime(deadline, "deadline");
-    const beforePubKeyBuffer = KeyUtils.validateAndConvertPublicKey(beforePublicKey, "beforePublicKey");
-    const afterPubKeyBuffer = KeyUtils.validateAndConvertPublicKey(afterPublicKey, "afterPublicKey");
+    const deadlineNumber = ValidationUtils.validateLocktime(
+      deadline,
+      "deadline",
+    );
+    const beforePubKeyBuffer = KeyUtils.validateAndConvertPublicKey(
+      beforePublicKey,
+      "beforePublicKey",
+    );
+    const afterPubKeyBuffer = KeyUtils.validateAndConvertPublicKey(
+      afterPublicKey,
+      "afterPublicKey",
+    );
 
     // Ensure the public keys are different
     if (beforePubKeyBuffer.equals(afterPubKeyBuffer)) {
@@ -106,19 +119,24 @@ export class EscrowManager extends BTCLockerCore {
       // ENDIF
       const redeemScript = bitcoin.script.compile([
         bitcoin.opcodes.OP_IF,
-          bitcoin.script.number.encode(deadlineNumber),
-          bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
-          bitcoin.opcodes.OP_DROP,
-          afterPubKeyBuffer,
-          bitcoin.opcodes.OP_CHECKSIG,
+        bitcoin.script.number.encode(deadlineNumber),
+        bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
+        bitcoin.opcodes.OP_DROP,
+        afterPubKeyBuffer,
+        bitcoin.opcodes.OP_CHECKSIG,
         bitcoin.opcodes.OP_ELSE,
-          beforePubKeyBuffer,
-          bitcoin.opcodes.OP_CHECKSIG,
+        beforePubKeyBuffer,
+        bitcoin.opcodes.OP_CHECKSIG,
         bitcoin.opcodes.OP_ENDIF,
       ]);
 
-      const scriptHash = ScriptUtils.calculateScriptHash(Buffer.from(redeemScript));
-      const address = ScriptUtils.createScriptAddress(Buffer.from(redeemScript), this.network);
+      const scriptHash = ScriptUtils.calculateScriptHash(
+        Buffer.from(redeemScript),
+      );
+      const address = ScriptUtils.createScriptAddress(
+        Buffer.from(redeemScript),
+        this.network,
+      );
 
       return {
         redeemScript: Buffer.from(redeemScript).toString("hex"),
@@ -130,7 +148,9 @@ export class EscrowManager extends BTCLockerCore {
         afterPublicKey: afterPubKeyBuffer.toString("hex"),
       };
     } catch (error) {
-      throw new Error(`Failed to create escrow script: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to create escrow script: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -150,7 +170,7 @@ export class EscrowManager extends BTCLockerCore {
    *   outputAddress: "tb1qaddr...",
    *   spendAfterDeadline: false
    * });
-   * 
+   *
    * // Create unsigned transaction for spending after deadline
    * const unsignedTx = await escrow.createEscrowSpendingTransaction({
    *   scriptData,
@@ -162,9 +182,11 @@ export class EscrowManager extends BTCLockerCore {
    *   currentTime: Date.now()
    * });
    */
-  async createEscrowSpendingTransaction(params: EscrowSpendingParams): Promise<string> {
+  async createEscrowSpendingTransaction(
+    params: EscrowSpendingParams,
+  ): Promise<string> {
     await this.ensureInitialized();
-    const { 
+    const {
       scriptData,
       utxoTxId,
       utxoIndex,
@@ -172,7 +194,7 @@ export class EscrowManager extends BTCLockerCore {
       outputAddress,
       spendAfterDeadline,
       currentTime = Date.now(),
-      previousTransaction = null
+      previousTransaction = null,
     } = params;
 
     // Validate inputs
@@ -200,7 +222,7 @@ export class EscrowManager extends BTCLockerCore {
     const currentTimeSeconds = Math.floor(currentTime / 1000);
     if (spendAfterDeadline && currentTimeSeconds <= scriptData.locktime!) {
       throw new Error(
-        `Cannot spend after deadline yet. Current time: ${currentTimeSeconds}, Deadline: ${scriptData.locktime}`
+        `Cannot spend after deadline yet. Current time: ${currentTimeSeconds}, Deadline: ${scriptData.locktime}`,
       );
     }
 
@@ -216,25 +238,42 @@ export class EscrowManager extends BTCLockerCore {
       // Add input
       const sequence = spendAfterDeadline ? 0xfffffffe : 0xffffffff;
       const redeemScript = Buffer.from(scriptData.redeemScript, "hex");
-      
-      psbt.addInput({
+
+      // For P2SH scripts, we need to use nonWitnessUtxo instead of witnessUtxo
+      // Try to get the full previous transaction
+      let inputData: any = {
         hash: utxoTxId,
         index: utxoIndex,
         sequence: sequence,
-        witnessUtxo: {
-          script: bitcoin.payments.p2sh({
-            redeem: { output: redeemScript },
-            network: this.network,
-          }).output!,
-          value: BigInt(amount),
-        },
         redeemScript: redeemScript,
-      });
+      };
+
+      if (previousTransaction) {
+        // Use provided previous transaction
+        inputData.nonWitnessUtxo = previousTransaction;
+      } else {
+        try {
+          // Try to fetch the full previous transaction for nonWitnessUtxo
+          const txHex = await this.api.getTransaction(utxoTxId);
+          inputData.nonWitnessUtxo = Buffer.from(txHex, "hex");
+        } catch (error) {
+          // Fallback to witnessUtxo but with P2SH script
+          inputData.witnessUtxo = {
+            script: bitcoin.payments.p2sh({
+              redeem: { output: redeemScript },
+              network: this.network,
+            }).output!,
+            value: BigInt(amount),
+          };
+        }
+      }
+
+      psbt.addInput(inputData);
 
       // Add output (subtract a reasonable fee)
       const fee = 1000; // 1000 satoshis fee
       const outputAmount = amount - fee;
-      
+
       if (outputAmount <= 0) {
         throw new Error("Amount too small to cover fee");
       }
@@ -242,7 +281,9 @@ export class EscrowManager extends BTCLockerCore {
       // Get output script for the destination address
       let outputScript: Buffer;
       try {
-        outputScript = Buffer.from(bitcoin.address.toOutputScript(outputAddress, this.network));
+        outputScript = Buffer.from(
+          bitcoin.address.toOutputScript(outputAddress, this.network),
+        );
       } catch (error) {
         throw new Error(`Invalid output address: ${(error as Error).message}`);
       }
@@ -255,7 +296,9 @@ export class EscrowManager extends BTCLockerCore {
       // Return unsigned PSBT as base64
       return psbt.toBase64();
     } catch (error) {
-      throw new Error(`Failed to create spending transaction: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to create spending transaction: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -270,18 +313,19 @@ export class EscrowManager extends BTCLockerCore {
     signingParams: EscrowSpendingSigningParams,
     memo?: string,
   ): Promise<EscrowSpendingTransaction> {
-    const privateKeyString = typeof signingParams.privateKey === 'string' 
-      ? signingParams.privateKey 
-      : signingParams.privateKey.toString('hex');
-    
+    const privateKeyString =
+      typeof signingParams.privateKey === "string"
+        ? signingParams.privateKey
+        : signingParams.privateKey.toString("hex");
+
     const signedTx = await this.signTransaction(
-      signingParams.unsignedTransaction, 
+      signingParams.unsignedTransaction,
       privateKeyString,
-      { spendAfterDeadline: signingParams.spendAfterDeadline }
+      { spendAfterDeadline: signingParams.spendAfterDeadline },
     );
-    
+
     const txid = await this.submitTransaction(signedTx, { api: this.api });
-    
+
     return {
       txHex: signedTx,
       txId: txid,
