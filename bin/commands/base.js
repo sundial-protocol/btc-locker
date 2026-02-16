@@ -266,7 +266,7 @@ async function handleSignCommand(cmdOptions, parentOptions) {
           `⚠️  Note: Manual transaction signing is complex and requires UTXO data.`
         )
       );
-      console.log(chalk.blue(`Transaction hex: ${txHex}`));
+      console.log(chalk.blue(`Transaction hex: ${signedTx}`));
       console.log(chalk.blue(`Private key provided for input ${inputIndex}`));
     }
   } catch (error) {
