@@ -308,155 +308,6 @@ router.post(
   })
 );
 
-/**
- * @swagger
- * /api/multisig/create:
- *   post:
- *     summary: Create a multisig timelock script
- *     tags: [Multisig]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - locktime
- *               - m
- *               - publicKeys
- *             properties:
- *               locktime:
- *                 type: integer
- *                 description: Unix timestamp or block height
- *                 example: 1640995200
- *               m:
- *                 type: integer
- *                 description: Required number of signatures
- *                 example: 2
- *               publicKeys:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of public keys in hex format
- *                 example: ['03a40291efea7e0dcbacd37c192062d3cae101e9d21cd320c9e9f6ad6a7cac5a8c', '02f55e8f3bb415351e1d522cae820e9f9ca9a6a5a1ddda9bd44db6654cdc5e2eef']
- *               network:
- *                 type: string
- *                 enum: [mainnet, testnet]
- *                 default: testnet
- *     responses:
- *       200:
- *         description: Successfully created multisig timelock script
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/MultisigTimelockScript'
- */
-router.post(
-  "/multisig/create",
-  ensureBTCLockerReady,
-  asyncHandler(async (req, res) => {
-    const { locktime, m, publicKeys, network = "testnet" } = req.body;
-
-    if (!locktime || !m || !publicKeys || !Array.isArray(publicKeys)) {
-      return res
-        .status(400)
-        .json({ error: "Locktime, m, and publicKeys array are required" });
-    }
-
-    const bitcoin = require("bitcoinjs-lib");
-    const networkObj =
-      network === "mainnet"
-        ? bitcoin.networks.bitcoin
-        : bitcoin.networks.testnet;
-
-    const locker = new BTCLocker(networkObj);
-    await locker.init();
-
-    const script = await locker.createMultisigTimelockScript(
-      locktime,
-      m,
-      publicKeys
-    );
-    res.json(script);
-  })
-);
-
-/**
- * @swagger
- * /api/hodl/create:
- *   post:
- *     summary: Create a HODL script with emergency escape
- *     tags: [HODL]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - locktime
- *               - ownerPubKey
- *               - penaltyPubKey
- *             properties:
- *               locktime:
- *                 type: integer
- *                 description: Unix timestamp or block height
- *                 example: 1640995200
- *               ownerPubKey:
- *                 type: string
- *                 description: Owner's public key in hex format
- *                 example: 03a40291efea7e0dcbacd37c192062d3cae101e9d21cd320c9e9f6ad6a7cac5a8c
- *               penaltyPubKey:
- *                 type: string
- *                 description: Emergency escape public key in hex format
- *                 example: 02f55e8f3bb415351e1d522cae820e9f9ca9a6a5a1ddda9bd44db6654cdc5e2eef
- *               network:
- *                 type: string
- *                 enum: [mainnet, testnet]
- *                 default: testnet
- *     responses:
- *       200:
- *         description: Successfully created HODL script
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/HodlScript'
- */
-router.post(
-  "/hodl/create",
-  ensureBTCLockerReady,
-  asyncHandler(async (req, res) => {
-    const {
-      locktime,
-      ownerPubKey,
-      penaltyPubKey,
-      network = "testnet",
-    } = req.body;
-
-    if (!locktime || !ownerPubKey || !penaltyPubKey) {
-      return res.status(400).json({
-        error: "Locktime, ownerPubKey, and penaltyPubKey are required",
-      });
-    }
-
-    const bitcoin = require("bitcoinjs-lib");
-    const networkObj =
-      network === "mainnet"
-        ? bitcoin.networks.bitcoin
-        : bitcoin.networks.testnet;
-
-    const locker = new BTCLocker(networkObj);
-    await locker.init();
-
-    const script = await locker.createHodlScript(
-      locktime,
-      ownerPubKey,
-      penaltyPubKey
-    );
-    res.json(script);
-  })
-);
-
 // Error handling middleware
 router.use((error, req, res, next) => {
   console.error("API Error:", error);
@@ -834,6 +685,939 @@ router.post(
       res.status(500).json({
         error: error.message,
         code: "YIELD_DISTRIBUTION_FAILED",
+      });
+    }
+  })
+);
+
+/**
+ * @swagger
+ * /api/escrow/create:
+ *   post:
+ *     summary: Create a time-based escrow script
+ *     tags: [Escrow]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - deadline
+ *               - beforePublicKey
+ *               - afterPublicKey
+ *             properties:
+ *               deadline:
+ *                 type: integer
+ *                 description: Unix timestamp deadline
+ *                 example: 1640995200
+ *               beforePublicKey:
+ *                 type: string
+ *                 description: Public key for user who can withdraw before deadline
+ *                 example: 03a40291efea7e0dcbacd37c192062d3cae101e9d21cd320c9e9f6ad6a7cac5a8c
+ *               afterPublicKey:
+ *                 type: string
+ *                 description: Public key for user who can withdraw after deadline
+ *                 example: 0225a1e61f898173040566c0dd8365b51f48ee87e15b25c10d6e5c87b2c8e8d8e5
+ *               network:
+ *                 type: string
+ *                 enum: [mainnet, testnet]
+ *                 default: testnet
+ *     responses:
+ *       200:
+ *         description: Successfully created escrow script
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/EscrowScript'
+ *       400:
+ *         description: Invalid parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post(
+  "/escrow/create",
+  ensureBTCLockerReady,
+  asyncHandler(async (req, res) => {
+    const { deadline, beforePublicKey, afterPublicKey, network = "testnet" } = req.body;
+
+    if (!deadline || !beforePublicKey || !afterPublicKey) {
+      return res.status(400).json({
+        error: "Missing required parameters: deadline, beforePublicKey, afterPublicKey",
+      });
+    }
+
+    const bitcoin = require("bitcoinjs-lib");
+    const networkObj =
+      network === "mainnet"
+        ? bitcoin.networks.bitcoin
+        : bitcoin.networks.testnet;
+
+    try {
+      const locker = new BTCLocker(networkObj);
+      await locker.init();
+
+      const script = await locker.createEscrowScript(deadline, beforePublicKey, afterPublicKey);
+      res.json({
+        success: true,
+        data: script,
+        message: "Escrow script created successfully",
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        code: "ESCROW_SCRIPT_FAILED",
+      });
+    }
+  })
+);
+
+/**
+ * @swagger
+ * /api/escrow/spend:
+ *   post:
+ *     summary: Create spending transaction for escrow script
+ *     tags: [Escrow]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - scriptData
+ *               - utxoTxId
+ *               - utxoIndex
+ *               - amount
+ *               - outputAddress
+ *               - spendAfterDeadline
+ *               - privateKey
+ *             properties:
+ *               scriptData:
+ *                 type: object
+ *                 description: Script data from createEscrowScript
+ *               utxoTxId:
+ *                 type: string
+ *                 description: Transaction ID of the UTXO to spend
+ *               utxoIndex:
+ *                 type: integer
+ *                 description: Output index of the UTXO to spend
+ *               amount:
+ *                 type: integer
+ *                 description: Amount in satoshis to spend
+ *               outputAddress:
+ *                 type: string
+ *                 description: Address to send funds to
+ *               spendAfterDeadline:
+ *                 type: boolean
+ *                 description: Whether spending after deadline (true) or before (false)
+ *               privateKey:
+ *                 type: string
+ *                 description: Private key for signing (hex format)
+ *               currentTime:
+ *                 type: integer
+ *                 description: Current time for validation (optional)
+ *               network:
+ *                 type: string
+ *                 enum: [mainnet, testnet]
+ *                 default: testnet
+ *     responses:
+ *       200:
+ *         description: Successfully created escrow spending transaction
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Transaction'
+ *       400:
+ *         description: Invalid parameters or timing violation
+ *       500:
+ *         description: Server error
+ */
+router.post(
+  "/escrow/spend",
+  ensureBTCLockerReady,
+  asyncHandler(async (req, res) => {
+    const {
+      scriptData,
+      utxoTxId,
+      utxoIndex,
+      amount,
+      outputAddress,
+      spendAfterDeadline,
+      privateKey,
+      currentTime,
+      network = "testnet",
+    } = req.body;
+
+    if (
+      !scriptData ||
+      !utxoTxId ||
+      utxoIndex === undefined ||
+      !amount ||
+      !outputAddress ||
+      spendAfterDeadline === undefined ||
+      !privateKey
+    ) {
+      return res.status(400).json({
+        error:
+          "Missing required parameters: scriptData, utxoTxId, utxoIndex, amount, outputAddress, spendAfterDeadline, privateKey",
+      });
+    }
+
+    const bitcoin = require("bitcoinjs-lib");
+    const networkObj =
+      network === "mainnet"
+        ? bitcoin.networks.bitcoin
+        : bitcoin.networks.testnet;
+
+    try {
+      const locker = new BTCLocker(networkObj);
+      await locker.init();
+
+      const transaction = await locker.createEscrowSpendingTransaction({
+        scriptData,
+        utxoTxId,
+        utxoIndex,
+        amount,
+        outputAddress,
+        spendAfterDeadline,
+        currentTime,
+      });
+
+      res.json({
+        success: true,
+        data: transaction,
+        message: "Escrow spending transaction created successfully",
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        code: "ESCROW_SPENDING_FAILED",
+      });
+    }
+  })
+);
+
+/**
+ * @swagger
+ * /api/dawn/stake:
+ *   post:
+ *     summary: Create Dawn Protocol staking transaction
+ *     tags: [Dawn]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - sourceAddress
+ *               - escrowAddress
+ *               - escrowAmount
+ *               - timelockAddress
+ *               - timelockAmount
+ *             properties:
+ *               inputs:
+ *                 type: array
+ *                 items:
+ *                   $ref: '#/components/schemas/UTXO'
+ *                 description: Specific UTXOs to use (optional - will auto-select from sourceAddress if not provided)
+ *               sourceAddress:
+ *                 type: string
+ *                 description: Source address for automatic UTXO selection
+ *               escrowAddress:
+ *                 type: string
+ *                 description: Escrow script address
+ *               escrowAmount:
+ *                 type: integer
+ *                 description: Amount to send to escrow in satoshis
+ *               timelockAddress:
+ *                 type: string
+ *                 description: Timelock script address
+ *               timelockAmount:
+ *                 type: integer
+ *                 description: Amount to send to timelock in satoshis
+ *               changeAddress:
+ *                 type: string
+ *                 description: Optional change address
+ *               feeRate:
+ *                 type: integer
+ *                 default: 10
+ *                 description: Fee rate in sat/byte
+ *               feeAddress:
+ *                 type: string
+ *                 description: Optional protocol fee address
+ *               protocolFeeAmount:
+ *                 type: integer
+ *                 description: Optional protocol fee amount in satoshis
+ *               metadata:
+ *                 type: string
+ *                 description: Optional metadata (max 80 bytes)
+ *               network:
+ *                 type: string
+ *                 enum: [mainnet, testnet]
+ *                 default: testnet
+ *     responses:
+ *       200:
+ *         description: Successfully created Dawn staking transaction
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DawnStakingResult'
+ *       400:
+ *         description: Invalid parameters or insufficient funds
+ *       500:
+ *         description: Server error
+ */
+router.post(
+  "/dawn/stake",
+  ensureBTCLockerReady,
+  asyncHandler(async (req, res) => {
+    const {
+      inputs,
+      sourceAddress,
+      escrowAddress,
+      escrowAmount,
+      timelockAddress,
+      timelockAmount,
+      changeAddress,
+      feeRate = 10,
+      feeAddress,
+      protocolFeeAmount,
+      metadata,
+      network = "testnet",
+    } = req.body;
+
+    if (
+      !sourceAddress ||
+      !escrowAddress ||
+      !escrowAmount ||
+      !timelockAddress ||
+      !timelockAmount
+    ) {
+      return res.status(400).json({
+        error:
+          "Missing required parameters: sourceAddress, escrowAddress, escrowAmount, timelockAddress, timelockAmount",
+      });
+    }
+
+    const bitcoin = require("bitcoinjs-lib");
+    const networkObj =
+      network === "mainnet"
+        ? bitcoin.networks.bitcoin
+        : bitcoin.networks.testnet;
+
+    try {
+      const locker = new BTCLocker(networkObj);
+      await locker.init();
+
+      const transaction = await locker.createDawnStakingTransaction({
+        inputs,
+        sourceAddress,
+        escrowAddress,
+        escrowAmount,
+        timelockAddress,
+        timelockAmount,
+        changeAddress,
+        feeRate,
+        feeAddress,
+        protocolFeeAmount,
+        metadata,
+      });
+
+      res.json({
+        success: true,
+        data: transaction,
+        message: "Dawn staking transaction created successfully",
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        code: "DAWN_STAKING_FAILED",
+      });
+    }
+  })
+);
+
+/**
+ * @swagger
+ * /api/dawn/calculate:
+ *   post:
+ *     summary: Calculate optimal amounts for Dawn staking
+ *     tags: [Dawn]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - sourceAddress
+ *               - desiredEscrowAmount
+ *               - desiredTimelockAmount
+ *             properties:
+ *               inputs:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     value:
+ *                       type: integer
+ *                 description: Available inputs (optional - will fetch from sourceAddress if not provided)
+ *               sourceAddress:
+ *                 type: string
+ *                 description: Source address for automatic UTXO fetching
+ *               desiredEscrowAmount:
+ *                 type: integer
+ *                 description: Desired amount for escrow output in satoshis
+ *               desiredTimelockAmount:
+ *                 type: integer
+ *                 description: Desired amount for timelock output in satoshis
+ *               includeChange:
+ *                 type: boolean
+ *                 default: false
+ *                 description: Whether to include change output in calculation
+ *               feeRate:
+ *                 type: integer
+ *                 default: 10
+ *                 description: Fee rate in sat/byte
+ *               protocolFeeAmount:
+ *                 type: integer
+ *                 description: Optional protocol fee amount in satoshis
+ *               metadata:
+ *                 type: string
+ *                 description: Optional metadata (max 80 bytes)
+ *               network:
+ *                 type: string
+ *                 enum: [mainnet, testnet]
+ *                 default: testnet
+ *     responses:
+ *       200:
+ *         description: Successfully calculated Dawn staking amounts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DawnCalculationResult'
+ *       400:
+ *         description: Invalid parameters
+ *       500:
+ *         description: Server error
+ */
+router.post(
+  "/dawn/calculate",
+  ensureBTCLockerReady,
+  asyncHandler(async (req, res) => {
+    const {
+      inputs,
+      sourceAddress,
+      desiredEscrowAmount,
+      desiredTimelockAmount,
+      includeChange = false,
+      feeRate = 10,
+      protocolFeeAmount,
+      metadata,
+      network = "testnet",
+    } = req.body;
+
+    if (!sourceAddress || !desiredEscrowAmount || !desiredTimelockAmount) {
+      return res.status(400).json({
+        error:
+          "Missing required parameters: sourceAddress, desiredEscrowAmount, desiredTimelockAmount",
+      });
+    }
+
+    const bitcoin = require("bitcoinjs-lib");
+    const networkObj =
+      network === "mainnet"
+        ? bitcoin.networks.bitcoin
+        : bitcoin.networks.testnet;
+
+    try {
+      const locker = new BTCLocker(networkObj);
+      await locker.init();
+
+      const calculation = await locker.calculateDawnStakingAmounts({
+        inputs,
+        sourceAddress,
+        desiredEscrowAmount,
+        desiredTimelockAmount,
+        includeChange,
+        feeRate,
+        protocolFeeAmount,
+        metadata,
+      });
+
+      res.json({
+        success: true,
+        data: calculation,
+        message: "Dawn staking calculation completed successfully",
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        code: "DAWN_CALCULATION_FAILED",
+      });
+    }
+  })
+);
+
+/**
+ * @swagger
+ * /api/dawn/withdraw:
+ *   post:
+ *     summary: Create Dawn withdrawal transaction combining escrow and timelock inputs
+ *     tags: [Dawn]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - escrowRedeemScript
+ *               - timelockRedeemScript
+ *               - destination
+ *             properties:
+ *               escrowInputs:
+ *                 type: array
+ *                 items:
+ *                   $ref: '#/components/schemas/UTXO'
+ *                 description: Escrow inputs (optional - will fetch all from escrowAddress if not provided)
+ *               escrowAddress:
+ *                 type: string
+ *                 description: Escrow script address (optional - calculated from script if not provided)
+ *               escrowRedeemScript:
+ *                 type: string
+ *                 description: Escrow redeem script in hex format
+ *               timelockInputs:
+ *                 type: array
+ *                 items:
+ *                   $ref: '#/components/schemas/UTXO'
+ *                 description: Timelock inputs (optional - will fetch all from timelockAddress if not provided)
+ *               timelockAddress:
+ *                 type: string
+ *                 description: Timelock script address (optional - calculated from script if not provided)
+ *               timelockRedeemScript:
+ *                 type: string
+ *                 description: Timelock redeem script in hex format
+ *               destination:
+ *                 type: string
+ *                 description: Destination address for combined withdrawal
+ *               feeAmount:
+ *                 type: integer
+ *                 default: 2000
+ *                 description: Transaction fee in satoshis
+ *               feeAddress:
+ *                 type: string
+ *                 description: Optional protocol fee address
+ *               protocolFeeAmount:
+ *                 type: integer
+ *                 description: Optional protocol fee amount in satoshis
+ *               metadata:
+ *                 type: string
+ *                 description: Optional metadata (max 80 bytes)
+ *               network:
+ *                 type: string
+ *                 enum: [mainnet, testnet]
+ *                 default: testnet
+ *     responses:
+ *       200:
+ *         description: Successfully created Dawn withdrawal transaction
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: string
+ *                   description: Unsigned PSBT as base64 string
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Invalid parameters or timing violation
+ *       500:
+ *         description: Server error
+ */
+router.post(
+  "/dawn/withdraw",
+  ensureBTCLockerReady,
+  asyncHandler(async (req, res) => {
+    const {
+      escrowInputs,
+      escrowAddress,
+      escrowRedeemScript,
+      timelockInputs,
+      timelockAddress,
+      timelockRedeemScript,
+      destination,
+      feeAmount = 2000,
+      feeAddress,
+      protocolFeeAmount,
+      metadata,
+      network = "testnet",
+    } = req.body;
+
+    if (!escrowRedeemScript || !timelockRedeemScript || !destination) {
+      return res.status(400).json({
+        error:
+          "Missing required parameters: escrowRedeemScript, timelockRedeemScript, destination",
+      });
+    }
+
+    const bitcoin = require("bitcoinjs-lib");
+    const networkObj =
+      network === "mainnet"
+        ? bitcoin.networks.bitcoin
+        : bitcoin.networks.testnet;
+
+    try {
+      const locker = new BTCLocker(networkObj);
+      await locker.init();
+
+      const transaction = await locker.createDawnWithdrawalTransaction({
+        escrowInputs,
+        escrowAddress,
+        escrowRedeemScript,
+        timelockInputs,
+        timelockAddress,
+        timelockRedeemScript,
+        destination,
+        feeAmount,
+        feeAddress,
+        protocolFeeAmount,
+        metadata,
+      });
+
+      res.json({
+        success: true,
+        data: transaction,
+        message: "Dawn withdrawal transaction created successfully",
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        code: "DAWN_WITHDRAWAL_FAILED",
+      });
+    }
+  })
+);
+
+/**
+ * @swagger
+ * /api/utils/validate-timelock:
+ *   post:
+ *     summary: Check if a timelock has expired
+ *     tags: [Utilities]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - locktime
+ *             properties:
+ *               locktime:
+ *                 type: integer
+ *                 description: Unix timestamp or block height to check
+ *                 example: 1640995200
+ *               currentTime:
+ *                 type: integer
+ *                 description: Current time for comparison (optional, defaults to now)
+ *                 example: 1641081600
+ *               network:
+ *                 type: string
+ *                 enum: [mainnet, testnet]
+ *                 default: testnet
+ *     responses:
+ *       200:
+ *         description: Timelock validation result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     expired:
+ *                       type: boolean
+ *                       description: Whether the timelock has expired
+ *                     locktime:
+ *                       type: integer
+ *                       description: The locktime value that was checked
+ *                     currentTime:
+ *                       type: integer
+ *                       description: The current time used for comparison
+ *                     timeRemaining:
+ *                       type: integer
+ *                       description: Seconds remaining until expiration (negative if expired)
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Invalid locktime
+ *       500:
+ *         description: Server error
+ */
+router.post(
+  "/utils/validate-timelock",
+  ensureBTCLockerReady,
+  asyncHandler(async (req, res) => {
+    const { locktime, currentTime, network = "testnet" } = req.body;
+
+    if (!locktime) {
+      return res.status(400).json({
+        error: "Missing required parameter: locktime",
+      });
+    }
+
+    const bitcoin = require("bitcoinjs-lib");
+    const networkObj =
+      network === "mainnet"
+        ? bitcoin.networks.bitcoin
+        : bitcoin.networks.testnet;
+
+    try {
+      const locker = new BTCLocker(networkObj);
+      await locker.init();
+
+      const currentTimeToUse = currentTime || Math.floor(Date.now() / 1000);
+      const expired = locker.isTimelockExpired(locktime, currentTimeToUse);
+      const timeRemaining = locktime - currentTimeToUse;
+
+      res.json({
+        success: true,
+        data: {
+          expired,
+          locktime,
+          currentTime: currentTimeToUse,
+          timeRemaining,
+        },
+        message: "Timelock validation completed successfully",
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        code: "TIMELOCK_VALIDATION_FAILED",
+      });
+    }
+  })
+);
+
+/**
+ * @swagger
+ * /api/utils/validate-address:
+ *   post:
+ *     summary: Validate a Bitcoin address
+ *     tags: [Utilities]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - address
+ *             properties:
+ *               address:
+ *                 type: string
+ *                 description: Bitcoin address to validate
+ *                 example: tb1q63558dl8w2hzwyz994k5fc6x0pzc986zap2suc
+ *               network:
+ *                 type: string
+ *                 enum: [mainnet, testnet]
+ *                 default: testnet
+ *     responses:
+ *       200:
+ *         description: Address validation result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     valid:
+ *                       type: boolean
+ *                       description: Whether the address is valid
+ *                     address:
+ *                       type: string
+ *                       description: The address that was validated
+ *                     network:
+ *                       type: string
+ *                       description: Network the address is valid for
+ *                     type:
+ *                       type: string
+ *                       description: Address type (P2PKH, P2SH, P2WPKH, etc.)
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Missing address parameter
+ *       500:
+ *         description: Server error
+ */
+router.post(
+  "/utils/validate-address",
+  ensureBTCLockerReady,
+  asyncHandler(async (req, res) => {
+    const { address, network = "testnet" } = req.body;
+
+    if (!address) {
+      return res.status(400).json({
+        error: "Missing required parameter: address",
+      });
+    }
+
+    const bitcoin = require("bitcoinjs-lib");
+    const networkObj =
+      network === "mainnet"
+        ? bitcoin.networks.bitcoin
+        : bitcoin.networks.testnet;
+
+    try {
+      const locker = new BTCLocker(networkObj);
+      await locker.init();
+
+      let valid = false;
+      let addressType = "unknown";
+
+      try {
+        // Try to decode as different address types
+        if (address.startsWith("bc1") || address.startsWith("tb1")) {
+          // Bech32 address
+          bitcoin.address.fromBech32(address);
+          valid = true;
+          addressType = address.length === 42 ? "P2WPKH" : "P2WSH";
+        } else if (address.startsWith("1") || address.startsWith("m") || address.startsWith("n")) {
+          // Base58 P2PKH
+          bitcoin.address.fromBase58Check(address);
+          valid = true;
+          addressType = "P2PKH";
+        } else if (address.startsWith("3") || address.startsWith("2")) {
+          // Base58 P2SH
+          bitcoin.address.fromBase58Check(address);
+          valid = true;
+          addressType = "P2SH";
+        }
+      } catch (e) {
+        valid = false;
+      }
+
+      res.json({
+        success: true,
+        data: {
+          valid,
+          address,
+          network: network,
+          type: addressType,
+        },
+        message: "Address validation completed successfully",
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        code: "ADDRESS_VALIDATION_FAILED",
+      });
+    }
+  })
+);
+
+/**
+ * @swagger
+ * /api/utils/estimate-fees:
+ *   get:
+ *     summary: Get current fee estimates
+ *     tags: [Utilities]
+ *     parameters:
+ *       - in: query
+ *         name: network
+ *         schema:
+ *           type: string
+ *           enum: [mainnet, testnet]
+ *           default: testnet
+ *         description: Bitcoin network
+ *     responses:
+ *       200:
+ *         description: Current fee estimates
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     fastestFee:
+ *                       type: integer
+ *                       description: Fee for fastest confirmation (sat/vB)
+ *                     halfHourFee:
+ *                       type: integer
+ *                       description: Fee for ~30 minute confirmation (sat/vB)
+ *                     hourFee:
+ *                       type: integer
+ *                       description: Fee for ~1 hour confirmation (sat/vB)
+ *                     economyFee:
+ *                       type: integer
+ *                       description: Economy fee rate (sat/vB)
+ *                     minimumFee:
+ *                       type: integer
+ *                       description: Minimum relay fee rate (sat/vB)
+ *                 message:
+ *                   type: string
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/utils/estimate-fees",
+  ensureBTCLockerReady,
+  asyncHandler(async (req, res) => {
+    const { network = "testnet" } = req.query;
+
+    const bitcoin = require("bitcoinjs-lib");
+    const networkObj =
+      network === "mainnet"
+        ? bitcoin.networks.bitcoin
+        : bitcoin.networks.testnet;
+
+    try {
+      const locker = new BTCLocker(networkObj);
+      await locker.init();
+
+      // Try to get fee estimates from the API
+      let feeEstimates;
+      try {
+        feeEstimates = await locker.api.getFeeEstimates();
+      } catch (error) {
+        // Fallback to default estimates if API fails
+        feeEstimates = {
+          fastestFee: 20,
+          halfHourFee: 15,
+          hourFee: 10,
+          economyFee: 5,
+          minimumFee: 1,
+        };
+      }
+
+      res.json({
+        success: true,
+        data: feeEstimates,
+        message: "Fee estimates retrieved successfully",
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        code: "FEE_ESTIMATION_FAILED",
       });
     }
   })

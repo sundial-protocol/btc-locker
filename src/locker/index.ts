@@ -363,6 +363,20 @@ export class BTCLocker extends BTCLockerCore {
   }
 
   /**
+   * Check if a timelock has expired
+   * @param locktime - Unix timestamp to check
+   * @param currentTime - Current time (optional, defaults to now)
+   * @returns True if timelock has expired
+   * @example
+   * const locker = new BTCLocker();
+   * const expired = locker.isTimelockExpired(1640995200);
+   */
+  isTimelockExpired(locktime: number, currentTime?: number): boolean {
+    const currentTimeSeconds = currentTime || Math.floor(Date.now() / 1000);
+    return currentTimeSeconds >= locktime;
+  }
+
+  /**
    * Sign any transaction PSBT with one or more private keys
    * @async
    * @param unsignedPsbt - Unsigned PSBT in base64 format
