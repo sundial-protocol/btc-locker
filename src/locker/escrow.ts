@@ -257,14 +257,12 @@ export class EscrowManager extends BTCLockerCore {
           const txHex = await this.api.getTransaction(utxoTxId);
           inputData.nonWitnessUtxo = Buffer.from(txHex, "hex");
         } catch (error) {
-          // Fallback to witnessUtxo but with P2SH script
-          inputData.witnessUtxo = {
-            script: bitcoin.payments.p2sh({
-              redeem: { output: redeemScript },
-              network: this.network,
-            }).output!,
-            value: BigInt(amount),
-          };
+          // For P2SH scripts, we must have the full previous transaction
+          // Cannot use witnessUtxo as it's only for SegWit scripts
+          throw new Error(
+            `Failed to fetch previous transaction ${utxoTxId}. P2SH escrow scripts require the full previous transaction for signing. ` +
+            `API error: ${(error as Error).message}. Please provide the previous transaction manually using the previousTransaction parameter.`
+          );
         }
       }
 
