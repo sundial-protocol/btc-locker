@@ -1,11 +1,12 @@
 /**
- * @fileoverview Time-based escrow script functionality
- * @description Create scripts where one user can withdraw before a deadline and another after
+ * @fileoverview Time-based escrow script functionality using Taproot
+ * @description Create Taproot scripts where one user can withdraw before a deadline and another after
  */
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore, getECC } from "./core";
 import { KeyUtils, ValidationUtils, ScriptUtils } from "../utils";
+import { SUNDIAL_NAMESPACE_XONLY, TAPROOT_LEAF_VERSION } from "../utils/scripts";
 import type { ScriptInfo } from "../types";
 
 /**
@@ -14,7 +15,7 @@ import type { ScriptInfo } from "../types";
  * @description Parameters for creating an unsigned escrow spending transaction
  */
 export interface EscrowSpendingParams {
-  /** Script data returned from createEscrowScript */
+  /** Script data returned from createEscrowScript (must include controlBlock) */
   scriptData: ScriptInfo;
   /** Transaction ID of the UTXO to spend */
   utxoTxId: string;
@@ -28,8 +29,6 @@ export interface EscrowSpendingParams {
   spendAfterDeadline: boolean;
   /** Current time for validation (defaults to Date.now()) */
   currentTime?: number;
-  /** Previous transaction buffer (for testing/validation) */
-  previousTransaction?: Buffer | null;
 }
 
 /**
@@ -133,7 +132,7 @@ export class EscrowManager extends BTCLockerCore {
       const scriptHash = ScriptUtils.calculateScriptHash(
         Buffer.from(redeemScript),
       );
-      const address = ScriptUtils.createScriptAddress(
+      const spendInfo = ScriptUtils.deriveTaprootSpendInfo(
         Buffer.from(redeemScript),
         this.network,
       );
@@ -141,7 +140,11 @@ export class EscrowManager extends BTCLockerCore {
       return {
         redeemScript: Buffer.from(redeemScript).toString("hex"),
         scriptHash,
-        address,
+        address: spendInfo.address,
+        outputScript: spendInfo.outputScript.toString("hex"),
+        controlBlock: spendInfo.controlBlock.toString("hex"),
+        internalPubkey: SUNDIAL_NAMESPACE_XONLY.toString("hex"),
+        leafVersion: TAPROOT_LEAF_VERSION,
         type: "time-escrow",
         locktime: deadlineNumber,
         beforePublicKey: beforePubKeyBuffer.toString("hex"),
@@ -194,7 +197,6 @@ export class EscrowManager extends BTCLockerCore {
       outputAddress,
       spendAfterDeadline,
       currentTime = Date.now(),
-      previousTransaction = null,
     } = params;
 
     // Validate inputs
@@ -235,38 +237,32 @@ export class EscrowManager extends BTCLockerCore {
         psbt.locktime = scriptData.locktime!;
       }
 
-      // Add input
+      // Add input with Taproot script-path spending data
       const sequence = spendAfterDeadline ? 0xfffffffe : 0xffffffff;
       const redeemScript = Buffer.from(scriptData.redeemScript, "hex");
+      const controlBlock = Buffer.from(scriptData.controlBlock!, "hex");
 
-      // For P2SH scripts, we need to use nonWitnessUtxo instead of witnessUtxo
-      // Try to get the full previous transaction
-      let inputData: any = {
+      // Build the P2TR output script for the witnessUtxo
+      const outputScript = scriptData.outputScript
+        ? Buffer.from(scriptData.outputScript, "hex")
+        : ScriptUtils.deriveTaprootSpendInfo(redeemScript, this.network).outputScript;
+
+      psbt.addInput({
         hash: utxoTxId,
         index: utxoIndex,
-        sequence: sequence,
-        redeemScript: redeemScript,
-      };
-
-      if (previousTransaction) {
-        // Use provided previous transaction
-        inputData.nonWitnessUtxo = previousTransaction;
-      } else {
-        try {
-          // Try to fetch the full previous transaction for nonWitnessUtxo
-          const txHex = await this.api.getTransaction(utxoTxId);
-          inputData.nonWitnessUtxo = Buffer.from(txHex, "hex");
-        } catch (error) {
-          // For P2SH scripts, we must have the full previous transaction
-          // Cannot use witnessUtxo as it's only for SegWit scripts
-          throw new Error(
-            `Failed to fetch previous transaction ${utxoTxId}. P2SH escrow scripts require the full previous transaction for signing. ` +
-            `API error: ${(error as Error).message}. Please provide the previous transaction manually using the previousTransaction parameter.`
-          );
-        }
-      }
-
-      psbt.addInput(inputData);
+        sequence,
+        witnessUtxo: {
+          script: outputScript,
+          value: BigInt(amount),
+        },
+        tapLeafScript: [
+          {
+            leafVersion: scriptData.leafVersion ?? TAPROOT_LEAF_VERSION,
+            script: redeemScript,
+            controlBlock,
+          },
+        ],
+      });
 
       // Add output (subtract a reasonable fee)
       const fee = 1000; // 1000 satoshis fee
@@ -277,9 +273,9 @@ export class EscrowManager extends BTCLockerCore {
       }
 
       // Get output script for the destination address
-      let outputScript: Buffer;
+      let destOutputScript: Buffer;
       try {
-        outputScript = Buffer.from(
+        destOutputScript = Buffer.from(
           bitcoin.address.toOutputScript(outputAddress, this.network),
         );
       } catch (error) {
@@ -287,7 +283,7 @@ export class EscrowManager extends BTCLockerCore {
       }
 
       psbt.addOutput({
-        script: outputScript,
+        script: destOutputScript,
         value: BigInt(outputAmount),
       });
 

@@ -5,6 +5,7 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { ECPairInterface } from "ecpair";
 import { BTCLockerCore, getECC } from "./core";
+import KeyUtils from "../utils/keys";
 import type { KeyPair } from "../types";
 
 /**
@@ -35,8 +36,8 @@ export class KeyPairGenerator extends BTCLockerCore {
     const { ECPair } = getECC();
 
     const keyPair = ECPair.makeRandom({ network: this.network });
-    const { address } = bitcoin.payments.p2wpkh({
-      pubkey: keyPair.publicKey,
+    const { address } = bitcoin.payments.p2tr({
+      internalPubkey: bitcoin.toXOnly(keyPair.publicKey),
       network: this.network,
     });
 
@@ -68,8 +69,8 @@ export class KeyPairGenerator extends BTCLockerCore {
     const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKeyHex, "hex"), {
       network: this.network,
     });
-    const { address } = bitcoin.payments.p2wpkh({
-      pubkey: keyPair.publicKey,
+    const { address } = bitcoin.payments.p2tr({
+      internalPubkey: bitcoin.toXOnly(keyPair.publicKey),
       network: this.network,
     });
 

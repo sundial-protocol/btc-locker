@@ -10,6 +10,7 @@ import type { ECCLib, InitializedECC } from "../types";
 import type { NetworkType } from "../utils/network";
 import { NETWORKS } from "../utils/network";
 import BitcoinAPI from "../bitcoin-api";
+import ScriptUtils from "../utils/scripts";
 
 // ECC will be initialized asynchronously
 let ecc: ECCLib | null = null;
@@ -68,6 +69,35 @@ export function getECC(): InitializedECC {
     throw new Error("ECC not initialized. Call initECC() first.");
   }
   return { ecc, bip32, ECPair };
+}
+
+/**
+ * Create a tweaked signer for Taproot key-path spending.
+ * For key-path spends, the private key must be tweaked with the TapTweak
+ * tagged hash of the x-only public key per BIP341.
+ * @param keyPair - The original ECPair signer
+ * @param network - Bitcoin network
+ * @returns A new ECPair with the tweaked private key for Schnorr signing
+ */
+export function tweakSigner(keyPair: any, network: bitcoin.Network): any {
+  const { ecc: eccLib, ECPair: ECPairLib } = getECC();
+  let privateKey = keyPair.privateKey;
+  if (!privateKey) {
+    throw new Error('Private key is required for tweaking signer');
+  }
+  // If the public key has an odd y-coordinate (prefix 0x03), negate the private key
+  if (keyPair.publicKey[0] === 3) {
+    privateKey = Buffer.from((eccLib as any).privateNegate(privateKey));
+  }
+  const tweakHash = bitcoin.crypto.taggedHash(
+    'TapTweak',
+    bitcoin.toXOnly(keyPair.publicKey),
+  );
+  const tweakedPrivateKey = (eccLib as any).privateAdd(privateKey, tweakHash);
+  if (!tweakedPrivateKey) {
+    throw new Error('Failed to produce tweaked private key');
+  }
+  return ECPairLib.fromPrivateKey(Buffer.from(tweakedPrivateKey), { network });
 }
 
 export class BTCLockerCore {
@@ -175,73 +205,82 @@ export class BTCLockerCore {
         const keyPair = keyPairs[i] || keyPairs[0]; // Use per-input key or default to first key
         const input = psbt.data.inputs[i];
         
-        // Update witnessUtxo if needed for P2WPKH inputs
-        if (input.witnessUtxo && (!input.witnessUtxo.script || 
+        const isTapscriptPath = input.tapLeafScript && input.tapLeafScript.length > 0;
+        
+        // For P2TR key-path inputs (no tapLeafScript), fill in witnessUtxo and tapInternalKey
+        if (!isTapscriptPath && input.witnessUtxo && (!input.witnessUtxo.script || 
             input.witnessUtxo.script.length === 0 || 
-            input.witnessUtxo.script.every(byte => byte === 0))) {
-          input.witnessUtxo.script = bitcoin.payments.p2wpkh({
-            pubkey: keyPair.publicKey,
+            input.witnessUtxo.script.every((byte: number) => byte === 0))) {
+          const internalPubkey = bitcoin.toXOnly(keyPair.publicKey);
+          const p2tr = bitcoin.payments.p2tr({
+            internalPubkey,
             network: this.network,
-          }).output!;
+          });
+          
+          if (!p2tr.output) {
+            throw new Error(`Failed to generate P2TR output script for input ${i}`);
+          }
+          
+          input.witnessUtxo.script = p2tr.output;
+          input.tapInternalKey = internalPubkey;
         }
         
         try {
-          psbt.signInput(i, keyPair);
+          if (isTapscriptPath) {
+            // Taproot script-path: sign with the original (untweaked) key
+            psbt.signInput(i, keyPair);
+          } else {
+            // Taproot key-path: sign with tweaked key per BIP341
+            const tweakedKeyPair = tweakSigner(keyPair, this.network);
+            psbt.signInput(i, tweakedKeyPair);
+          }
         } catch (error) {
           throw new Error(`Failed to sign input ${i}: ${(error as Error).message}`);
         }
       }
 
-      // Auto-finalize based on script structure
+      // Auto-finalize based on input type
       for (let i = 0; i < psbt.inputCount; i++) {
         const input = psbt.data.inputs[i];
         
-        if (input.redeemScript) {
-          // Custom finalization for scripts
-          const redeemScript = Buffer.from(input.redeemScript);
-          
-          // Auto-detect script type and apply appropriate finalization
-          if (this.hasConditionalLogic(redeemScript)) {
-            // Escrow-style script with conditional logic
-            psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
-              const signature = inputData.partialSig?.[0]?.signature;
-              if (!signature) {
-                throw new Error(`Missing signature for input ${inputIndex}`);
-              }
-              // check whether to use after-deadline spending path for escrow scripts
+        if (input.tapLeafScript && input.tapLeafScript.length > 0) {
+          // Taproot script-path finalization
+          const tapLeaf = input.tapLeafScript[0];
+          const leafScript = Buffer.from(tapLeaf.script);
+          const controlBlock = Buffer.from(tapLeaf.controlBlock);
+
+          psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
+            const sig = inputData.tapScriptSig?.[0]?.signature;
+            if (!sig) {
+              throw new Error(`Missing tapScriptSig for input ${inputIndex}`);
+            }
+
+            let witnessStack: Buffer[];
+
+            if (this.hasConditionalLogic(leafScript)) {
+              // Escrow-style script with IF/ELSE branches
               const useAfterDeadline = options?.spendAfterDeadline !== false; // Default true
-              const scriptSig = bitcoin.script.compile([
-                signature,
-                useAfterDeadline ? bitcoin.opcodes.OP_TRUE : bitcoin.opcodes.OP_FALSE,
-                redeemScript
-              ]);
-              
-              return {
-                finalScriptSig: scriptSig,
-                finalScriptWitness: undefined
-              };
-            });
-          } else {
-            // Simple script or timelock script
-            psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
-              const signature = inputData.partialSig?.[0]?.signature;
-              if (!signature) {
-                throw new Error(`Missing signature for input ${inputIndex}`);
-              }
-              
-              const scriptSig = bitcoin.script.compile([
-                signature,
-                redeemScript
-              ]);
-              
-              return {
-                finalScriptSig: scriptSig,
-                finalScriptWitness: undefined
-              };
-            });
-          }
+              witnessStack = [
+                sig,
+                useAfterDeadline ? Buffer.of(1) : Buffer.alloc(0), // OP_TRUE or OP_FALSE selector
+                leafScript,
+                controlBlock,
+              ];
+            } else {
+              // Simple tapscript (timelock, single CHECKSIG)
+              witnessStack = [
+                sig,
+                leafScript,
+                controlBlock,
+              ];
+            }
+
+            return {
+              finalScriptWitness: ScriptUtils.witnessStackToScriptWitness(witnessStack),
+            };
+          });
         } else {
-          // Standard finalization
+          // Standard finalization (key-path P2TR or P2WPKH)
           psbt.finalizeInput(i);
         }
       }

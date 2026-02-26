@@ -38,10 +38,10 @@ export default class KeyUtils {
       throw new Error(`${paramName} must be a string or Buffer`);
     }
 
-    // Validate public key length
-    if (publicKeyBuffer.length !== 33 && publicKeyBuffer.length !== 65) {
+    // Validate public key length (33/65 for ECDSA, 32 for x-only Taproot)
+    if (publicKeyBuffer.length !== 32 && publicKeyBuffer.length !== 33 && publicKeyBuffer.length !== 65) {
       throw new Error(
-        `Invalid ${paramName} length: ${publicKeyBuffer.length}. Expected 33 (compressed) or 65 (uncompressed) bytes`
+        `Invalid ${paramName} length: ${publicKeyBuffer.length}. Expected 32 (x-only), 33 (compressed) or 65 (uncompressed) bytes`
       );
     }
 

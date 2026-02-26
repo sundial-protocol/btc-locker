@@ -1074,13 +1074,13 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
       0,
     );
 
-    // Check if we have sufficient funds
+    // Check if we have sufficient funds (using Taproot fee estimation)
     const totalRequired =
       escrowAmount + timelockAmount + (protocolFeeAmount || 0);
     const outputCount =
       2 + (protocolFeeAmount ? 1 : 0) + (changeAddress ? 1 : 0);
     const estimatedFee =
-      (10 + txInputs.length * 148 + outputCount * 34 + 20) * feeRate;
+      (11 + txInputs.length * 68 + outputCount * 43 + 20) * feeRate;
 
     if (totalInputValue < totalRequired + estimatedFee) {
       throw new Error(

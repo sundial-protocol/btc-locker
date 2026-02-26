@@ -1,7 +1,8 @@
 /**
- * @fileoverview Dawn Protocol staking functionality
- * @description Create transactions for Dawn protocol staking with dual outputs:
- * configurable amount to escrow script and configurable amount to timelock script
+ * @fileoverview Dawn Protocol staking functionality using Taproot
+ * @description Create transactions for Dawn protocol staking with dual P2TR outputs:
+ * configurable amount to escrow tapscript and configurable amount to timelock tapscript,
+ * both anchored under the Sundial namespace internal pubkey.
  */
 
 import * as bitcoin from "bitcoinjs-lib";
@@ -9,6 +10,8 @@ import { BTCLockerCore } from "./core";
 import type { UTXO, ScriptInfo } from "../types";
 import { ApiUTXO } from "../bitcoin-api";
 import ScriptUtils from "../utils/scripts";
+import FeeUtils from "../utils/fees";
+import { TAPROOT_LEAF_VERSION } from "../utils/scripts";
 
 /**
  * Parameters for Dawn staking transactions
@@ -153,16 +156,16 @@ export interface DawnStakingCalculationResult {
 export interface DawnWithdrawalParams {
   /** Array of escrow inputs to withdraw from (optional - will fetch all UTXOs from escrow address if not provided) */
   escrowInputs?: UTXO[];
-  /** Escrow script address (optional - will be calculated from escrowRedeemScript if not provided) */
+  /** Escrow script address (optional - will be calculated from escrowScript if not provided) */
   escrowAddress?: string;
-  /** Escrow redeem script in hexadecimal format */
-  escrowRedeemScript: string;
+  /** Escrow script info returned from createEscrowScript (contains redeemScript, controlBlock, etc.) */
+  escrowScript: ScriptInfo;
   /** Array of timelock inputs to withdraw from (optional - will fetch all UTXOs from timelock address if not provided) */
   timelockInputs?: UTXO[];
-  /** Timelock script address (optional - will be calculated from timelockRedeemScript if not provided) */
+  /** Timelock script address (optional - will be calculated from timelockScript if not provided) */
   timelockAddress?: string;
-  /** Timelock redeem script in hexadecimal format */
-  timelockRedeemScript: string;
+  /** Timelock script info returned from createTimelockScript (contains redeemScript, controlBlock, etc.) */
+  timelockScript: ScriptInfo;
   /** Destination address for withdrawn funds */
   destination: string;
   /** Optional fixed fee amount in satoshis */
@@ -251,12 +254,12 @@ export interface DawnWithdrawalSigningParams {
   timelockPrivateKey?: string;
   /** Array of escrow inputs (optional - will be extracted from PSBT if not provided) */
   escrowInputs?: UTXO[];
-  /** Escrow redeem script in hexadecimal format */
-  escrowRedeemScript: string;
+  /** Escrow script info (contains redeemScript, controlBlock, etc.) */
+  escrowScript: ScriptInfo;
   /** Array of timelock inputs (optional - will be extracted from PSBT if not provided) */
   timelockInputs?: UTXO[];
-  /** Timelock redeem script in hexadecimal format */
-  timelockRedeemScript: string;
+  /** Timelock script info (contains redeemScript, controlBlock, etc.) */
+  timelockScript: ScriptInfo;
 }
 
 /**
@@ -393,11 +396,9 @@ export class DawnStakingManager extends BTCLockerCore {
       if (changeAddress) outputCount++;
       if (metadata) outputCount++;
 
-      // First estimate required amount for input selection
+      // First estimate required amount for input selection (Taproot sizes)
       const estimatedInputCount = Math.min(availableInputs.length, 3); // Estimate 1-3 inputs
-      const estimatedSize =
-        10 + estimatedInputCount * 148 + outputCount * 34 + 20;
-      const estimatedFee = estimatedSize * feeRate;
+      const estimatedFee = FeeUtils.estimateFee(estimatedInputCount, outputCount, feeRate, 20);
       const targetAmount =
         escrowAmount + timelockAmount + (protocolFeeAmount || 0) + estimatedFee;
 
@@ -434,10 +435,8 @@ export class DawnStakingManager extends BTCLockerCore {
     if (changeAddress) outputCount++;
     if (metadata) outputCount++;
 
-    // Estimate transaction size for fee calculation
-    // Base size + (inputs * 148) + (outputs * 34) + some overhead
-    const estimatedSize = 10 + inputs.length * 148 + outputCount * 34 + 20;
-    const estimatedFee = estimatedSize * feeRate;
+    // Estimate transaction size for fee calculation (Taproot with script overhead)
+    const estimatedFee = FeeUtils.estimateFee(inputs.length, outputCount, feeRate, 20);
 
     // Calculate total required amount
     const totalRequiredAmount =
@@ -482,8 +481,10 @@ export class DawnStakingManager extends BTCLockerCore {
       // Create PSBT for transaction construction
       const psbt = new bitcoin.Psbt({ network: this.network });
 
-      // Add inputs (using placeholder witnessUtxo - actual script will be added during signing)
+      // Add inputs with proper P2TR witnessUtxo scripts
       for (const input of inputs) {
+        // For UTXO selection, we need to derive the P2TR script from the source address
+        // Since we don't have the public key here, we'll let the signing logic fill it
         const inputData = {
           hash: input.txid,
           index: input.vout,
@@ -658,9 +659,7 @@ export class DawnStakingManager extends BTCLockerCore {
 
       // Auto-select from available UTXOs for calculation
       const estimatedInputCount = Math.min(availableInputs.length, 3);
-      const estimatedSize =
-        10 + estimatedInputCount * 148 + outputCount * 34 + 20;
-      const estimatedFee = estimatedSize * feeRate;
+      const estimatedFee = FeeUtils.estimateFee(estimatedInputCount, outputCount, feeRate, 20);
       const targetAmount =
         desiredEscrowAmount +
         desiredTimelockAmount +
@@ -696,9 +695,8 @@ export class DawnStakingManager extends BTCLockerCore {
     if (includeChange) outputCount++;
     if (metadata) outputCount++;
 
-    // Estimate transaction size
-    const estimatedSize = 10 + inputs.length * 148 + outputCount * 34 + 20;
-    const estimatedFee = estimatedSize * feeRate;
+    // Estimate transaction size and fee (Taproot with script overhead)
+    const estimatedFee = FeeUtils.estimateFee(inputs.length, outputCount, feeRate, 20);
 
     const dustThreshold = 546;
     const totalRequired =
@@ -784,10 +782,10 @@ export class DawnStakingManager extends BTCLockerCore {
     const {
       escrowInputs: providedEscrowInputs,
       escrowAddress: providedEscrowAddress,
-      escrowRedeemScript,
+      escrowScript,
       timelockInputs: providedTimelockInputs,
       timelockAddress: providedTimelockAddress,
-      timelockRedeemScript,
+      timelockScript,
       destination,
       feeAmount = 2000,
       feeAddress,
@@ -815,19 +813,9 @@ export class DawnStakingManager extends BTCLockerCore {
       );
     }
 
-    // Calculate script addresses if not provided
-    let escrowAddress =
-      providedEscrowAddress ??
-      ScriptUtils.createScriptAddress(
-        Buffer.from(escrowRedeemScript, "hex"),
-        this.network,
-      );
-    let timelockAddress =
-      providedTimelockAddress ??
-      ScriptUtils.createScriptAddress(
-        Buffer.from(timelockRedeemScript, "hex"),
-        this.network,
-      );
+    // Use script addresses or derive from ScriptInfo
+    const escrowAddress = providedEscrowAddress ?? escrowScript.address;
+    const timelockAddress = providedTimelockAddress ?? timelockScript.address;
 
     // Fetch UTXOs if not provided
     let escrowInputs: UTXO[] = providedEscrowInputs || [];
@@ -896,82 +884,22 @@ export class DawnStakingManager extends BTCLockerCore {
 
     const psbt = new bitcoin.Psbt({ network: this.network });
 
-    // Determine if we need to set locktime for escrow and timelock scripts
-    let maxLocktime = 0;
+    // Determine locktime from script info
+    const escrowLocktime = escrowScript.locktime ?? 0;
+    const timelockLocktime = timelockScript.locktime ?? 0;
+    const maxLocktime = Math.max(escrowLocktime, timelockLocktime);
+
+    // Validate time constraints
     const currentTime = Math.floor(Date.now() / 1000);
-
-    try {
-      const script = Buffer.from(escrowRedeemScript, "hex");
-      if (script.length > 5 && script[0] === 0x63) {
-        // OP_IF (escrow script)
-        // Extract timestamp (next 4 bytes after OP_IF and push opcode)
-        const timestampBytes = script.slice(2, 6);
-        const timestamp = timestampBytes.readUInt32LE(0);
-
-        console.log(
-          `Debug: Escrow - Current time: ${currentTime}, Script deadline: ${timestamp}`,
-        );
-        console.log(
-          `Debug: Escrow - Current time human: ${new Date(currentTime * 1000).toISOString()}`,
-        );
-        console.log(
-          `Debug: Escrow - Deadline human: ${new Date(timestamp * 1000).toISOString()}`,
-        );
-
-        // Validate that we're past the deadline
-        if (currentTime < timestamp) {
-          throw new Error(
-            `Cannot withdraw from escrow script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(timestamp * 1000).toISOString()}`,
-          );
-        }
-
-        maxLocktime = Math.max(maxLocktime, timestamp);
-      }
-    } catch (parseError) {
-      // Re-throw validation errors, ignore parsing errors
-      if (
-        parseError instanceof Error &&
-        parseError.message.includes("Cannot withdraw")
-      ) {
-        throw parseError;
-      }
+    if (escrowLocktime > 0 && currentTime < escrowLocktime) {
+      throw new Error(
+        `Cannot withdraw from escrow script yet. Current time: ${currentTime}, Deadline: ${escrowLocktime}. Wait until ${new Date(escrowLocktime * 1000).toISOString()}`,
+      );
     }
-
-    try {
-      const script = Buffer.from(timelockRedeemScript, "hex");
-      if (script.length > 4 && script[0] === 0x04) {
-        // Push 4 bytes (timelock script)
-        // Extract timestamp (next 4 bytes after push opcode)
-        const timestampBytes = script.slice(1, 5);
-        const timestamp = timestampBytes.readUInt32LE(0);
-
-        console.log(
-          `Debug: Timelock - Current time: ${currentTime}, Script deadline: ${timestamp}`,
-        );
-        console.log(
-          `Debug: Timelock - Current time human: ${new Date(currentTime * 1000).toISOString()}`,
-        );
-        console.log(
-          `Debug: Timelock - Deadline human: ${new Date(timestamp * 1000).toISOString()}`,
-        );
-
-        // Validate that we're past the deadline
-        if (currentTime < timestamp) {
-          throw new Error(
-            `Cannot withdraw from timelock script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(timestamp * 1000).toISOString()}`,
-          );
-        }
-
-        maxLocktime = Math.max(maxLocktime, timestamp);
-      }
-    } catch (parseError) {
-      // Re-throw validation errors, ignore parsing errors
-      if (
-        parseError instanceof Error &&
-        parseError.message.includes("Cannot withdraw")
-      ) {
-        throw parseError;
-      }
+    if (timelockLocktime > 0 && currentTime < timelockLocktime) {
+      throw new Error(
+        `Cannot withdraw from timelock script yet. Current time: ${currentTime}, Deadline: ${timelockLocktime}. Wait until ${new Date(timelockLocktime * 1000).toISOString()}`,
+      );
     }
 
     // Set transaction locktime if needed
@@ -979,96 +907,58 @@ export class DawnStakingManager extends BTCLockerCore {
       psbt.setLocktime(maxLocktime);
     }
 
-    // Add escrow inputs
-    for (let i = 0; i < escrowInputs.length; i++) {
-      const input = escrowInputs[i];
-      const redeemScript = Buffer.from(escrowRedeemScript, "hex");
+    // Prepare tapscript spending data for escrow
+    const escrowRedeemScript = Buffer.from(escrowScript.redeemScript, "hex");
+    const escrowControlBlock = Buffer.from(escrowScript.controlBlock!, "hex");
+    const escrowOutputScript = escrowScript.outputScript
+      ? Buffer.from(escrowScript.outputScript, "hex")
+      : ScriptUtils.deriveTaprootSpendInfo(escrowRedeemScript, this.network).outputScript;
 
-      let inputData;
-      if (this.api) {
-        // Fetch full transaction for nonWitnessUtxo
-        try {
-          const txHex = await this.api.getTransaction(input.txid);
-          inputData = {
-            hash: input.txid,
-            index: input.vout,
-            nonWitnessUtxo: Buffer.from(txHex, "hex"),
-            redeemScript: redeemScript,
-            sequence: 0xfffffffe, // Enable locktime validation
-          };
-        } catch (error) {
-          throw new Error(
-            `Failed to fetch transaction ${input.txid}: ${(error as Error).message}`,
-          );
-        }
-      } else {
-        // Fallback to witnessUtxo (may not work for all P2SH scripts)
-        const scriptHash = bitcoin.crypto.hash160(redeemScript);
-        const p2shScript = bitcoin.script.compile([
-          bitcoin.opcodes.OP_HASH160,
-          scriptHash,
-          bitcoin.opcodes.OP_EQUAL,
-        ]);
+    // Prepare tapscript spending data for timelock
+    const timelockRedeemScript = Buffer.from(timelockScript.redeemScript, "hex");
+    const timelockControlBlock = Buffer.from(timelockScript.controlBlock!, "hex");
+    const timelockOutputScript = timelockScript.outputScript
+      ? Buffer.from(timelockScript.outputScript, "hex")
+      : ScriptUtils.deriveTaprootSpendInfo(timelockRedeemScript, this.network).outputScript;
 
-        inputData = {
-          hash: input.txid,
-          index: input.vout,
-          witnessUtxo: {
-            script: p2shScript,
-            value: BigInt(input.value),
+    // Add escrow inputs with Taproot script-path data
+    for (const input of escrowInputs) {
+      psbt.addInput({
+        hash: input.txid,
+        index: input.vout,
+        sequence: 0xfffffffe, // Enable locktime validation
+        witnessUtxo: {
+          script: escrowOutputScript,
+          value: BigInt(input.value),
+        },
+        tapLeafScript: [
+          {
+            leafVersion: escrowScript.leafVersion ?? TAPROOT_LEAF_VERSION,
+            script: escrowRedeemScript,
+            controlBlock: escrowControlBlock,
           },
-          redeemScript: redeemScript,
-          sequence: 0xfffffffe, // Enable locktime validation
-        };
-      }
-
-      psbt.addInput(inputData);
+        ],
+      });
     }
 
-    // Add timelock inputs
-    for (let i = 0; i < timelockInputs.length; i++) {
-      const input = timelockInputs[i];
-      const redeemScript = Buffer.from(timelockRedeemScript, "hex");
-
-      let inputData;
-      if (this.api) {
-        // Fetch full transaction for nonWitnessUtxo
-        try {
-          const txHex = await this.api.getTransaction(input.txid);
-          inputData = {
-            hash: input.txid,
-            index: input.vout,
-            nonWitnessUtxo: Buffer.from(txHex, "hex"),
-            redeemScript: redeemScript,
-            sequence: 0xfffffffe, // Enable locktime validation
-          };
-        } catch (error) {
-          throw new Error(
-            `Failed to fetch transaction ${input.txid}: ${(error as Error).message}`,
-          );
-        }
-      } else {
-        // Fallback to witnessUtxo (may not work for all P2SH scripts)
-        const scriptHash = bitcoin.crypto.hash160(redeemScript);
-        const p2shScript = bitcoin.script.compile([
-          bitcoin.opcodes.OP_HASH160,
-          scriptHash,
-          bitcoin.opcodes.OP_EQUAL,
-        ]);
-
-        inputData = {
-          hash: input.txid,
-          index: input.vout,
-          witnessUtxo: {
-            script: p2shScript,
-            value: BigInt(input.value),
+    // Add timelock inputs with Taproot script-path data
+    for (const input of timelockInputs) {
+      psbt.addInput({
+        hash: input.txid,
+        index: input.vout,
+        sequence: 0xfffffffe, // Enable locktime validation
+        witnessUtxo: {
+          script: timelockOutputScript,
+          value: BigInt(input.value),
+        },
+        tapLeafScript: [
+          {
+            leafVersion: timelockScript.leafVersion ?? TAPROOT_LEAF_VERSION,
+            script: timelockRedeemScript,
+            controlBlock: timelockControlBlock,
           },
-          redeemScript: redeemScript,
-          sequence: 0xfffffffe, // Enable locktime validation
-        };
-      }
-
-      psbt.addInput(inputData);
+        ],
+      });
     }
 
     // Add destination output

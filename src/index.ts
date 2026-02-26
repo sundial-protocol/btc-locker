@@ -21,6 +21,7 @@ import {
   ValidationUtils,
   Utils,
 } from "./utils";
+export { SUNDIAL_NAMESPACE_XONLY, TAPROOT_LEAF_VERSION } from "./utils/scripts";
 import {
   BTCLockerError,
   ValidationError,

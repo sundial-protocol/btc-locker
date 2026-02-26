@@ -4,6 +4,7 @@ import KeyUtils from './keys';
 import ValidationUtils from './validation';
 import TransactionUtils from './transactions';
 import ScriptUtils from './scripts';
+export { SUNDIAL_NAMESPACE_XONLY, TAPROOT_LEAF_VERSION } from './scripts';
 
 export { FeeUtils, TimeUtils, KeyUtils, ValidationUtils, TransactionUtils, ScriptUtils };
 

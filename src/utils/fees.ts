@@ -42,15 +42,28 @@ export default class FeeUtils {
   }
 
   /**
-   * Estimate transaction fee based on input/output count
+   * Estimate transaction fee based on input/output count for Taproot transactions
    * @param inputCount - Number of inputs
    * @param outputCount - Number of outputs
-   * @param feeRate - Fee rate in sat/byte (default 10)
+   * @param feeRate - Fee rate in sat/vbyte (default 10)
+   * @param scriptOverhead - Additional overhead for script-path spending (default 0)
    * @returns Estimated fee in satoshis
    */
-  static estimateFee(inputCount: number, outputCount: number, feeRate: number = 10): number {
-    // Rough estimate: 150 bytes per input + 34 bytes per output + 10 bytes overhead
-    const estimatedSize = (inputCount * 150) + (outputCount * 34) + 10;
+  static estimateFee(inputCount: number, outputCount: number, feeRate: number = 10, scriptOverhead: number = 0): number {
+    // P2TR estimates: 68 vbytes per input (key-path spend), 43 vbytes per output, 11 vbytes overhead
+    const estimatedSize = (inputCount * 68) + (outputCount * 43) + 11 + scriptOverhead;
     return Math.ceil(estimatedSize * feeRate);
+  }
+
+  /**
+   * Estimate transaction size in vbytes for Taproot transactions
+   * @param inputCount - Number of inputs
+   * @param outputCount - Number of outputs  
+   * @param scriptOverhead - Additional overhead for script-path spending (default 0)
+   * @returns Estimated transaction size in vbytes
+   */
+  static estimateSize(inputCount: number, outputCount: number, scriptOverhead: number = 0): number {
+    // P2TR estimates: 68 vbytes per input (key-path spend), 43 vbytes per output, 11 vbytes overhead
+    return (inputCount * 68) + (outputCount * 43) + 11 + scriptOverhead;
   }
 }

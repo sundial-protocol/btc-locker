@@ -1,19 +1,20 @@
 
+import FeeUtils from "./fees";
+
 /**
  * Transaction utilities
  */
 export default class TransactionUtils {
   /**
-   * Estimate transaction fee
+   * Estimate transaction fee for Taproot transactions
    * @param inputs - Number of inputs
    * @param outputs - Number of outputs
    * @param feeRate - Fee rate in sat/vB
    * @returns Estimated fee in satoshis
    */
   static estimateFee(inputs: number, outputs: number, feeRate: number = 10): number {
-    // Rough estimation: P2SH input ~147 vB, P2PKH output ~34 vB, overhead ~10 vB
-    const estimatedSize = inputs * 147 + outputs * 34 + 10;
-    return Math.ceil(estimatedSize * feeRate);
+    // Delegate to FeeUtils for consistent calculation
+    return FeeUtils.estimateFee(inputs, outputs, feeRate);
   }
 
   /**

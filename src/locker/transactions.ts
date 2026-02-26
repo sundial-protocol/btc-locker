@@ -3,8 +3,10 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore, getECC } from "./core";
+import { BTCLockerCore, getECC, tweakSigner } from "./core";
+import KeyUtils from "../utils/keys";
 import type { UTXO, TransactionResult } from "../types";
+import { toXOnly } from "bitcoinjs-lib";
 
 /**
  * Transaction output specification
@@ -275,17 +277,26 @@ export class TransactionManager extends BTCLockerCore {
           network: this.network,
         });
         
-        // Add witness UTXO script if missing
+        // Add witness UTXO script if missing (key-path P2TR)
         const input = psbt.data.inputs[i];
         if (input.witnessUtxo && !input.witnessUtxo.script.length) {
-          input.witnessUtxo.script = bitcoin.payments.p2wpkh({
-            pubkey: keyPair.publicKey,
+          const internalPubkey = toXOnly(keyPair.publicKey);
+          input.witnessUtxo.script = bitcoin.payments.p2tr({
+            internalPubkey,
             network: this.network,
           }).output!;
+          input.tapInternalKey = internalPubkey;
         }
         
         try {
-          psbt.signInput(i, keyPair);
+          // Use tweaked signer for key-path P2TR inputs
+          const isTapscriptPath = input.tapLeafScript && input.tapLeafScript.length > 0;
+          if (isTapscriptPath) {
+            psbt.signInput(i, keyPair);
+          } else {
+            const tweakedKeyPair = tweakSigner(keyPair, this.network);
+            psbt.signInput(i, tweakedKeyPair);
+          }
         } catch (error) {
           console.warn(`Could not sign input ${i}:`, (error as Error).message);
           throw error;

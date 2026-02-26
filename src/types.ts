@@ -26,12 +26,14 @@ export interface KeyPair {
  * @description Contains comprehensive information about Bitcoin scripts including timelock and escrow details
  */
 export interface ScriptInfo {
-  /** Redeem script in hexadecimal format */
+  /** Redeem script in hexadecimal format (the tapscript leaf script) */
   redeemScript: string;
   /** Hash of the script */
   scriptHash: string;
-  /** Bitcoin address for the script */
+  /** Bitcoin address for the script (P2TR address) */
   address: string;
+  /** P2TR output script in hexadecimal format */
+  outputScript?: string;
   /** Type of script (timelock, escrow, etc.) */
   type: string;
   /** Optional locktime for timelock scripts */
@@ -46,6 +48,12 @@ export interface ScriptInfo {
   beforePublicKey?: string;
   /** Public key that can spend after locktime (escrow) */
   afterPublicKey?: string;
+  /** Taproot control block hex for script-path spending */
+  controlBlock?: string;
+  /** Taproot internal pubkey hex (namespace key) */
+  internalPubkey?: string;
+  /** Taproot leaf version */
+  leafVersion?: number;
 }
 
 /**
