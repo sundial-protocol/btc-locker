@@ -43,8 +43,10 @@ export function setupInspectCommands(program) {
       }
 
       locktime = parseInt(locktime);
-      const isExpired = locker.timelockCreator.isTimelockExpired(locktime);
+      
+      // Check if timelock has expired (simple comparison)
       const currentTime = Math.floor(Date.now() / 1000);
+      const isExpired = currentTime >= locktime;
 
       const result = {
         locktime,

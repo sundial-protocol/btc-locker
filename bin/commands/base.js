@@ -187,6 +187,7 @@ async function handleInteractiveCommand(cmdOptions, parentOptions) {
 }
 
 async function handleSignCommand(cmdOptions, parentOptions) {
+  const locker = await initLocker(parentOptions);
   let txHex = cmdOptions.hex;
   let privateKey = cmdOptions.privateKey;
   let inputIndex = parseInt(cmdOptions.inputIndex);
@@ -226,10 +227,11 @@ async function handleSignCommand(cmdOptions, parentOptions) {
   try {
     console.log(chalk.blue("Parsing and signing transaction..."));
 
-    // Parse the transaction hex
+    const signedTx = await locker.signTransaction(txHex, privateKey);
+
     let transaction;
     try {
-      transaction = bitcoin.Transaction.fromHex(txHex);
+      transaction = bitcoin.Transaction.fromHex(signedTx);
     } catch (parseError) {
       throw new Error(`Invalid transaction hex: ${parseError.message}`);
     }
@@ -244,7 +246,7 @@ async function handleSignCommand(cmdOptions, parentOptions) {
 
     const result = {
       original_tx: txHex,
-      signed_tx: txHex, // In a real implementation, this would be the signed version
+      signed_tx: signedTx,
       transaction: {
         txid: transaction.getId(),
         size: transaction.byteLength(),
@@ -264,14 +266,8 @@ async function handleSignCommand(cmdOptions, parentOptions) {
           `⚠️  Note: Manual transaction signing is complex and requires UTXO data.`
         )
       );
-      console.log(chalk.blue(`Transaction hex: ${txHex}`));
+      console.log(chalk.blue(`Transaction hex: ${signedTx}`));
       console.log(chalk.blue(`Private key provided for input ${inputIndex}`));
-
-      console.log(
-        chalk.yellow(
-          `💡 Tip: Use the 'spend', 'lock', or 'distribute' commands for automatic signing.`
-        )
-      );
     }
   } catch (error) {
     console.error(chalk.red(`Error: ${error.message}`));
@@ -282,7 +278,11 @@ async function handleSignCommand(cmdOptions, parentOptions) {
 }
 
 async function handleSubmitCommand(cmdOptions, parentOptions) {
-  const api = new BitcoinAPI(parentOptions.network);
+  // Create a network object that matches the expected NetworkType structure
+  const networkObj = {
+    name: parentOptions.network === "mainnet" ? "bitcoin" : parentOptions.network
+  };
+  const api = new BitcoinAPI(networkObj);
   let txHex = cmdOptions.hex;
 
   // If file option is provided, read from file
@@ -325,8 +325,8 @@ async function handleSubmitCommand(cmdOptions, parentOptions) {
       },
       outputs_summary: transaction.outs.map((output, index) => ({
         index,
-        value: output.value,
-        value_btc: TransactionUtils.satoshisToBTC(output.value),
+        value: Number(output.value),
+        value_btc: TransactionUtils.satoshisToBTC(Number(output.value)),
         script_type: output.script.length > 0 ? "Script" : "Unknown",
       })),
     };
