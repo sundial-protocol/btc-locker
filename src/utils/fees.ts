@@ -1,3 +1,17 @@
+import BitcoinAPI, { type ApiProvider } from "../bitcoin-api";
+import { type NetworkType, NETWORKS } from "./network";
+
+/**
+ * Fee priority levels for user-friendly fee selection
+ */
+export enum FeePriorities {
+  /** Fast confirmation (next block) */
+  HIGH = "high",
+  /** Medium confirmation (~6 blocks) */
+  MEDIUM = "medium",
+  /** Slow confirmation (~1 day) */
+  LOW = "low",
+}
 
 /**
  * Fee calculation and transaction utilities
@@ -20,24 +34,28 @@ export default class FeeUtils {
    * @param feeAmount - Transaction fee
    * @returns Change calculation result
    */
-  static calculateChange(totalInputValue: number, outputValue: number, feeAmount: number = this.DEFAULT_FEE): {
+  static calculateChange(
+    totalInputValue: number,
+    outputValue: number,
+    feeAmount: number = this.DEFAULT_FEE,
+  ): {
     changeAmount: number;
     isAboveDustThreshold: boolean;
     adjustedFee: number;
   } {
     const changeAmount = totalInputValue - outputValue - feeAmount;
-    const isAboveDustThreshold = changeAmount > this.DUST_THRESHOLD;
-    
+    const isAboveDustThreshold = changeAmount > this.SEGWIT_DUST_THRESHOLD;
+
     // If change is below dust threshold but positive, add it to fee
     let adjustedFee = feeAmount;
-    if (changeAmount > 0 && changeAmount <= this.DUST_THRESHOLD) {
+    if (changeAmount > 0 && changeAmount <= this.SEGWIT_DUST_THRESHOLD) {
       adjustedFee += changeAmount;
     }
 
     return {
       changeAmount: isAboveDustThreshold ? changeAmount : 0,
       isAboveDustThreshold,
-      adjustedFee
+      adjustedFee,
     };
   }
 
@@ -48,9 +66,86 @@ export default class FeeUtils {
    * @param feeRate - Fee rate in sat/byte (default 10)
    * @returns Estimated fee in satoshis
    */
-  static estimateFee(inputCount: number, outputCount: number, feeRate: number = 10): number {
+  static estimateFee(
+    inputCount: number,
+    outputCount: number,
+    feeRate: number = 10,
+  ): number {
     // Rough estimate: 150 bytes per input + 34 bytes per output + 10 bytes overhead
-    const estimatedSize = (inputCount * 150) + (outputCount * 34) + 10;
+    const estimatedSize = inputCount * 150 + outputCount * 34 + 10;
     return Math.ceil(estimatedSize * feeRate);
+  }
+
+  /**
+   * Query the blockchain for current fee rates
+   * @param network - Network to query (default: bitcoin mainnet)
+   * @param apiProvider - API provider to use (default: mempool)
+   * @returns Fee priorities with sat/byte rates for different confirmation times
+   */
+  static async queryChainFeeRates(
+    priority: FeePriorities = FeePriorities.MEDIUM,
+    network: NetworkType = NETWORKS.bitcoin,
+    apiProvider: ApiProvider = "mempool",
+  ): Promise<number> {
+    try {
+      const api = new BitcoinAPI(network, apiProvider);
+      const feeEstimates = await api.getFeeEstimates();
+
+      // Convert raw fee estimates to user-friendly priorities
+      const result = {
+        high: 0,
+        medium: 0,
+        low: 0,
+      };
+
+      // Map common block targets to priorities
+      // Look for closest matches to standard confirmation targets
+      const blockTargets = Object.keys(feeEstimates)
+        .map(Number)
+        .sort((a, b) => a - b);
+
+      // High priority: 1-2 blocks (next block confirmation)
+      result.high =
+        feeEstimates[1] || feeEstimates[2] || blockTargets[0]
+          ? feeEstimates[blockTargets[0]]
+          : 20;
+
+      // Medium priority: 3-6 blocks
+      const mediumTarget = blockTargets.find(
+        (target) => target >= 3 && target <= 6,
+      );
+      result.medium = mediumTarget
+        ? feeEstimates[mediumTarget]
+        : feeEstimates[6] || result.high * 0.7;
+
+      // Low priority: 12+ blocks (lower cost)
+      const lowTarget = blockTargets.find((target) => target >= 12);
+      result.low = lowTarget
+        ? feeEstimates[lowTarget]
+        : feeEstimates[144] || result.medium * 0.5;
+
+      // Ensure fees are reasonable (min 1 sat/byte, max 1000 sat/byte)
+      result.high = Math.min(Math.max(Math.ceil(result.high), 1), 1000);
+      result.medium = Math.min(Math.max(Math.ceil(result.medium), 1), 1000);
+      result.low = Math.min(Math.max(Math.ceil(result.low), 1), 1000);
+
+      switch (priority) {
+        case FeePriorities.HIGH:
+          return result.high;
+        case FeePriorities.MEDIUM:
+          return result.medium;
+        case FeePriorities.LOW:
+          return result.low;
+        default:
+          return result.medium;
+      }
+    } catch (error) {
+      // Fallback to reasonable default values if API fails
+      console.warn(
+        `Failed to get fee rates from ${apiProvider}: ${(error as Error).message}`,
+      );
+      // If the API call fails, return a default fee rate
+      return 10;
+    }
   }
 }

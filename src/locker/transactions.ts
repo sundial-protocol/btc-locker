@@ -59,7 +59,7 @@ export interface TransactionSigningParams {
   /** Optional redeem script for spending transactions */
   redeemScript?: string;
   /** Transaction type to determine signing method */
-  transactionType: 'funding' | 'spending';
+  transactionType: "funding" | "spending";
 }
 
 /**
@@ -119,7 +119,9 @@ export class TransactionManager extends BTCLockerCore {
    *   redeemScript: '...'
    * });
    */
-  async createSpendingTransaction(params: SpendingTransactionParams): Promise<string> {
+  async createSpendingTransaction(
+    params: SpendingTransactionParams,
+  ): Promise<string> {
     await this.ensureInitialized();
     const { inputs, outputs, redeemScript } = params;
 
@@ -156,7 +158,7 @@ export class TransactionManager extends BTCLockerCore {
               `Timelock has not expired yet. ` +
                 `Current time: ${currentTime}, Locktime: ${locktime}. ` +
                 `Time remaining: ${timeRemaining} seconds. ` +
-                `Expires at: ${expiryDate}`
+                `Expires at: ${expiryDate}`,
             );
           }
         }
@@ -165,7 +167,10 @@ export class TransactionManager extends BTCLockerCore {
       if ((error as Error).message.includes("Timelock has not expired")) {
         throw error; // Re-throw timelock errors
       }
-      console.warn("Could not parse locktime from script:", (error as Error).message);
+      console.warn(
+        "Could not parse locktime from script:",
+        (error as Error).message,
+      );
     }
 
     // Create transaction manually for better P2SH support
@@ -189,7 +194,7 @@ export class TransactionManager extends BTCLockerCore {
     outputs.forEach((output) => {
       tx.addOutput(
         bitcoin.address.toOutputScript(output.address, this.network),
-        BigInt(output.value)
+        BigInt(output.value),
       );
     });
 
@@ -210,7 +215,9 @@ export class TransactionManager extends BTCLockerCore {
    *   outputs: [{ address: '3...', value: 100000 }]
    * });
    */
-  async createFundingTransaction(params: FundingTransactionParams): Promise<string> {
+  async createFundingTransaction(
+    params: FundingTransactionParams,
+  ): Promise<string> {
     await this.ensureInitialized();
     const { inputs, outputs } = params;
 
@@ -259,22 +266,27 @@ export class TransactionManager extends BTCLockerCore {
    *   transactionType: 'funding'
    * });
    */
-  async signTransactionLegacy(params: TransactionSigningParams): Promise<string> {
+  async signTransactionLegacy(
+    params: TransactionSigningParams,
+  ): Promise<string> {
     await this.ensureInitialized();
     const { ECPair } = getECC();
-    const { unsignedTransaction, privateKeys, redeemScript, transactionType } = params;
+    const { unsignedTransaction, privateKeys, redeemScript, transactionType } =
+      params;
 
-    if (transactionType === 'funding') {
+    if (transactionType === "funding") {
       // Handle PSBT signing for funding transactions
-      const psbt = bitcoin.Psbt.fromBase64(unsignedTransaction, { network: this.network });
-      
+      const psbt = bitcoin.Psbt.fromBase64(unsignedTransaction, {
+        network: this.network,
+      });
+
       // Sign with the provided private keys
       for (let i = 0; i < psbt.inputCount; i++) {
         const privateKey = privateKeys[i] || privateKeys[0]; // Use first key if not enough keys provided
         const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, "hex"), {
           network: this.network,
         });
-        
+
         // Add witness UTXO script if missing
         const input = psbt.data.inputs[i];
         if (input.witnessUtxo && !input.witnessUtxo.script.length) {
@@ -283,7 +295,7 @@ export class TransactionManager extends BTCLockerCore {
             network: this.network,
           }).output!;
         }
-        
+
         try {
           psbt.signInput(i, keyPair);
         } catch (error) {
@@ -291,57 +303,56 @@ export class TransactionManager extends BTCLockerCore {
           throw error;
         }
       }
-      
+
       psbt.finalizeAllInputs();
       const tx = psbt.extractTransaction();
       return tx.toHex();
-      
-    } else if (transactionType === 'spending') {
+    } else if (transactionType === "spending") {
       // Handle raw transaction signing for spending transactions
       const tx = bitcoin.Transaction.fromHex(unsignedTransaction);
-      
+
       if (!redeemScript) {
         throw new Error("Redeem script is required for spending transactions");
       }
-      
+
       const redeemScriptBuf = Buffer.from(redeemScript, "hex");
-      
+
       // Sign each input
       for (let inputIndex = 0; inputIndex < tx.ins.length; inputIndex++) {
         const privateKey = privateKeys[inputIndex] || privateKeys[0];
         const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, "hex"), {
           network: this.network,
         });
-        
+
         const hashType = bitcoin.Transaction.SIGHASH_ALL;
-        
+
         // Create signature hash
         const signatureHash = tx.hashForSignature(
           inputIndex,
           redeemScriptBuf,
-          hashType
+          hashType,
         );
-        
+
         // Sign with canonical DER encoding
         const signature = keyPair.sign(Buffer.from(signatureHash));
         const signatureWithHashType = bitcoin.script.signature.encode(
           signature,
-          hashType
+          hashType,
         );
-        
+
         // Create scriptSig
         const scriptSig = bitcoin.script.compile([
           signatureWithHashType,
           redeemScriptBuf,
         ]);
-        
+
         // Set input script
         tx.setInputScript(inputIndex, scriptSig);
       }
-      
+
       return tx.toHex();
     }
-    
+
     throw new Error(`Unsupported transaction type: ${transactionType}`);
   }
 
@@ -359,28 +370,33 @@ export class TransactionManager extends BTCLockerCore {
    *   api: bitcoinApiInstance
    * });
    */
-  async submitTransactionLegacy(params: TransactionSubmissionParams): Promise<TransactionResult> {
+  async submitTransactionLegacy(
+    params: TransactionSubmissionParams,
+  ): Promise<TransactionResult> {
     const { signedTransaction, api } = params;
-    
+
     const tx = bitcoin.Transaction.fromHex(signedTransaction);
-    
+
     let txid = tx.getId();
-    
+
     // If API is provided, broadcast the transaction
-    if (api && typeof api.broadcastTransaction === 'function') {
+    if (api && typeof api.broadcastTransaction === "function") {
       try {
-        const broadcastResult = await api.broadcastTransaction(signedTransaction);
+        const broadcastResult =
+          await api.broadcastTransaction(signedTransaction);
         txid = broadcastResult.txid || txid;
       } catch (error) {
-        throw new Error(`Failed to broadcast transaction: ${(error as Error).message}`);
+        throw new Error(
+          `Failed to broadcast transaction: ${(error as Error).message}`,
+        );
       }
     }
-    
+
     return {
       hex: signedTransaction,
       txid: txid,
       size: tx.virtualSize(),
-      fee: 0 // TODO: Calculate actual fee if inputs/outputs are known
+      fee: 0, // Note: Fee calculation requires input values, calculate at transaction creation time
     };
   }
 
@@ -403,13 +419,13 @@ export class TransactionManager extends BTCLockerCore {
    */
   async signAndSubmitTransaction(
     signingParams: TransactionSigningParams,
-    submissionParams?: { api?: any }
+    submissionParams?: { api?: any },
   ): Promise<TransactionResult> {
     const signedTx = await this.signTransactionLegacy(signingParams);
-    
+
     return this.submitTransactionLegacy({
       signedTransaction: signedTx,
-      api: submissionParams?.api
+      api: submissionParams?.api,
     });
   }
 }

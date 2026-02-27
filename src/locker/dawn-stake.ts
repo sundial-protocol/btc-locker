@@ -8,7 +8,8 @@ import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core";
 import type { UTXO, ScriptInfo } from "../types";
 import { ApiUTXO } from "../bitcoin-api";
-import ScriptUtils from "../utils/scripts";
+import { FeeUtils, ScriptUtils } from "../utils";
+import { FeePriorities } from "../utils/fees";
 
 /**
  * Parameters for Dawn staking transactions
@@ -30,8 +31,8 @@ export interface DawnStakingParams {
   timelockAmount: number;
   /** Optional change address for remaining funds */
   changeAddress?: string;
-  /** Optional fee rate in satoshis per byte */
-  feeRate?: number;
+  /** Fee priority levels for user-friendly fee selection */
+  priority: FeePriorities;
   /** Optional fee address for protocol fees */
   feeAddress?: string;
   /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
@@ -165,8 +166,8 @@ export interface DawnWithdrawalParams {
   timelockRedeemScript: string;
   /** Destination address for withdrawn funds */
   destination: string;
-  /** Optional fixed fee amount in satoshis */
-  feeAmount?: number;
+  /** Fee priority levels for user-friendly fee selection */
+  priority: FeePriorities;
   /** Optional fee address for protocol fees */
   feeAddress?: string;
   /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
@@ -338,7 +339,7 @@ export class DawnStakingManager extends BTCLockerCore {
       timelockAddress,
       timelockAmount,
       changeAddress,
-      feeRate = 10,
+      priority = FeePriorities.MEDIUM,
       feeAddress,
       protocolFeeAmount,
       metadata,
@@ -372,6 +373,7 @@ export class DawnStakingManager extends BTCLockerCore {
     }
 
     let inputs: UTXO[];
+    const feeRate = await FeeUtils.queryChainFeeRates(priority);
 
     if (providedInputs) {
       // Use provided inputs
@@ -395,9 +397,12 @@ export class DawnStakingManager extends BTCLockerCore {
 
       // First estimate required amount for input selection
       const estimatedInputCount = Math.min(availableInputs.length, 3); // Estimate 1-3 inputs
-      const estimatedSize =
-        10 + estimatedInputCount * 148 + outputCount * 34 + 20;
-      const estimatedFee = estimatedSize * feeRate;
+
+      const estimatedFee = FeeUtils.estimateFee(
+        estimatedInputCount,
+        outputCount,
+        feeRate,
+      );
       const targetAmount =
         escrowAmount + timelockAmount + (protocolFeeAmount || 0) + estimatedFee;
 
@@ -789,7 +794,7 @@ export class DawnStakingManager extends BTCLockerCore {
       timelockAddress: providedTimelockAddress,
       timelockRedeemScript,
       destination,
-      feeAmount = 2000,
+      priority = FeePriorities.MEDIUM,
       feeAddress,
       protocolFeeAmount,
       metadata,
@@ -878,6 +883,12 @@ export class DawnStakingManager extends BTCLockerCore {
       0,
     );
     const totalInputValue = escrowValue + timelockValue;
+    const feeRate = await FeeUtils.queryChainFeeRates(priority);
+    const feeAmount = FeeUtils.estimateFee(
+      escrowInputs.length + timelockInputs.length,
+      1 + (protocolFeeAmount ? 1 : 0),
+      feeRate,
+    );
     const totalFees = feeAmount + (protocolFeeAmount || 0);
     const destinationValue = totalInputValue - totalFees;
 

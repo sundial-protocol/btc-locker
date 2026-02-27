@@ -5,7 +5,8 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore, getECC } from "./core";
-import { KeyUtils, ValidationUtils, ScriptUtils } from "../utils";
+import { KeyUtils, ValidationUtils, ScriptUtils, FeeUtils } from "../utils";
+import { FeePriorities } from "../utils/fees";
 import type { ScriptInfo } from "../types";
 
 /**
@@ -26,6 +27,8 @@ export interface EscrowSpendingParams {
   outputAddress: string;
   /** Whether to spend after deadline (true) or before (false) */
   spendAfterDeadline: boolean;
+  /** Fee priority levels for user-friendly fee selection */
+  priority?: FeePriorities;
   /** Current time for validation (defaults to Date.now()) */
   currentTime?: number;
   /** Previous transaction buffer (for testing/validation) */
@@ -193,6 +196,7 @@ export class EscrowManager extends BTCLockerCore {
       amount,
       outputAddress,
       spendAfterDeadline,
+      priority = FeePriorities.MEDIUM,
       currentTime = Date.now(),
       previousTransaction = null,
     } = params;
@@ -270,9 +274,10 @@ export class EscrowManager extends BTCLockerCore {
 
       psbt.addInput(inputData);
 
-      // Add output (subtract a reasonable fee)
-      const fee = 1000; // 1000 satoshis fee
-      const outputAmount = amount - fee;
+      // Calculate fee based on priority
+      const feeRate = await FeeUtils.queryChainFeeRates(priority);
+      const estimatedFee = FeeUtils.estimateFee(1, 1, feeRate); // 1 input, 1 output
+      const outputAmount = amount - estimatedFee;
 
       if (outputAmount <= 0) {
         throw new Error("Amount too small to cover fee");
