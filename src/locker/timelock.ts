@@ -33,11 +33,13 @@ export class TimelockManager extends BTCLockerCore {
     const publicKeyBuffer = KeyUtils.validateAndConvertPublicKey(publicKey);
 
     try {
+      // BIP342: tapscript OP_CHECKSIG requires 32-byte x-only public keys
+      const xOnlyPubKey = bitcoin.toXOnly(publicKeyBuffer);
       const redeemScript = bitcoin.script.compile([
         bitcoin.script.number.encode(locktimeNumber),
         bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
         bitcoin.opcodes.OP_DROP,
-        publicKeyBuffer,
+        xOnlyPubKey,
         bitcoin.opcodes.OP_CHECKSIG,
       ]);
 
@@ -82,11 +84,13 @@ export class TimelockManager extends BTCLockerCore {
     // Validate public key using shared utility
     const publicKeyBuffer = KeyUtils.validateAndConvertPublicKey(publicKey);
 
+    // BIP342: tapscript OP_CHECKSIG requires 32-byte x-only public keys
+    const xOnlyPubKey = bitcoin.toXOnly(publicKeyBuffer);
     const redeemScript = bitcoin.script.compile([
       bitcoin.script.number.encode(sequence),
       bitcoin.opcodes.OP_CHECKSEQUENCEVERIFY,
       bitcoin.opcodes.OP_DROP,
-      publicKeyBuffer,
+      xOnlyPubKey,
       bitcoin.opcodes.OP_CHECKSIG,
     ]);
 

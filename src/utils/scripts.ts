@@ -9,7 +9,7 @@ import * as bitcoin from "bitcoinjs-lib";
  */
 export const SUNDIAL_NAMESPACE_XONLY = Buffer.from(
   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "hex"
+  "hex",
 );
 
 /**
@@ -54,7 +54,7 @@ export default class ScriptUtils {
   }
 
   /**
-   * Validate Bitcoin address (supports P2PKH, P2SH, P2WPKH, P2WSH, and P2TR/Taproot)
+   * Validate Bitcoin address
    * @param address - Bitcoin address to validate
    * @param network - Bitcoin network (optional)
    * @returns True if valid
@@ -92,7 +92,7 @@ export default class ScriptUtils {
       .join(" ");
   }
 
-    /**
+  /**
    * Create P2TR address from a tapscript leaf
    * @param redeemScript - The tapscript leaf script buffer
    * @param network - Bitcoin network
@@ -132,6 +132,16 @@ export default class ScriptUtils {
   }
 
   /**
+   * Calculate script hash from redeem script
+   * @param redeemScript - The redeem script buffer
+   * @returns Script hash as hex string
+   */
+  static calculateScriptHash(redeemScript: Buffer): string {
+    const hash = bitcoin.crypto.hash160(redeemScript);
+    return Buffer.from(hash).toString("hex");
+  }
+
+  /**
    * Derive the revealed script and control block for script-path spending of a tapscript leaf.
    * @param redeemScript - The tapscript leaf script buffer
    * @param network - Bitcoin network
@@ -154,6 +164,7 @@ export default class ScriptUtils {
     if (!spend.witness || spend.witness.length < 2) {
       throw new Error("Failed to derive script-path witness/controlBlock");
     }
+
     if (!spend.output || !spend.address) {
       throw new Error("Failed to derive P2TR output/address");
     }
@@ -167,16 +178,6 @@ export default class ScriptUtils {
       outputScript: Buffer.from(spend.output),
       address: spend.address,
     };
-  }
-
-  /**
-   * Calculate script hash from redeem script
-   * @param redeemScript - The redeem script buffer
-   * @returns Script hash as hex string
-   */
-  static calculateScriptHash(redeemScript: Buffer): string {
-    const hash = bitcoin.crypto.hash160(redeemScript);
-    return Buffer.from(hash).toString("hex");
   }
 
   /**
@@ -203,7 +204,7 @@ export default class ScriptUtils {
   /**
    * Encode an integer as a Bitcoin-style variable-length integer
    */
-  private static encodeVarInt(n: number): Buffer {
+  static encodeVarInt(n: number): Buffer {
     if (n < 0xfd) {
       const buf = Buffer.alloc(1);
       buf.writeUInt8(n, 0);

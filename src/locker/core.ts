@@ -200,14 +200,15 @@ export class BTCLockerCore {
         return ECPair.fromPrivateKey(Buffer.from(key, "hex"), { network: this.network });
       });
 
-      // Sign each input with appropriate key
+      // BIP341 sighash commits to ALL input scriptPubKeys (hash_scriptpubkeys),
+      // so we must fill in every witnessUtxo script BEFORE signing any input.
+      // Pass 1: populate missing witnessUtxo scripts and tapInternalKey
       for (let i = 0; i < psbt.inputCount; i++) {
-        const keyPair = keyPairs[i] || keyPairs[0]; // Use per-input key or default to first key
+        const keyPair = keyPairs[i] || keyPairs[0];
         const input = psbt.data.inputs[i];
         
         const isTapscriptPath = input.tapLeafScript && input.tapLeafScript.length > 0;
         
-        // For P2TR key-path inputs (no tapLeafScript), fill in witnessUtxo and tapInternalKey
         if (!isTapscriptPath && input.witnessUtxo && (!input.witnessUtxo.script || 
             input.witnessUtxo.script.length === 0 || 
             input.witnessUtxo.script.every((byte: number) => byte === 0))) {
@@ -224,6 +225,14 @@ export class BTCLockerCore {
           input.witnessUtxo.script = p2tr.output;
           input.tapInternalKey = internalPubkey;
         }
+      }
+
+      // Pass 2: sign each input with the appropriate key and method
+      for (let i = 0; i < psbt.inputCount; i++) {
+        const keyPair = keyPairs[i] || keyPairs[0];
+        const input = psbt.data.inputs[i];
+        
+        const isTapscriptPath = input.tapLeafScript && input.tapLeafScript.length > 0;
         
         try {
           if (isTapscriptPath) {

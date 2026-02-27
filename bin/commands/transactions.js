@@ -8,6 +8,7 @@ import chalk from "chalk";
 import { ScriptUtils, TransactionUtils } from "../../dist/esm/index.js";
 import BitcoinAPI from "../../dist/esm/bitcoin-api.js";
 import { NETWORKS } from "../../dist/esm/utils/network.js";
+import { SUNDIAL_NAMESPACE_XONLY, TAPROOT_LEAF_VERSION } from "../../dist/esm/utils/scripts.js";
 import { initLocker, displayResult } from "./shared.js";
 
 /**
@@ -1505,6 +1506,54 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
       ),
     );
 
+    // Build full ScriptInfo objects from raw redeem script hex
+    // These contain the Taproot spend info needed for script-path spending
+    const escrowRedeemBuf = Buffer.from(escrowScript, "hex");
+    const escrowSpendInfo = ScriptUtils.deriveTaprootSpendInfo(escrowRedeemBuf, network);
+    const escrowScriptInfo = {
+      redeemScript: escrowScript,
+      scriptHash: ScriptUtils.calculateScriptHash(escrowRedeemBuf),
+      address: escrowSpendInfo.address,
+      outputScript: escrowSpendInfo.outputScript.toString("hex"),
+      controlBlock: escrowSpendInfo.controlBlock.toString("hex"),
+      internalPubkey: SUNDIAL_NAMESPACE_XONLY.toString("hex"),
+      leafVersion: TAPROOT_LEAF_VERSION,
+      type: "time-escrow",
+      locktime: (() => {
+        // Parse locktime from escrow script (OP_IF <push> <timestamp> ...)
+        try {
+          if (escrowRedeemBuf.length > 5 && escrowRedeemBuf[0] === 0x63) {
+            const ts = escrowRedeemBuf.slice(2, 6).readUInt32LE(0);
+            return ts;
+          }
+        } catch {}
+        return 0;
+      })(),
+    };
+
+    const timelockRedeemBuf = Buffer.from(timelockScript, "hex");
+    const timelockSpendInfo = ScriptUtils.deriveTaprootSpendInfo(timelockRedeemBuf, network);
+    const timelockScriptInfo = {
+      redeemScript: timelockScript,
+      scriptHash: ScriptUtils.calculateScriptHash(timelockRedeemBuf),
+      address: timelockSpendInfo.address,
+      outputScript: timelockSpendInfo.outputScript.toString("hex"),
+      controlBlock: timelockSpendInfo.controlBlock.toString("hex"),
+      internalPubkey: SUNDIAL_NAMESPACE_XONLY.toString("hex"),
+      leafVersion: TAPROOT_LEAF_VERSION,
+      type: "timelock",
+      locktime: (() => {
+        // Parse locktime from timelock script (<push 4> <timestamp> ...)
+        try {
+          if (timelockRedeemBuf.length > 4 && timelockRedeemBuf[0] === 0x04) {
+            const ts = timelockRedeemBuf.slice(1, 5).readUInt32LE(0);
+            return ts;
+          }
+        } catch {}
+        return 0;
+      })(),
+    };
+
     // Prepare inputs for the dawn withdrawal method
     const dawnEscrowInputs =
       confirmedEscrowUtxos.length > 0
@@ -1512,7 +1561,6 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
             txid: utxo.txid,
             vout: utxo.vout,
             value: utxo.value,
-            redeemScript: escrowScript,
           }))
         : [];
 
@@ -1522,21 +1570,21 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
             txid: utxo.txid,
             vout: utxo.vout,
             value: utxo.value,
-            redeemScript: timelockScript,
           }))
         : [];
 
     // Create unsigned dawn withdrawal transaction
     const unsignedPsbt = await locker.createDawnWithdrawalTransaction({
       escrowInputs: dawnEscrowInputs,
-      escrowRedeemScript: escrowScript,
+      escrowAddress: escrowAddress,
+      escrowScript: escrowScriptInfo,
       timelockInputs: dawnTimelockInputs,
-      timelockRedeemScript: timelockScript,
+      timelockAddress: timelockAddress,
+      timelockScript: timelockScriptInfo,
       destination: destination,
       feeAmount: feeAmount,
       feeAddress,
       protocolFeeAmount,
-      api: api, // Pass API instance for transaction fetching
     });
 
     // Sign the transaction with the single private key

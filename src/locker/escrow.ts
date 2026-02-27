@@ -116,15 +116,18 @@ export class EscrowManager extends BTCLockerCore {
       // ELSE
       //   <beforePublicKey> CHECKSIG
       // ENDIF
+      // BIP342: tapscript OP_CHECKSIG requires 32-byte x-only public keys
+      const xOnlyAfterPubKey = bitcoin.toXOnly(afterPubKeyBuffer);
+      const xOnlyBeforePubKey = bitcoin.toXOnly(beforePubKeyBuffer);
       const redeemScript = bitcoin.script.compile([
         bitcoin.opcodes.OP_IF,
         bitcoin.script.number.encode(deadlineNumber),
         bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
         bitcoin.opcodes.OP_DROP,
-        afterPubKeyBuffer,
+        xOnlyAfterPubKey,
         bitcoin.opcodes.OP_CHECKSIG,
         bitcoin.opcodes.OP_ELSE,
-        beforePubKeyBuffer,
+        xOnlyBeforePubKey,
         bitcoin.opcodes.OP_CHECKSIG,
         bitcoin.opcodes.OP_ENDIF,
       ]);
