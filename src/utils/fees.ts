@@ -44,11 +44,11 @@ export default class FeeUtils {
     adjustedFee: number;
   } {
     const changeAmount = totalInputValue - outputValue - feeAmount;
-    const isAboveDustThreshold = changeAmount > this.SEGWIT_DUST_THRESHOLD;
+    const isAboveDustThreshold = changeAmount > this.DUST_THRESHOLD;
 
     // If change is below dust threshold but positive, add it to fee
     let adjustedFee = feeAmount;
-    if (changeAmount > 0 && changeAmount <= this.SEGWIT_DUST_THRESHOLD) {
+    if (changeAmount > 0 && changeAmount <= this.DUST_THRESHOLD) {
       adjustedFee += changeAmount;
     }
 
