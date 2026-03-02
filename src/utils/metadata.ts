@@ -117,176 +117,195 @@ function bytesToUuid(buf: Buffer, offset: number): string {
   ].join("-");
 }
 
-// ── Public API ───────────────────────────────────────────────────────────────
+// ── Metadata Utils Class ─────────────────────────────────────────────────────
 
 /**
- * Pack a Sundial metadata payload into a 60-byte Buffer suitable for OP_RETURN.
- *
- * @param opts          - Metadata fields to encode
- * @param opts.magic    - Magic identifier, must be `"SD01"` or some future value (default `"SD01"`)
- * @param opts.txType   - Transaction type (Deposit, YieldWithdrawal, Distribution, UserWithdrawal)
- * @param opts.depositId - UUID v4 string identifying the deposit
- * @param opts.providerXonlyPubkey - 32-byte x-only public key as a 64-char hex string
- * @param opts.flags    - Optional 2-byte flags (default `0x0000`)
- * @returns 60-byte Buffer
- *
- * @example
- * ```ts
- * const buf = packMetadata({
- *   txType: TxType.Deposit,
- *   depositId: "550e8400-e29b-41d4-a716-446655440000",
- *   providerXonlyPubkey: "a1b2c3...64-hex-chars",
- * });
- * ```
+ * Sundial metadata utilities for OP_RETURN encoding/decoding
  */
-export function packMetadata(opts: {
-  magic?: string;
-  txType: TxType;
-  depositId: string;
-  providerXonlyPubkey: string;
-  flags?: number;
-}): Buffer {
-  const magic = opts.magic ?? MAGIC_SD01;
+export default class MetadataUtils {
+  // Export constants as static properties
+  static readonly MAGIC_SD01 = MAGIC_SD01;
+  static readonly METADATA_VERSION = METADATA_VERSION;
+  static readonly METADATA_LENGTH = METADATA_LENGTH;
+  static readonly TxType = TxType;
 
-  // ── Validate inputs ──────────────────────────────────────────────────────
-  if (!VALID_MAGICS.has(magic)) {
-    throw new ValidationError(
-      `Invalid magic: "${magic}". Must be one of: ${[...VALID_MAGICS].join(", ")}`,
-    );
+  /**
+   * Pack a Sundial metadata payload into a 60-byte Buffer suitable for OP_RETURN.
+   *
+   * @param opts          - Metadata fields to encode
+   * @param opts.magic    - Magic identifier, must be `"SD01"` or some future value (default `"SD01"`)
+   * @param opts.txType   - Transaction type (Deposit, YieldWithdrawal, Distribution, UserWithdrawal)
+   * @param opts.depositId - UUID v4 string identifying the deposit
+   * @param opts.providerXonlyPubkey - 32-byte x-only public key as a 64-char hex string
+   * @param opts.flags    - Optional 2-byte flags (default `0x0000`)
+   * @returns 60-byte Buffer
+   *
+   * @example
+   * ```ts
+   * const buf = MetadataUtils.pack({
+   *   txType: MetadataUtils.TxType.Deposit,
+   *   depositId: "550e8400-e29b-41d4-a716-446655440000",
+   *   providerXonlyPubkey: "a1b2c3...64-hex-chars",
+   * });
+   * ```
+   */
+  static pack(opts: {
+    magic?: string;
+    txType: TxType;
+    depositId: string;
+    providerXonlyPubkey: string;
+    flags?: number;
+  }): Buffer {
+    const magic = opts.magic ?? MAGIC_SD01;
+
+    // ── Validate inputs ──────────────────────────────────────────────────────
+    if (!VALID_MAGICS.has(magic)) {
+      throw new ValidationError(
+        `Invalid magic: "${magic}". Must be one of: ${[...VALID_MAGICS].join(", ")}`,
+      );
+    }
+
+    if (!(opts.txType in TxType)) {
+      throw new ValidationError(
+        `Invalid txType: ${opts.txType}. Must be a valid TxType value`,
+      );
+    }
+
+    const depositIdBytes = uuidToBytes(opts.depositId);
+
+    const pubkeyHex = opts.providerXonlyPubkey;
+    if (
+      pubkeyHex.length !== 64 ||
+      !/^[0-9a-fA-F]{64}$/.test(pubkeyHex)
+    ) {
+      throw new ValidationError(
+        `Invalid providerXonlyPubkey: expected 64 hex chars (32 bytes), got ${pubkeyHex.length} chars`,
+      );
+    }
+    const pubkeyBytes = Buffer.from(pubkeyHex, "hex");
+
+    const flags = opts.flags ?? 0x0000;
+    if (flags < 0 || flags > 0xffff) {
+      throw new ValidationError(
+        `Invalid flags: ${flags}. Must be a 16-bit unsigned integer (0–65535)`,
+      );
+    }
+
+    // ── Build buffer ─────────────────────────────────────────────────────────
+    const buf = Buffer.alloc(METADATA_LENGTH);
+
+    // Magic (4 bytes, ASCII)
+    buf.write(magic, OFF_MAGIC, 4, "ascii");
+
+    // Version (1 byte)
+    buf.writeUInt8(METADATA_VERSION, OFF_VERSION);
+
+    // TxType (1 byte)
+    buf.writeUInt8(opts.txType, OFF_TX_TYPE);
+
+    // Deposit ID (16 bytes)
+    depositIdBytes.copy(buf, OFF_DEPOSIT_ID);
+
+    // Provider x-only pubkey (32 bytes)
+    pubkeyBytes.copy(buf, OFF_PROVIDER_KEY);
+
+    // Flags (2 bytes, big-endian)
+    buf.writeUInt16BE(flags, OFF_FLAGS);
+
+    // Checksum (CRC-32 over bytes 0–55)
+    const checksum = crc32(buf, 0, OFF_CHECKSUM);
+    buf.writeUInt32BE(checksum, OFF_CHECKSUM);
+
+    return buf;
   }
 
-  if (!(opts.txType in TxType)) {
-    throw new ValidationError(
-      `Invalid txType: ${opts.txType}. Must be a valid TxType value`,
-    );
+  /**
+   * Unpack a 60-byte Sundial metadata Buffer into its constituent fields.
+   *
+   * Validates the magic, version, tx_type, and CRC-32 checksum.
+   *
+   * @param buf - 60-byte Buffer (e.g. from an OP_RETURN output)
+   * @returns Decoded {@link SundialMetadata}
+   * @throws {ValidationError} on any structural or checksum mismatch
+   *
+   * @example
+   * ```ts
+   * const meta = MetadataUtils.unpack(opReturnData);
+   * console.log(meta.depositId);  // "550e8400-e29b-41d4-a716-446655440000"
+   * console.log(meta.txType);     // TxType.Deposit
+   * ```
+   */
+  static unpack(buf: Buffer): SundialMetadata {
+    if (!Buffer.isBuffer(buf)) {
+      throw new ValidationError("Expected a Buffer");
+    }
+
+    if (buf.length !== METADATA_LENGTH) {
+      throw new ValidationError(
+        `Invalid metadata length: expected ${METADATA_LENGTH} bytes, got ${buf.length}`,
+      );
+    }
+
+    // ── Magic ────────────────────────────────────────────────────────────────
+    const magic = buf.toString("ascii", OFF_MAGIC, OFF_MAGIC + 4);
+    if (!VALID_MAGICS.has(magic)) {
+      throw new ValidationError(
+        `Unknown magic: "${magic}". Expected one of: ${[...VALID_MAGICS].join(", ")}`,
+      );
+    }
+
+    // ── Version ──────────────────────────────────────────────────────────────
+    const version = buf.readUInt8(OFF_VERSION);
+    if (version !== METADATA_VERSION) {
+      throw new ValidationError(
+        `Unsupported metadata version: ${version}. Expected ${METADATA_VERSION}`,
+      );
+    }
+
+    // ── TxType ───────────────────────────────────────────────────────────────
+    const txType = buf.readUInt8(OFF_TX_TYPE) as TxType;
+    if (!(txType in TxType)) {
+      throw new ValidationError(
+        `Invalid txType: ${txType}. Must be a valid TxType value`,
+      );
+    }
+
+    // ── Checksum ─────────────────────────────────────────────────────────────
+    const storedChecksum = buf.readUInt32BE(OFF_CHECKSUM);
+    const computedChecksum = crc32(buf, 0, OFF_CHECKSUM);
+    if (storedChecksum !== computedChecksum) {
+      throw new ValidationError(
+        `Checksum mismatch: stored 0x${storedChecksum.toString(16).padStart(8, "0")}, ` +
+          `computed 0x${computedChecksum.toString(16).padStart(8, "0")}`,
+      );
+    }
+
+    // ── Deposit ID ───────────────────────────────────────────────────────────
+    const depositId = bytesToUuid(buf, OFF_DEPOSIT_ID);
+
+    // ── Provider x-only pubkey ───────────────────────────────────────────────
+    const providerXonlyPubkey = buf
+      .subarray(OFF_PROVIDER_KEY, OFF_PROVIDER_KEY + 32)
+      .toString("hex");
+
+    // ── Flags ────────────────────────────────────────────────────────────────
+    const flags = buf.readUInt16BE(OFF_FLAGS);
+
+    return {
+      magic,
+      version,
+      txType,
+      depositId,
+      providerXonlyPubkey,
+      flags,
+    };
   }
 
-  const depositIdBytes = uuidToBytes(opts.depositId);
-
-  const pubkeyHex = opts.providerXonlyPubkey;
-  if (
-    pubkeyHex.length !== 64 ||
-    !/^[0-9a-fA-F]{64}$/.test(pubkeyHex)
-  ) {
-    throw new ValidationError(
-      `Invalid providerXonlyPubkey: expected 64 hex chars (32 bytes), got ${pubkeyHex.length} chars`,
-    );
-  }
-  const pubkeyBytes = Buffer.from(pubkeyHex, "hex");
-
-  const flags = opts.flags ?? 0x0000;
-  if (flags < 0 || flags > 0xffff) {
-    throw new ValidationError(
-      `Invalid flags: ${flags}. Must be a 16-bit unsigned integer (0–65535)`,
-    );
-  }
-
-  // ── Build buffer ─────────────────────────────────────────────────────────
-  const buf = Buffer.alloc(METADATA_LENGTH);
-
-  // Magic (4 bytes, ASCII)
-  buf.write(magic, OFF_MAGIC, 4, "ascii");
-
-  // Version (1 byte)
-  buf.writeUInt8(METADATA_VERSION, OFF_VERSION);
-
-  // TxType (1 byte)
-  buf.writeUInt8(opts.txType, OFF_TX_TYPE);
-
-  // Deposit ID (16 bytes)
-  depositIdBytes.copy(buf, OFF_DEPOSIT_ID);
-
-  // Provider x-only pubkey (32 bytes)
-  pubkeyBytes.copy(buf, OFF_PROVIDER_KEY);
-
-  // Flags (2 bytes, big-endian)
-  buf.writeUInt16BE(flags, OFF_FLAGS);
-
-  // Checksum (CRC-32 over bytes 0–55)
-  const checksum = crc32(buf, 0, OFF_CHECKSUM);
-  buf.writeUInt32BE(checksum, OFF_CHECKSUM);
-
-  return buf;
+  // Legacy function aliases for backward compatibility
+  static packMetadata = MetadataUtils.pack;
+  static unpackMetadata = MetadataUtils.unpack;
 }
 
-/**
- * Unpack a 60-byte Sundial metadata Buffer into its constituent fields.
- *
- * Validates the magic, version, tx_type, and CRC-32 checksum.
- *
- * @param buf - 60-byte Buffer (e.g. from an OP_RETURN output)
- * @returns Decoded {@link SundialMetadata}
- * @throws {ValidationError} on any structural or checksum mismatch
- *
- * @example
- * ```ts
- * const meta = unpackMetadata(opReturnData);
- * console.log(meta.depositId);  // "550e8400-e29b-41d4-a716-446655440000"
- * console.log(meta.txType);     // TxType.Deposit
- * ```
- */
-export function unpackMetadata(buf: Buffer): SundialMetadata {
-  if (!Buffer.isBuffer(buf)) {
-    throw new ValidationError("Expected a Buffer");
-  }
-
-  if (buf.length !== METADATA_LENGTH) {
-    throw new ValidationError(
-      `Invalid metadata length: expected ${METADATA_LENGTH} bytes, got ${buf.length}`,
-    );
-  }
-
-  // ── Magic ────────────────────────────────────────────────────────────────
-  const magic = buf.toString("ascii", OFF_MAGIC, OFF_MAGIC + 4);
-  if (!VALID_MAGICS.has(magic)) {
-    throw new ValidationError(
-      `Unknown magic: "${magic}". Expected one of: ${[...VALID_MAGICS].join(", ")}`,
-    );
-  }
-
-  // ── Version ──────────────────────────────────────────────────────────────
-  const version = buf.readUInt8(OFF_VERSION);
-  if (version !== METADATA_VERSION) {
-    throw new ValidationError(
-      `Unsupported metadata version: ${version}. Expected ${METADATA_VERSION}`,
-    );
-  }
-
-  // ── TxType ───────────────────────────────────────────────────────────────
-  const txType = buf.readUInt8(OFF_TX_TYPE) as TxType;
-  if (!(txType in TxType)) {
-    throw new ValidationError(
-      `Invalid txType: ${txType}. Must be a valid TxType value`,
-    );
-  }
-
-  // ── Checksum ─────────────────────────────────────────────────────────────
-  const storedChecksum = buf.readUInt32BE(OFF_CHECKSUM);
-  const computedChecksum = crc32(buf, 0, OFF_CHECKSUM);
-  if (storedChecksum !== computedChecksum) {
-    throw new ValidationError(
-      `Checksum mismatch: stored 0x${storedChecksum.toString(16).padStart(8, "0")}, ` +
-        `computed 0x${computedChecksum.toString(16).padStart(8, "0")}`,
-    );
-  }
-
-  // ── Deposit ID ───────────────────────────────────────────────────────────
-  const depositId = bytesToUuid(buf, OFF_DEPOSIT_ID);
-
-  // ── Provider x-only pubkey ───────────────────────────────────────────────
-  const providerXonlyPubkey = buf
-    .subarray(OFF_PROVIDER_KEY, OFF_PROVIDER_KEY + 32)
-    .toString("hex");
-
-  // ── Flags ────────────────────────────────────────────────────────────────
-  const flags = buf.readUInt16BE(OFF_FLAGS);
-
-  return {
-    magic,
-    version,
-    txType,
-    depositId,
-    providerXonlyPubkey,
-    flags,
-  };
-}
+// Export legacy functions for backward compatibility
+export const packMetadata = MetadataUtils.pack;
+export const unpackMetadata = MetadataUtils.unpack;

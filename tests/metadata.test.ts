@@ -1,11 +1,10 @@
-import {
+import MetadataUtils, {
   packMetadata,
   unpackMetadata,
   TxType,
   MAGIC_SD01,
   METADATA_VERSION,
   METADATA_LENGTH,
-  type SundialMetadata,
 } from "../src/utils/metadata";
 import { ValidationError } from "../src/errors";
 
@@ -18,7 +17,52 @@ describe("Sundial Metadata", () => {
   const INVALID_PUBKEY_LONG = "a".repeat(65);
   const INVALID_UUID = "invalid-uuid";
 
-  describe("packMetadata", () => {
+  describe("MetadataUtils class", () => {
+    describe("pack method", () => {
+      test("should pack deposit metadata with default values", () => {
+        const result = MetadataUtils.pack({
+          txType: TxType.Deposit,
+          depositId: VALID_UUID,
+          providerXonlyPubkey: VALID_PUBKEY,
+        });
+
+        expect(Buffer.isBuffer(result)).toBe(true);
+        expect(result.length).toBe(METADATA_LENGTH);
+      });
+
+      test("should have static constants", () => {
+        expect(MetadataUtils.MAGIC_SD01).toBe(MAGIC_SD01);
+        expect(MetadataUtils.METADATA_VERSION).toBe(METADATA_VERSION);
+        expect(MetadataUtils.METADATA_LENGTH).toBe(METADATA_LENGTH);
+        expect(MetadataUtils.TxType).toBe(TxType);
+      });
+    });
+
+    describe("unpack method", () => {
+      test("should unpack valid metadata", () => {
+        const packed = MetadataUtils.pack({
+          txType: TxType.Deposit,
+          depositId: VALID_UUID,
+          providerXonlyPubkey: VALID_PUBKEY,
+          flags: 0x1234,
+        });
+
+        const result = MetadataUtils.unpack(packed);
+
+        expect(result).toEqual({
+          magic: MAGIC_SD01,
+          version: METADATA_VERSION,
+          txType: TxType.Deposit,
+          depositId: VALID_UUID,
+          providerXonlyPubkey: VALID_PUBKEY,
+          flags: 0x1234,
+        });
+      });
+    });
+  });
+
+  describe("Legacy function compatibility", () => {
+    describe("packMetadata", () => {
     describe("valid inputs", () => {
       test("should pack deposit metadata with default values", () => {
         const result = packMetadata({
@@ -407,4 +451,4 @@ describe("Sundial Metadata", () => {
       expect(() => unpackMetadata(packed)).not.toThrow();
     });
   });
-});
+})});

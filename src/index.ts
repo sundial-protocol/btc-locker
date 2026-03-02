@@ -19,6 +19,7 @@ import {
   KeyUtils,
   FeeUtils,
   ValidationUtils,
+  MetadataUtils,
   Utils,
 } from "./utils";
 import {
@@ -52,6 +53,10 @@ export type {
   EscrowSpendingParams,
   EscrowSpendingSigningParams
 } from "./locker/escrow";
+
+export type {
+  SundialMetadata
+} from "./utils/metadata";
 
 export type {
   ExtendedKeyPair
@@ -132,6 +137,7 @@ export {
   KeyUtils,
   FeeUtils,
   ValidationUtils,
+  MetadataUtils,
   Utils,
   BTCLockerError,
   ValidationError,
@@ -155,6 +161,7 @@ export default {
   KeyUtils,
   FeeUtils,
   ValidationUtils,
+  MetadataUtils,
   Utils,
   BTCLockerError,
   ValidationError,
