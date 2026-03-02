@@ -5,6 +5,7 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core";
 import { FeeUtils } from "../utils";
+import { FeePriorities } from "../utils/fees";
 import type { UTXO } from "../types";
 import BitcoinAPI from "../bitcoin-api";
 
@@ -34,8 +35,8 @@ export interface YieldDistributionParams {
   metadata?: string;
   /** Optional change address for remaining funds */
   changeAddress?: string;
-  /** Optional fee rate in satoshis per byte */
-  feeRate?: number;
+  /** Fee priority levels for user-friendly fee selection */
+  priority?: FeePriorities;
 }
 
 /**
@@ -77,6 +78,8 @@ export interface YieldDistributionSigningParams {
   unsignedTransaction: string;
   /** Private key for signing the distribution transaction */
   privateKey: string;
+  /** Fee priority for the transaction */
+  priority?: FeePriorities;
 }
 
 /**
@@ -108,6 +111,7 @@ export class YieldDistributor extends BTCLockerCore {
       timelockAddress,
       amount,
       metadata,
+      priority = FeePriorities.MEDIUM,
     } = params;
 
     // Validate that either inputs or sourceAddress+api are provided
@@ -136,12 +140,21 @@ export class YieldDistributor extends BTCLockerCore {
 
     const psbt = new bitcoin.Psbt({ network: this.network });
 
+    // Calculate fee based on priority
+    const feeRate = await FeeUtils.queryChainFeeRates(priority);
+    const outputCount = params.changeAddress ? 2 : 1; // yield output + optional change
+    const estimatedFee = FeeUtils.estimateFee(
+      inputs.length,
+      outputCount,
+      feeRate,
+    );
+
     // Calculate total input value and change
     const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
     const changeResult = FeeUtils.calculateChange(
       totalInputValue,
       amount,
-      FeeUtils.DEFAULT_FEE,
+      estimatedFee,
     );
 
     // Add inputs (without signing information)
@@ -204,12 +217,15 @@ export class YieldDistributor extends BTCLockerCore {
     const mainOutput = outputs[0];
     const changeOutput = outputs.length > 1 ? outputs[1] : null;
 
+    const feeRate = await FeeUtils.queryChainFeeRates(signingParams.priority);
+    const fee = FeeUtils.estimateFee(tx.ins.length, outputs.length, feeRate);
+
     return {
       transaction: tx,
       hex: signedTx,
       txid: txid,
       size: tx.byteLength(),
-      fee: 0, // TODO: Calculate actual fee if needed
+      fee: fee,
       metadata: metadata || "Yield distribution to timelock",
       distribution: {
         amount: Number(mainOutput.value),

@@ -27,7 +27,11 @@ export function setupTransactionCommands(program) {
     .option("-f, --from-key <key>", "Private key to send from (hex)")
     .option("-t, --to <address>", "Timelock script address to send to")
     .option("-a, --amount <satoshis>", "Amount to send in satoshis")
-    .option("--fee <satoshis>", "Fee in satoshis", "1000")
+    .option(
+      "-p, --priority <level>",
+      "Fee priority: high, medium, low",
+      "medium",
+    )
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
@@ -43,7 +47,11 @@ export function setupTransactionCommands(program) {
     .option("-f, --from-key <key>", "Private key to send from (hex)")
     .option("-t, --to <address>", "Timelock script address to send yield to")
     .option("-a, --amount <satoshis>", "Amount to distribute in satoshis")
-    .option("--fee <satoshis>", "Fee in satoshis", "1000")
+    .option(
+      "-p, --priority <level>",
+      "Fee priority: high, medium, low",
+      "medium",
+    )
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
@@ -63,7 +71,11 @@ export function setupTransactionCommands(program) {
     .option("-s, --script-data <file>", "Path to script data JSON file")
     .option("-u, --utxo <txid:vout:amount>", "UTXO to spend (txid:vout:amount)")
     .option("-t, --to <address>", "Address to send funds to")
-    .option("--fee <satoshis>", "Fee in satoshis", "1000")
+    .option(
+      "-p, --priority <level>",
+      "Fee priority: high, medium, low",
+      "medium",
+    )
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
@@ -86,7 +98,11 @@ export function setupTransactionCommands(program) {
       "--after-deadline",
       "Spend after deadline (default: before deadline)",
     )
-    .option("--fee <satoshis>", "Fee in satoshis", "1000")
+    .option(
+      "-p, --priority <level>",
+      "Fee priority: high, medium, low",
+      "medium",
+    )
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
@@ -107,8 +123,11 @@ export function setupTransactionCommands(program) {
       "--timelock-amount <satoshis>",
       "Amount to send to timelock (satoshis)",
     )
-
-    .option("--fee-rate <rate>", "Fee rate in sat/byte", "10")
+    .option(
+      "-p, --priority <level>",
+      "Fee priority: high, medium, low",
+      "medium",
+    )
     .option("--fee-address <address>", "Protocol fee address (optional)")
     .option(
       "--protocol-fee-amount <satoshis>",
@@ -145,7 +164,11 @@ export function setupTransactionCommands(program) {
       "-d, --destination <address>",
       "Destination address for withdrawal (calculated from private key if not provided)",
     )
-    .option("--fee <satoshis>", "Fee in satoshis", "2000")
+    .option(
+      "-p, --priority <level>",
+      "Fee priority: high, medium, low",
+      "medium",
+    )
     .option("--fee-address <address>", "Protocol fee address (optional)")
     .option(
       "--protocol-fee-amount <satoshis>",
@@ -156,6 +179,44 @@ export function setupTransactionCommands(program) {
       const parentOptions = program.opts();
       await handleDawnWithdrawCommand(cmdOptions, parentOptions);
     });
+}
+
+/**
+ * Parse actual fee from a signed transaction by comparing inputs vs outputs
+ */
+function calculateTransactionFee(signedTxHex, inputUtxos) {
+  const tx = bitcoin.Transaction.fromHex(signedTxHex);
+
+  // Calculate total input value
+  const totalInputValue = inputUtxos.reduce((sum, utxo) => sum + utxo.value, 0);
+
+  // Calculate total output value
+  const totalOutputValue = tx.outs.reduce(
+    (sum, output) => sum + Number(output.value),
+    0,
+  );
+
+  // Fee is the difference
+  const actualFee = totalInputValue - totalOutputValue;
+
+  return {
+    actualFee,
+    totalInputValue,
+    totalOutputValue,
+    feeRate: (actualFee / tx.virtualSize()).toFixed(2),
+  };
+}
+
+/**
+ * Convert priority string to enum value
+ */
+function parsePriority(priorityStr) {
+  const priorityMap = {
+    high: "HIGH",
+    medium: "MEDIUM",
+    low: "LOW",
+  };
+  return priorityMap[priorityStr.toLowerCase()] || "MEDIUM";
 }
 
 async function handleLockCommand(cmdOptions, parentOptions) {
@@ -178,7 +239,7 @@ async function handleLockCommand(cmdOptions, parentOptions) {
   let fromPrivateKey = cmdOptions.fromKey;
   let toAddress = cmdOptions.to;
   let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
-  let feeAmount = parseInt(cmdOptions.fee);
+  let priority = parsePriority(cmdOptions.priority || "medium");
 
   // Interactive prompts if options not provided
   if (!fromPrivateKey || !toAddress || !amount) {
@@ -246,19 +307,16 @@ async function handleLockCommand(cmdOptions, parentOptions) {
       (sum, utxo) => sum + utxo.value,
       0,
     );
-    const totalRequired = amount + feeAmount;
 
-    if (totalInputValue < totalRequired) {
+    // Check if we have any funds at all
+    if (totalInputValue <= amount) {
       console.log(
         chalk.red(
-          `❌ Insufficient funds. Have ${totalInputValue} sat, need ${totalRequired} sat`,
+          `❌ Insufficient funds. Have ${totalInputValue} sat, need ${amount} sat + fees`,
         ),
       );
       return;
     }
-
-    // Calculate change
-    const changeAmount = totalInputValue - totalRequired;
 
     console.log(chalk.blue("Creating locking transaction..."));
 
@@ -277,24 +335,7 @@ async function handleLockCommand(cmdOptions, parentOptions) {
       },
     ];
 
-    // Add change output if needed
-    if (changeAmount > 546) {
-      // Dust threshold
-      outputs.push({
-        address: fromAddress,
-        value: changeAmount,
-      });
-    } else if (changeAmount > 0) {
-      // Add dust to fee
-      feeAmount += changeAmount;
-      console.log(
-        chalk.yellow(
-          `Adding ${changeAmount} sat dust to fee (total fee: ${feeAmount} sat)`,
-        ),
-      );
-    }
-
-    // Create unsigned funding transaction
+    // Create unsigned funding transaction first to let the system calculate change
     const unsignedPsbt = await locker.createFundingTransaction({
       inputs: txInputs,
       outputs: outputs,
@@ -303,13 +344,18 @@ async function handleLockCommand(cmdOptions, parentOptions) {
     // Sign the transaction
     const signedTx = await locker.signTransaction(unsignedPsbt, fromPrivateKey);
 
+    // Calculate actual fee and change from the transaction
+    const feeInfo = calculateTransactionFee(signedTx, txInputs);
+    const changeAmount = feeInfo.totalInputValue - amount - feeInfo.actualFee;
+
     // Parse transaction details for display
     const tx = bitcoin.Transaction.fromHex(signedTx);
     const lockingTx = {
       hex: signedTx,
       txid: tx.getId(),
       size: signedTx.length / 2,
-      fee: feeAmount, // Use the calculated fee amount
+      fee: feeInfo.actualFee,
+      feeRate: feeInfo.feeRate,
     };
 
     const result = {
@@ -318,7 +364,7 @@ async function handleLockCommand(cmdOptions, parentOptions) {
         txid: lockingTx.txid,
         size: lockingTx.size,
         fee: lockingTx.fee,
-        fee_rate: (lockingTx.fee / lockingTx.size).toFixed(2),
+        fee_rate: lockingTx.feeRate,
       },
       inputs: {
         count: confirmedUtxos.length,
@@ -350,7 +396,7 @@ async function handleLockCommand(cmdOptions, parentOptions) {
         name: "confirm",
         message: `Lock ${TransactionUtils.satoshisToBTC(
           amount,
-        )} BTC in timelock script with ${feeAmount} sat fee?`,
+        )} BTC in timelock script with ${lockingTx.fee} sat fee (${lockingTx.feeRate} sat/byte)?`,
         default: false,
       },
     ]);
@@ -417,6 +463,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
   let toAddress = cmdOptions.to;
   let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
   let memo = cmdOptions.memo;
+  let priority = parsePriority(cmdOptions.priority || "medium");
 
   // Interactive prompts if options not provided
   if (!fromPrivateKey || !toAddress || !amount) {
@@ -515,11 +562,15 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
       inputs: txInputs,
       timelockAddress: toAddress,
       amount: amount,
-      memo: memo,
+      priority: priority,
+      metadata: memo,
     });
 
     // Sign the transaction
     const signedTx = await locker.signTransaction(unsignedPsbt, fromPrivateKey);
+
+    // Calculate actual fee from the transaction
+    const feeInfo = calculateTransactionFee(signedTx, txInputs);
 
     // Parse transaction details for display
     const tx = bitcoin.Transaction.fromHex(signedTx);
@@ -527,10 +578,11 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
       hex: signedTx,
       txid: tx.getId(),
       size: signedTx.length / 2,
-      fee: 1000, // Use default fee amount
+      fee: feeInfo.actualFee,
+      feeRate: feeInfo.feeRate,
       distribution: {
         amount: amount,
-        change: totalInputValue - amount - 1000,
+        change: totalInputValue - amount - feeInfo.actualFee,
       },
       memo: memo,
     };
@@ -541,7 +593,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
         txid: distributionResult.txid,
         size: distributionResult.size,
         fee: distributionResult.fee,
-        fee_rate: (distributionResult.fee / distributionResult.size).toFixed(2),
+        fee_rate: distributionResult.feeRate,
       },
       inputs: {
         count: confirmedUtxos.length,
@@ -578,12 +630,10 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
     const confirmationMessage = memo
       ? `Distribute ${TransactionUtils.satoshisToBTC(
           distributionResult.distribution.amount,
-        )} BTC yield to timelock with ${
-          distributionResult.fee
-        } sat fee?\nMemo: ${memo}`
+        )} BTC yield to timelock with ${distributionResult.fee} sat fee (${distributionResult.feeRate} sat/byte)?\nMemo: ${memo}`
       : `Distribute ${TransactionUtils.satoshisToBTC(
           distributionResult.distribution.amount,
-        )} BTC yield to timelock with ${distributionResult.fee} sat fee?`;
+        )} BTC yield to timelock with ${distributionResult.fee} sat fee (${distributionResult.feeRate} sat/byte)?`;
 
     const { confirm } = await inquirer.prompt([
       {
@@ -666,7 +716,7 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
   let redeemScript = cmdOptions.script;
   let privateKey = cmdOptions.key;
   let destinationAddress = cmdOptions.to;
-  let feeAmount = parseInt(cmdOptions.fee);
+  let priority = parsePriority(cmdOptions.priority || "medium");
   let emergencyKey = cmdOptions.emergencyKey;
 
   // Interactive prompts if options not provided
@@ -744,21 +794,17 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
       return;
     }
 
-    // Calculate total available and output amount
+    // Calculate total available
     const totalInputValue = confirmedUtxos.reduce(
       (sum, utxo) => sum + utxo.value,
       0,
     );
-    const outputValue = totalInputValue - feeAmount;
 
-    if (outputValue <= 0) {
-      console.log(chalk.red("❌ Fee amount exceeds available balance"));
-      return;
-    }
-
+    // For spending transactions, let the transaction method handle fee calculation
+    // We'll use the full input amount and let the system calculate optimal output
     console.log(chalk.blue("Creating spending transaction..."));
 
-    // Create unsigned spending transaction
+    // Create unsigned spending transaction (fee calculation handled automatically)
     const txInputs = confirmedUtxos.map((utxo) => ({
       txid: utxo.txid,
       vout: utxo.vout,
@@ -766,12 +812,13 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
       scriptPubKey: null, // Will be set by the library
     }));
 
+    // Create outputs with full available amount (fees will be deducted automatically)
     const txParams = {
       inputs: txInputs,
       outputs: [
         {
           address: destinationAddress,
-          value: outputValue,
+          value: totalInputValue, // Start with full amount, fees deducted automatically
         },
       ],
       redeemScript,
@@ -784,13 +831,18 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
     const privateKeys = emergencyKey ? [privateKey, emergencyKey] : privateKey;
     const signedTx = await locker.signTransaction(unsignedPsbt, privateKeys);
 
+    // Calculate actual fee from the transaction
+    const feeInfo = calculateTransactionFee(signedTx, txInputs);
+    const actualOutputValue = feeInfo.totalInputValue - feeInfo.actualFee;
+
     // Parse transaction details for display
     const tx = bitcoin.Transaction.fromHex(signedTx);
     const spendingTx = {
       hex: signedTx,
       txid: tx.getId(),
       size: signedTx.length / 2,
-      fee: feeAmount,
+      fee: feeInfo.actualFee,
+      feeRate: feeInfo.feeRate,
     };
 
     const result = {
@@ -799,7 +851,7 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
         txid: spendingTx.txid,
         size: spendingTx.size,
         fee: spendingTx.fee,
-        fee_rate: (spendingTx.fee / spendingTx.size).toFixed(2),
+        fee_rate: spendingTx.feeRate,
       },
       inputs: {
         count: confirmedUtxos.length,
@@ -808,8 +860,8 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
       },
       outputs: {
         destination: destinationAddress,
-        value: outputValue,
-        value_btc: TransactionUtils.satoshisToBTC(outputValue),
+        value: actualOutputValue,
+        value_btc: TransactionUtils.satoshisToBTC(actualOutputValue),
       },
     };
 
@@ -828,7 +880,7 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
         name: "confirm",
         message: `Broadcast transaction spending ${TransactionUtils.satoshisToBTC(
           totalInputValue,
-        )} BTC with ${feeAmount} sat fee?`,
+        )} BTC with ${spendingTx.fee} sat fee (${spendingTx.feeRate} sat/byte)?`,
         default: false,
       },
     ]);
@@ -896,7 +948,7 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
     ? parseInt(cmdOptions.timelockAmount)
     : null;
 
-  let feeRate = parseInt(cmdOptions.feeRate);
+  let priority = parsePriority(cmdOptions.priority || "medium");
   let feeAddress = cmdOptions.feeAddress;
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
@@ -1074,59 +1126,27 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
       0,
     );
 
-    // Check if we have sufficient funds
+    // Basic check if we have sufficient funds (detailed fee calculation handled by transaction method)
     const totalRequired =
       escrowAmount + timelockAmount + (protocolFeeAmount || 0);
-    const outputCount =
-      2 + (protocolFeeAmount ? 1 : 0) + (changeAddress ? 1 : 0);
-    const estimatedFee =
-      (10 + txInputs.length * 148 + outputCount * 34 + 20) * feeRate;
 
-    if (totalInputValue < totalRequired + estimatedFee) {
+    if (totalInputValue <= totalRequired) {
       throw new Error(
-        `Insufficient funds. Have: ${totalInputValue} sats, Need: ${totalRequired + estimatedFee} sats (${totalRequired} outputs + ${estimatedFee} network fee)`,
+        `Insufficient funds. Have: ${totalInputValue} sats, Need at least: ${totalRequired} sats + network fees`,
       );
     }
 
     console.log(chalk.cyan("Creating Dawn staking transaction..."));
 
-    // Calculate optimal amounts
-    const calculation = await locker.calculateDawnStakingAmounts({
-      inputs: txInputs,
-      desiredEscrowAmount: escrowAmount,
-      desiredTimelockAmount: timelockAmount,
-      includeChange: true, // Always include change to sender's address
-      feeRate,
-      protocolFeeAmount: protocolFeeAmount || 0,
-    });
-
-    if (!calculation.feasible) {
-      throw new Error(
-        `Transaction not feasible: ${calculation.recommendation}`,
-      );
-    }
-
-    console.log(chalk.gray("Transaction calculation:"));
-    console.log(
-      chalk.gray(`  Total input: ${calculation.totalInputValue} sats`),
-    );
-    console.log(chalk.gray(`  Escrow amount: ${escrowAmount} sats`));
-    console.log(chalk.gray(`  Timelock amount: ${timelockAmount} sats`));
-    console.log(
-      chalk.gray(`  Estimated fee: ${calculation.estimatedFee} sats`),
-    );
-    console.log(chalk.gray(`  Change: ${calculation.changeAmount} sats`));
-
-    // Create the unsigned Dawn staking transaction
+    // Create the unsigned Dawn staking transaction (fee calculation handled automatically)
     const unsignedPsbt = await locker.createDawnStakingTransaction({
       inputs: txInputs,
       escrowAddress,
       escrowAmount,
       timelockAddress,
       timelockAmount,
-      changeAddress:
-        calculation.changeAmount >= 546 ? changeAddress : undefined,
-      feeRate,
+      changeAddress,
+      priority: priority,
       feeAddress,
       protocolFeeAmount,
       metadata,
@@ -1135,17 +1155,26 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
     // Sign the transaction
     const signedTx = await locker.signTransaction(unsignedPsbt, fromPrivateKey);
 
+    // Calculate actual fee from the transaction
+    const feeInfo = calculateTransactionFee(signedTx, txInputs);
+
     // Parse transaction details for display
     const tx = bitcoin.Transaction.fromHex(signedTx);
     const stakingTx = {
       hex: signedTx,
       txid: tx.getId(),
       size: signedTx.length / 2,
-      fee: calculation.estimatedFee,
+      fee: feeInfo.actualFee,
+      feeRate: feeInfo.feeRate,
       outputs: {
         escrowAmount,
         timelockAmount,
-        changeAmount: calculation.changeAmount,
+        changeAmount:
+          feeInfo.totalInputValue -
+          escrowAmount -
+          timelockAmount -
+          (protocolFeeAmount || 0) -
+          feeInfo.actualFee,
       },
     };
 
@@ -1156,7 +1185,7 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
         txid: stakingTx.txid,
         size: stakingTx.size,
         fee: stakingTx.fee,
-        fee_rate: (stakingTx.fee / stakingTx.size).toFixed(2),
+        fee_rate: stakingTx.feeRate,
       },
       inputs: {
         count: txInputs.length,
@@ -1286,7 +1315,7 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
   let timelockScript = cmdOptions.timelockScript;
   let privateKey = cmdOptions.privateKey;
   let destination = cmdOptions.destination;
-  let feeAmount = parseInt(cmdOptions.fee);
+  let priority = parsePriority(cmdOptions.priority || "medium");
   let feeAddress = cmdOptions.feeAddress;
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
@@ -1462,14 +1491,12 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
       0,
     );
     const totalInputValue = escrowValue + timelockValue;
-    const totalFees = feeAmount + (protocolFeeAmount || 0);
-    const destinationValue = totalInputValue - totalFees;
 
-    if (destinationValue <= 546) {
-      // Dust threshold
+    // Basic check for sufficient funds (detailed calculation handled by transaction method)
+    if (totalInputValue <= (protocolFeeAmount || 0)) {
       console.log(
         chalk.red(
-          "Destination output amount would be below dust threshold after fees",
+          `Insufficient funds. Have ${totalInputValue} sats, need at least ${protocolFeeAmount || 0} sats for protocol fees + network fees`,
         ),
       );
       return;
@@ -1491,7 +1518,6 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
         `  Total input: ${totalInputValue} sats (${TransactionUtils.satoshisToBTC(totalInputValue)} BTC)`,
       ),
     );
-    console.log(chalk.gray(`  Network fee: ${feeAmount} sats`));
     if (protocolFeeAmount && feeAddress) {
       console.log(
         chalk.gray(
@@ -1499,11 +1525,6 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
         ),
       );
     }
-    console.log(
-      chalk.gray(
-        `  Destination output: ${destinationValue} sats (${TransactionUtils.satoshisToBTC(destinationValue)} BTC)`,
-      ),
-    );
 
     // Prepare inputs for the dawn withdrawal method
     const dawnEscrowInputs =
@@ -1533,14 +1554,19 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
       timelockInputs: dawnTimelockInputs,
       timelockRedeemScript: timelockScript,
       destination: destination,
-      feeAmount: feeAmount,
+      priority: priority,
       feeAddress,
       protocolFeeAmount,
-      api: api, // Pass API instance for transaction fetching
     });
 
     // Sign the transaction with the single private key
     const signedTx = await locker.signTransaction(unsignedPsbt, privateKey);
+
+    // Calculate actual fees from the transaction
+    const allInputs = [...dawnEscrowInputs, ...dawnTimelockInputs];
+    const feeInfo = calculateTransactionFee(signedTx, allInputs);
+    const destinationValue =
+      feeInfo.totalInputValue - (protocolFeeAmount || 0) - feeInfo.actualFee;
 
     // Parse transaction details for display
     const tx = bitcoin.Transaction.fromHex(signedTx);
@@ -1548,7 +1574,8 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
       hex: signedTx,
       txid: tx.getId(),
       size: signedTx.length / 2,
-      fee: feeAmount,
+      fee: feeInfo.actualFee,
+      feeRate: feeInfo.feeRate,
       inputs: {
         escrowValue,
         timelockValue,
@@ -1568,7 +1595,7 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
         txid: withdrawalResult.txid,
         size: withdrawalResult.size,
         fee: withdrawalResult.fee,
-        fee_rate: (withdrawalResult.fee / withdrawalResult.size).toFixed(2),
+        fee_rate: withdrawalResult.feeRate,
       },
       inputs: {
         escrow: {
@@ -1623,7 +1650,7 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
       {
         type: "confirm",
         name: "confirm",
-        message: `Broadcast withdrawal transaction moving ${TransactionUtils.satoshisToBTC(totalInputValue)} BTC to ${destination} with ${feeAmount} sat fee?`,
+        message: `Broadcast withdrawal transaction moving ${TransactionUtils.satoshisToBTC(totalInputValue)} BTC to ${destination} with ${withdrawalResult.fee} sat fee (${withdrawalResult.feeRate} sat/byte)?`,
         default: false,
       },
     ]);
@@ -1681,9 +1708,11 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
     privateKey,
     to: destinationAddress,
     afterDeadline,
-    fee: feeAmount = 1000,
+    priority: priorityStr = "medium",
     dryRun,
   } = cmdOptions;
+
+  const priority = parsePriority(priorityStr);
 
   // Convert 'mainnet' to 'bitcoin' for consistency
   const networkName =
@@ -1844,6 +1873,7 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
       amount: amount,
       outputAddress: destinationAddress,
       spendAfterDeadline: afterDeadline,
+      priority: priority,
       currentTime: Date.now(),
     });
 
@@ -1851,6 +1881,10 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
     const signedTx = await locker.signTransaction(unsignedPsbt, privateKey, {
       spendAfterDeadline: afterDeadline,
     });
+
+    // Calculate actual fee from the transaction
+    const inputUtxos = [{ value: amount }];
+    const feeInfo = calculateTransactionFee(signedTx, inputUtxos);
 
     // Calculate transaction details for display
     const tx = bitcoin.Transaction.fromHex(signedTx);
@@ -1863,8 +1897,8 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
         hex: txHex,
         txid: txId,
         size: size,
-        fee: feeAmount,
-        fee_rate: (feeAmount / size).toFixed(2),
+        fee: feeInfo.actualFee,
+        fee_rate: feeInfo.feeRate,
       },
       inputs: {
         count: 1,
@@ -1873,8 +1907,8 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
       },
       outputs: {
         destination: destinationAddress,
-        value: amount - feeAmount,
-        value_btc: TransactionUtils.satoshisToBTC(amount - feeAmount),
+        value: amount - feeInfo.actualFee,
+        value_btc: TransactionUtils.satoshisToBTC(amount - feeInfo.actualFee),
       },
       spending_path: afterDeadline ? "After deadline" : "Before deadline",
     };
@@ -1887,7 +1921,7 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
         {
           type: "confirm",
           name: "confirm",
-          message: `Broadcast transaction spending ${TransactionUtils.satoshisToBTC(amount)} BTC with ${feeAmount} sat fee?`,
+          message: `Broadcast transaction spending ${TransactionUtils.satoshisToBTC(amount)} BTC with ${feeInfo.actualFee} sat fee (${feeInfo.feeRate} sat/byte)?`,
           default: false,
         },
       ]);
