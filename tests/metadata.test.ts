@@ -229,6 +229,7 @@ describe("Sundial Metadata", () => {
       });
     });
   });
+  });
 
   describe("unpackMetadata", () => {
     let validPackedMetadata: Buffer;
@@ -398,6 +399,178 @@ describe("Sundial Metadata", () => {
     });
   });
 
+  describe("pack_string validation", () => {
+    describe("JSON string input", () => {
+      test("should pack valid JSON metadata string", () => {
+        const metadataObj = {
+          txType: TxType.Deposit,
+          depositId: VALID_UUID,
+          providerXonlyPubkey: VALID_PUBKEY,
+          flags: 0x1234
+        };
+        const jsonString = JSON.stringify(metadataObj);
+        
+        const result = MetadataUtils.pack_string(jsonString);
+        
+        expect(Buffer.isBuffer(result)).toBe(true);
+        expect(result.length).toBe(METADATA_LENGTH);
+        
+        // Verify it can be unpacked correctly
+        const unpacked = MetadataUtils.unpack(result);
+        expect(unpacked.txType).toBe(TxType.Deposit);
+        expect(unpacked.depositId).toBe(VALID_UUID);
+        expect(unpacked.providerXonlyPubkey).toBe(VALID_PUBKEY);
+        expect(unpacked.flags).toBe(0x1234);
+      });
+
+      test("should pack JSON with minimal required fields", () => {
+        const metadataObj = {
+          txType: TxType.YieldWithdrawal,
+          depositId: VALID_UUID,
+          providerXonlyPubkey: VALID_PUBKEY
+        };
+        const jsonString = JSON.stringify(metadataObj);
+        
+        const result = MetadataUtils.pack_string(jsonString);
+        const unpacked = MetadataUtils.unpack(result);
+        
+        expect(unpacked.magic).toBe(MAGIC_SD01);
+        expect(unpacked.version).toBe(METADATA_VERSION);
+        expect(unpacked.flags).toBe(0);
+      });
+
+      test("should throw on missing required fields", () => {
+        const invalidMetadata = {
+          txType: TxType.Deposit,
+          depositId: VALID_UUID
+          // missing providerXonlyPubkey
+        };
+        const jsonString = JSON.stringify(invalidMetadata);
+        
+        expect(() => MetadataUtils.pack_string(jsonString)).toThrow(ValidationError);
+      });
+
+      test("should throw on invalid JSON metadata", () => {
+        const invalidMetadata = {
+          txType: 999, // invalid
+          depositId: VALID_UUID,
+          providerXonlyPubkey: VALID_PUBKEY
+        };
+        const jsonString = JSON.stringify(invalidMetadata);
+        
+        expect(() => MetadataUtils.pack_string(jsonString)).toThrow(ValidationError);
+      });
+    });
+
+    describe("hex string input", () => {
+      test("should pack valid hex metadata string", () => {
+        // First create valid packed metadata
+        const originalPacked = MetadataUtils.pack({
+          txType: TxType.Distribution,
+          depositId: VALID_UUID,
+          providerXonlyPubkey: VALID_PUBKEY,
+          flags: 0x5678
+        });
+        const hexString = originalPacked.toString('hex');
+        
+        const result = MetadataUtils.pack_string(hexString);
+        
+        expect(Buffer.isBuffer(result)).toBe(true);
+        expect(result.length).toBe(METADATA_LENGTH);
+        expect(result).toEqual(originalPacked);
+      });
+
+      test("should throw on invalid hex string length", () => {
+        const shortHexString = "a".repeat(118); // 118 chars instead of 120
+        
+        expect(() => MetadataUtils.pack_string(shortHexString)).toThrow(ValidationError);
+        expect(() => MetadataUtils.pack_string(shortHexString)).toThrow(/Invalid hex string length/);
+      });
+
+      test("should throw on invalid hex metadata", () => {
+        // Create 120 character hex string but with invalid content
+        const invalidHex = "FF".repeat(60); // All 0xFF bytes won't have valid checksum
+        
+        expect(() => MetadataUtils.pack_string(invalidHex)).toThrow(ValidationError);
+      });
+
+      test("should handle uppercase and lowercase hex", () => {
+        const originalPacked = MetadataUtils.pack({
+          txType: TxType.UserWithdrawal,
+          depositId: VALID_UUID,
+          providerXonlyPubkey: VALID_PUBKEY
+        });
+        
+        const upperHex = originalPacked.toString('hex').toUpperCase();
+        const lowerHex = originalPacked.toString('hex').toLowerCase();
+        
+        const resultUpper = MetadataUtils.pack_string(upperHex);
+        const resultLower = MetadataUtils.pack_string(lowerHex);
+        
+        expect(resultUpper).toEqual(originalPacked);
+        expect(resultLower).toEqual(originalPacked);
+      });
+    });
+
+    describe("invalid input types", () => {
+      test("should throw on non-string input", () => {
+        expect(() => MetadataUtils.pack_string(123 as any)).toThrow(ValidationError);
+        expect(() => MetadataUtils.pack_string(null as any)).toThrow(ValidationError);
+        expect(() => MetadataUtils.pack_string(undefined as any)).toThrow(ValidationError);
+        expect(() => MetadataUtils.pack_string({} as any)).toThrow(ValidationError);
+      });
+
+      test("should throw on invalid JSON string", () => {
+        const invalidJson = "{ invalid json }";
+        
+        expect(() => MetadataUtils.pack_string(invalidJson)).toThrow(ValidationError);
+      });
+
+      test("should throw on non-hex, non-JSON string", () => {
+        const randomString = "this is just a random string";
+        
+        expect(() => MetadataUtils.pack_string(randomString)).toThrow(ValidationError);
+        expect(() => MetadataUtils.pack_string(randomString)).toThrow(/must be either valid JSON/);
+      });
+
+      test("should throw on hex string with invalid characters", () => {
+        const invalidHex = "G".repeat(120); // G is not a valid hex character
+        
+        expect(() => MetadataUtils.pack_string(invalidHex)).toThrow(ValidationError);
+      });
+    });
+
+    describe("toOutput with string", () => {
+      test("should create OP_RETURN output from JSON string", () => {
+        const metadataObj = {
+          txType: TxType.Deposit,
+          depositId: VALID_UUID,
+          providerXonlyPubkey: VALID_PUBKEY
+        };
+        const jsonString = JSON.stringify(metadataObj);
+        
+        const output = MetadataUtils.toOutput(jsonString);
+        
+        expect(output.value).toBe(BigInt(0));
+        expect(Buffer.isBuffer(output.script)).toBe(true);
+      });
+
+      test("should create OP_RETURN output from hex string", () => {
+        const originalPacked = MetadataUtils.pack({
+          txType: TxType.Distribution,
+          depositId: VALID_UUID,
+          providerXonlyPubkey: VALID_PUBKEY
+        });
+        const hexString = originalPacked.toString('hex');
+        
+        const output = MetadataUtils.toOutput(hexString);
+        
+        expect(output.value).toBe(BigInt(0));
+        expect(Buffer.isBuffer(output.script)).toBe(true);
+      });
+    });
+  });
+
   describe("constants", () => {
     test("should export correct constants", () => {
       expect(MAGIC_SD01).toBe("SD01");
@@ -451,4 +624,4 @@ describe("Sundial Metadata", () => {
       expect(() => unpackMetadata(packed)).not.toThrow();
     });
   });
-})});
+});

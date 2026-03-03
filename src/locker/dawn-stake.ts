@@ -10,6 +10,7 @@ import type { UTXO, ScriptInfo } from "../types";
 import { ApiUTXO } from "../bitcoin-api";
 import { FeeUtils, ScriptUtils } from "../utils";
 import { FeePriorities } from "../utils/fees";
+import MetadataUtils, { SundialMetadata } from "../utils/metadata";
 
 /**
  * Parameters for Dawn staking transactions
@@ -38,7 +39,7 @@ export interface DawnStakingParams {
   /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
   protocolFeeAmount?: number;
   /** Optional arbitrary string metadata to include in transaction (max 80 bytes) */
-  metadata?: string;
+  metadata?: SundialMetadata | string;
 }
 
 /**
@@ -173,7 +174,7 @@ export interface DawnWithdrawalParams {
   /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
   protocolFeeAmount?: number;
   /** Optional arbitrary string metadata to include in transaction (max 80 bytes) */
-  metadata?: string;
+  metadata?: SundialMetadata;
 }
 
 /**
@@ -365,13 +366,6 @@ export class DawnStakingManager extends BTCLockerCore {
       );
     }
 
-    // Validate metadata
-    if (metadata && Buffer.byteLength(metadata, "utf8") > 80) {
-      throw new Error(
-        `Metadata exceeds maximum size of 80 bytes. Current size: ${Buffer.byteLength(metadata, "utf8")} bytes`,
-      );
-    }
-
     let inputs: UTXO[];
     const feeRate = await FeeUtils.queryChainFeeRates(priority);
 
@@ -536,15 +530,7 @@ export class DawnStakingManager extends BTCLockerCore {
 
       // 5. Metadata output (if specified)
       if (metadata) {
-        const metadataBuffer = Buffer.from(metadata, "utf8");
-        const opReturnScript = bitcoin.script.compile([
-          bitcoin.opcodes.OP_RETURN,
-          metadataBuffer,
-        ]);
-        psbt.addOutput({
-          script: opReturnScript,
-          value: BigInt(0),
-        });
+        psbt.addOutput(MetadataUtils.toOutput(metadata));
       }
 
       // Return unsigned PSBT
@@ -810,13 +796,6 @@ export class DawnStakingManager extends BTCLockerCore {
     if (protocolFeeAmount && !feeAddress) {
       throw new Error(
         "feeAddress is required when protocolFeeAmount is provided",
-      );
-    }
-
-    // Validate metadata
-    if (metadata && Buffer.byteLength(metadata, "utf8") > 80) {
-      throw new Error(
-        `Metadata exceeds maximum size of 80 bytes. Current size: ${Buffer.byteLength(metadata, "utf8")} bytes`,
       );
     }
 
@@ -1098,15 +1077,7 @@ export class DawnStakingManager extends BTCLockerCore {
 
     // Add metadata output if specified
     if (metadata) {
-      const metadataBuffer = Buffer.from(metadata, "utf8");
-      const opReturnScript = bitcoin.script.compile([
-        bitcoin.opcodes.OP_RETURN,
-        metadataBuffer,
-      ]);
-      psbt.addOutput({
-        script: opReturnScript,
-        value: BigInt(0),
-      });
+      psbt.addOutput(MetadataUtils.toOutput(metadata));
     }
 
     // Return unsigned PSBT

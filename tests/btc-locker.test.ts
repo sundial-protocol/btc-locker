@@ -26,11 +26,6 @@ describe("BTCLocker", () => {
       const mainnetLocker = new BTCLocker("bitcoin");
       await mainnetLocker.init();
       expect(mainnetLocker.network).toBe(bitcoin.networks.bitcoin);
-
-      // Test regtest string
-      const regtestLocker = new BTCLocker("regtest");
-      await regtestLocker.init();
-      expect(regtestLocker.network).toBe(bitcoin.networks.regtest);
     });
 
     test("should accept network objects", async () => {

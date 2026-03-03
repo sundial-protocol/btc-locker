@@ -4,10 +4,11 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore, getECC } from "./core";
+import { BTCLockerCore } from "./core";
 import { KeyUtils, ValidationUtils, ScriptUtils, FeeUtils } from "../utils";
 import { FeePriorities } from "../utils/fees";
 import type { ScriptInfo } from "../types";
+import MetadataUtils, { SundialMetadata } from "../utils/metadata";
 
 /**
  * Escrow transaction creation parameters
@@ -33,6 +34,8 @@ export interface EscrowSpendingParams {
   currentTime?: number;
   /** Previous transaction buffer (for testing/validation) */
   previousTransaction?: Buffer | null;
+  /** Optional metadata to attach to the transaction */
+  metadata?: SundialMetadata;
 }
 
 /**
@@ -47,6 +50,8 @@ export interface EscrowSpendingSigningParams {
   privateKey: Buffer | string;
   /** Whether this is spending after deadline (affects validation) */
   spendAfterDeadline: boolean;
+  /** Optional metadata for the transaction */
+  metadata?: SundialMetadata | string,
 }
 
 /**
@@ -296,6 +301,10 @@ export class EscrowManager extends BTCLockerCore {
         value: BigInt(outputAmount),
       });
 
+      if(params.metadata) {
+        psbt.addOutput(MetadataUtils.toOutput(params.metadata));
+      }
+
       // Return unsigned PSBT as base64
       return psbt.toBase64();
     } catch (error) {
@@ -309,12 +318,10 @@ export class EscrowManager extends BTCLockerCore {
    * Convenience method to sign and submit an escrow spending transaction
    * @async
    * @param signingParams - Escrow spending signing parameters
-   * @param memo - Optional memo for the transaction
    * @returns Transaction result with escrow spending metadata
    */
   async signAndSubmitEscrowSpendingTransaction(
     signingParams: EscrowSpendingSigningParams,
-    memo?: string,
   ): Promise<EscrowSpendingTransaction> {
     const privateKeyString =
       typeof signingParams.privateKey === "string"

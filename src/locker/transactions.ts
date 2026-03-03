@@ -5,6 +5,7 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore, getECC } from "./core";
 import type { UTXO, TransactionResult } from "../types";
+import MetadataUtils, { SundialMetadata } from "../utils/metadata";
 
 /**
  * Transaction output specification
@@ -32,6 +33,8 @@ export interface SpendingTransactionParams {
   redeemScript: string;
   /** Optional locktime for the transaction */
   locktime?: number;
+  /** Optional metadata for the transaction */
+  metadata?: SundialMetadata;
 }
 
 /**
@@ -174,11 +177,10 @@ export class TransactionManager extends BTCLockerCore {
     }
 
     // Create transaction manually for better P2SH support
-    const tx = new bitcoin.Transaction();
-    tx.version = 2;
+    const psbt = new bitcoin.Psbt({ network: this.network });
 
     if (locktime) {
-      tx.locktime = locktime;
+      psbt.setLocktime(locktime);
     }
 
     // Add inputs with appropriate sequence numbers
@@ -187,19 +189,20 @@ export class TransactionManager extends BTCLockerCore {
       const txHash = Buffer.from(utxo.txid, "hex").reverse();
       // If this is a timelock script (locktime exists and has passed validation above),
       // use sequence < 0xffffffff to enable locktime checking
-      tx.addInput(txHash, utxo.vout, locktime ? 0xfffffffe : 0xffffffff);
+      psbt.addInput({ hash: txHash, index: utxo.vout, sequence: locktime ? 0xfffffffe : 0xffffffff });
     });
 
     // Add outputs
     outputs.forEach((output) => {
-      tx.addOutput(
-        bitcoin.address.toOutputScript(output.address, this.network),
-        BigInt(output.value),
-      );
+      psbt.addOutput({ address: output.address, value: BigInt(output.value) });
     });
 
+    if (params.metadata) {
+      psbt.addOutput(MetadataUtils.toOutput(params.metadata));
+    }
+
     // Return unsigned transaction hex
-    return tx.toHex();
+    return psbt.toHex();
   }
 
   /**

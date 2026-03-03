@@ -14,6 +14,8 @@
  */
 
 import { ValidationError } from "../errors";
+import { TxOutput } from "bitcoinjs-lib";
+import * as bitcoin from "bitcoinjs-lib";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -298,6 +300,113 @@ export default class MetadataUtils {
       depositId,
       providerXonlyPubkey,
       flags,
+    };
+  }
+
+  /**
+   * Pack a string into a Buffer with validation to ensure it matches the Sundial metadata schema.
+   * 
+   * Accepts either:
+   * - JSON string representing a SundialMetadata object
+   * - Hex string representing 60-byte packed metadata
+   * 
+   * @param s - String to validate and pack
+   * @returns Buffer containing the validated metadata
+   * @throws {ValidationError} if the string doesn't match the expected schema
+   * 
+   * @example
+   * ```ts
+   * // JSON string
+   * const jsonStr = JSON.stringify({
+   *   magic: "SD01",
+   *   version: 1,
+   *   txType: 1,
+   *   depositId: "550e8400-e29b-41d4-a716-446655440000",
+   *   providerXonlyPubkey: "a".repeat(64),
+   *   flags: 0
+   * });
+   * const buffer = MetadataUtils.pack_string(jsonStr);
+   * 
+   * // Hex string (60 bytes)
+   * const hexStr = "SD01010100..."; // 60-byte hex string
+   * const buffer2 = MetadataUtils.pack_string(hexStr);
+   * ```
+   */
+  static pack_string(s: string): Buffer {
+    if (typeof s !== 'string') {
+      throw new ValidationError('Input must be a string');
+    }
+
+    // Try to parse as JSON first
+    try {
+      const parsed = JSON.parse(s);
+      
+      // Validate it's a SundialMetadata object
+      if (typeof parsed === 'object' && parsed !== null) {
+        // Check required fields exist
+        const requiredFields = ['txType', 'depositId', 'providerXonlyPubkey'];
+        for (const field of requiredFields) {
+          if (!(field in parsed)) {
+            throw new ValidationError(`Missing required field: ${field}`);
+          }
+        }
+        
+        // Set defaults for optional fields if not present
+        const metadata: SundialMetadata = {
+          magic: parsed.magic || MAGIC_SD01,
+          version: parsed.version || METADATA_VERSION,
+          txType: parsed.txType,
+          depositId: parsed.depositId,
+          providerXonlyPubkey: parsed.providerXonlyPubkey,
+          flags: parsed.flags || 0
+        };
+        
+        // Use the pack method to validate and create buffer
+        return MetadataUtils.pack(metadata);
+      }
+    } catch (jsonError) {
+      // If JSON parsing fails, try hex parsing
+      
+      // Check if it's a valid hex string
+      if (/^[0-9a-fA-F]+$/.test(s)) {
+        // Ensure it's the correct length (120 hex chars = 60 bytes)
+        if (s.length !== METADATA_LENGTH * 2) {
+          throw new ValidationError(
+            `Invalid hex string length: expected ${METADATA_LENGTH * 2} characters (${METADATA_LENGTH} bytes), got ${s.length}`
+          );
+        }
+        
+        const buffer = Buffer.from(s, 'hex');
+        
+        // Validate the hex data by trying to unpack it
+        try {
+          MetadataUtils.unpack(buffer);
+          return buffer;
+        } catch (unpackError) {
+          throw new ValidationError(
+            `Invalid metadata hex string: ${(unpackError as Error).message}`
+          );
+        }
+      }
+      
+      // If neither JSON nor hex parsing worked, throw error
+      throw new ValidationError(
+        'String must be either valid JSON representing SundialMetadata or a valid 120-character hex string representing packed metadata'
+      );
+    }
+
+    return Buffer.from(s, "utf8");
+  }
+
+  static toOutput(metadata: SundialMetadata | string): TxOutput {
+    const metadataBuffer = typeof metadata === "string" ? this.pack_string(metadata) : this.pack(metadata);
+    const opReturnScript = bitcoin.script.compile([
+      bitcoin.opcodes.OP_RETURN,
+      metadataBuffer,
+    ]);
+    return {
+      script: Buffer.from(opReturnScript),
+      value: BigInt(0),
     };
   }
 
