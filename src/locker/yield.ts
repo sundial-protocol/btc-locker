@@ -8,6 +8,7 @@ import { FeeUtils } from "../utils";
 import { FeePriorities } from "../utils/fees";
 import type { UTXO } from "../types";
 import BitcoinAPI from "../bitcoin-api";
+import MetadataUtils, { SundialMetadata } from "../utils/metadata";
 
 /**
  * Yield input type
@@ -32,7 +33,7 @@ export interface YieldDistributionParams {
   /** Amount to distribute in satoshis */
   amount: number;
   /** Optional metadata for the distribution */
-  metadata?: string;
+  metadata?: SundialMetadata | string;
   /** Optional change address for remaining funds */
   changeAddress?: string;
   /** Fee priority levels for user-friendly fee selection */
@@ -142,10 +143,16 @@ export class YieldDistributor extends BTCLockerCore {
 
     // Calculate fee based on priority
     const feeRate = await FeeUtils.queryChainFeeRates(priority);
-    const outputCount = params.changeAddress ? 2 : 1; // yield output + optional change
+    const outputCount = () => {
+      let count = 1;
+      if(metadata) count += 1;
+      if (params.changeAddress) count += 1;
+      return count;
+    } // yield output + optional change
+
     const estimatedFee = FeeUtils.estimateFee(
       inputs.length,
-      outputCount,
+      outputCount(),
       feeRate,
     );
 
@@ -185,6 +192,10 @@ export class YieldDistributor extends BTCLockerCore {
         address: params.changeAddress || timelockAddress, // fallback to timelock address
         value: BigInt(changeResult.changeAmount),
       });
+    }
+
+    if(metadata) {
+      psbt.addOutput(MetadataUtils.toOutput(metadata));
     }
 
     // Return unsigned PSBT as base64

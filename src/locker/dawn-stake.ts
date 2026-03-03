@@ -174,7 +174,7 @@ export interface DawnWithdrawalParams {
   /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
   protocolFeeAmount?: number;
   /** Optional arbitrary string metadata to include in transaction (max 80 bytes) */
-  metadata?: SundialMetadata;
+  metadata?:  SundialMetadata | string;
 }
 
 /**

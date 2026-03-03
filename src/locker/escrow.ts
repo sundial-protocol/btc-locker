@@ -35,7 +35,7 @@ export interface EscrowSpendingParams {
   /** Previous transaction buffer (for testing/validation) */
   previousTransaction?: Buffer | null;
   /** Optional metadata to attach to the transaction */
-  metadata?: SundialMetadata;
+  metadata?: SundialMetadata | string;
 }
 
 /**

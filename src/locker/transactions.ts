@@ -34,7 +34,7 @@ export interface SpendingTransactionParams {
   /** Optional locktime for the transaction */
   locktime?: number;
   /** Optional metadata for the transaction */
-  metadata?: SundialMetadata;
+  metadata?: SundialMetadata | string;
 }
 
 /**

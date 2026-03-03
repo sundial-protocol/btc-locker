@@ -2,7 +2,7 @@ import MetadataUtils, {
   packMetadata,
   unpackMetadata,
   TxType,
-  MAGIC_SD01,
+  MAGIC_SNDL,
   METADATA_VERSION,
   METADATA_LENGTH,
 } from "../src/utils/metadata";
@@ -16,22 +16,30 @@ describe("Sundial Metadata", () => {
   const INVALID_PUBKEY_SHORT = "a".repeat(63);
   const INVALID_PUBKEY_LONG = "a".repeat(65);
   const INVALID_UUID = "invalid-uuid";
+  const MAGIC_SNDL = "SNDL";
+  const METADATA_VERSION = 0x01;
+  const METADATA_FLAGS = 0x1234;
+
+  const BASE_METADATA = {
+    magic: MAGIC_SNDL,
+    version: METADATA_VERSION,
+    txType: TxType.Deposit,
+    depositId: VALID_UUID,
+    providerXonlyPubkey: VALID_PUBKEY,
+    flags: METADATA_FLAGS,
+  };
 
   describe("MetadataUtils class", () => {
     describe("pack method", () => {
       test("should pack deposit metadata with default values", () => {
-        const result = MetadataUtils.pack({
-          txType: TxType.Deposit,
-          depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY,
-        });
+        const result = MetadataUtils.pack(BASE_METADATA);
 
         expect(Buffer.isBuffer(result)).toBe(true);
         expect(result.length).toBe(METADATA_LENGTH);
       });
 
       test("should have static constants", () => {
-        expect(MetadataUtils.MAGIC_SD01).toBe(MAGIC_SD01);
+        expect(MetadataUtils.MAGIC_SNDL).toBe(MAGIC_SNDL);
         expect(MetadataUtils.METADATA_VERSION).toBe(METADATA_VERSION);
         expect(MetadataUtils.METADATA_LENGTH).toBe(METADATA_LENGTH);
         expect(MetadataUtils.TxType).toBe(TxType);
@@ -40,23 +48,11 @@ describe("Sundial Metadata", () => {
 
     describe("unpack method", () => {
       test("should unpack valid metadata", () => {
-        const packed = MetadataUtils.pack({
-          txType: TxType.Deposit,
-          depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY,
-          flags: 0x1234,
-        });
+        const packed = MetadataUtils.pack(BASE_METADATA);
 
         const result = MetadataUtils.unpack(packed);
 
-        expect(result).toEqual({
-          magic: MAGIC_SD01,
-          version: METADATA_VERSION,
-          txType: TxType.Deposit,
-          depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY,
-          flags: 0x1234,
-        });
+        expect(result).toEqual(BASE_METADATA);
       });
     });
   });
@@ -65,11 +61,7 @@ describe("Sundial Metadata", () => {
     describe("packMetadata", () => {
     describe("valid inputs", () => {
       test("should pack deposit metadata with default values", () => {
-        const result = packMetadata({
-          txType: TxType.Deposit,
-          depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY,
-        });
+        const result = packMetadata(BASE_METADATA);
 
         expect(Buffer.isBuffer(result)).toBe(true);
         expect(result.length).toBe(METADATA_LENGTH);
@@ -85,9 +77,8 @@ describe("Sundial Metadata", () => {
 
         for (const txType of txTypes) {
           const result = packMetadata({
-            txType,
-            depositId: VALID_UUID,
-            providerXonlyPubkey: VALID_PUBKEY,
+            ...BASE_METADATA,
+            txType
           });
 
           expect(result.length).toBe(METADATA_LENGTH);
@@ -95,22 +86,15 @@ describe("Sundial Metadata", () => {
       });
 
       test("should pack metadata with custom magic", () => {
-        const result = packMetadata({
-          magic: MAGIC_SD01,
-          txType: TxType.Deposit,
-          depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY,
-        });
+        const result = packMetadata(BASE_METADATA);
 
         expect(result.length).toBe(METADATA_LENGTH);
       });
 
       test("should pack metadata with custom flags", () => {
-        const flags = 0x1234;
+        const flags = 0x1114;
         const result = packMetadata({
-          txType: TxType.Deposit,
-          depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY,
+          ...BASE_METADATA,
           flags,
         });
 
@@ -118,16 +102,11 @@ describe("Sundial Metadata", () => {
       });
 
       test("should accept UUID with or without dashes", () => {
-        const withDashes = packMetadata({
-          txType: TxType.Deposit,
-          depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY,
-        });
+        const withDashes = packMetadata(BASE_METADATA);
 
         const withoutDashes = packMetadata({
-          txType: TxType.Deposit,
+          ...BASE_METADATA,
           depositId: VALID_UUID_NO_DASHES,
-          providerXonlyPubkey: VALID_PUBKEY,
         });
 
         expect(withDashes).toEqual(withoutDashes);
@@ -138,10 +117,8 @@ describe("Sundial Metadata", () => {
       test("should throw on invalid magic", () => {
         expect(() =>
           packMetadata({
+            ...BASE_METADATA,
             magic: "XXXX",
-            txType: TxType.Deposit,
-            depositId: VALID_UUID,
-            providerXonlyPubkey: VALID_PUBKEY,
           })
         ).toThrow(ValidationError);
       });
@@ -149,9 +126,8 @@ describe("Sundial Metadata", () => {
       test("should throw on invalid txType", () => {
         expect(() =>
           packMetadata({
+            ...BASE_METADATA,
             txType: 999 as TxType,
-            depositId: VALID_UUID,
-            providerXonlyPubkey: VALID_PUBKEY,
           })
         ).toThrow(ValidationError);
       });
@@ -159,9 +135,8 @@ describe("Sundial Metadata", () => {
       test("should throw on invalid UUID", () => {
         expect(() =>
           packMetadata({
-            txType: TxType.Deposit,
+            ...BASE_METADATA,
             depositId: INVALID_UUID,
-            providerXonlyPubkey: VALID_PUBKEY,
           })
         ).toThrow(ValidationError);
       });
@@ -169,9 +144,8 @@ describe("Sundial Metadata", () => {
       test("should throw on short UUID", () => {
         expect(() =>
           packMetadata({
-            txType: TxType.Deposit,
+            ...BASE_METADATA,
             depositId: "550e8400-e29b-41d4-a716-44665544000", // missing 1 char
-            providerXonlyPubkey: VALID_PUBKEY,
           })
         ).toThrow(ValidationError);
       });
@@ -179,8 +153,7 @@ describe("Sundial Metadata", () => {
       test("should throw on invalid pubkey (too short)", () => {
         expect(() =>
           packMetadata({
-            txType: TxType.Deposit,
-            depositId: VALID_UUID,
+            ...BASE_METADATA,
             providerXonlyPubkey: INVALID_PUBKEY_SHORT,
           })
         ).toThrow(ValidationError);
@@ -189,8 +162,7 @@ describe("Sundial Metadata", () => {
       test("should throw on invalid pubkey (too long)", () => {
         expect(() =>
           packMetadata({
-            txType: TxType.Deposit,
-            depositId: VALID_UUID,
+            ...BASE_METADATA,
             providerXonlyPubkey: INVALID_PUBKEY_LONG,
           })
         ).toThrow(ValidationError);
@@ -199,8 +171,7 @@ describe("Sundial Metadata", () => {
       test("should throw on invalid pubkey (non-hex)", () => {
         expect(() =>
           packMetadata({
-            txType: TxType.Deposit,
-            depositId: VALID_UUID,
+            ...BASE_METADATA,
             providerXonlyPubkey: "g".repeat(64), // invalid hex
           })
         ).toThrow(ValidationError);
@@ -209,9 +180,7 @@ describe("Sundial Metadata", () => {
       test("should throw on invalid flags (negative)", () => {
         expect(() =>
           packMetadata({
-            txType: TxType.Deposit,
-            depositId: VALID_UUID,
-            providerXonlyPubkey: VALID_PUBKEY,
+            ...BASE_METADATA,
             flags: -1,
           })
         ).toThrow(ValidationError);
@@ -220,9 +189,7 @@ describe("Sundial Metadata", () => {
       test("should throw on invalid flags (too large)", () => {
         expect(() =>
           packMetadata({
-            txType: TxType.Deposit,
-            depositId: VALID_UUID,
-            providerXonlyPubkey: VALID_PUBKEY,
+            ...BASE_METADATA,
             flags: 0x10000, // > 16-bit max
           })
         ).toThrow(ValidationError);
@@ -235,12 +202,7 @@ describe("Sundial Metadata", () => {
     let validPackedMetadata: Buffer;
 
     beforeEach(() => {
-      validPackedMetadata = packMetadata({
-        txType: TxType.Deposit,
-        depositId: VALID_UUID,
-        providerXonlyPubkey: VALID_PUBKEY,
-        flags: 0x1234,
-      });
+      validPackedMetadata = packMetadata(BASE_METADATA);
     });
 
     describe("valid inputs", () => {
@@ -248,7 +210,7 @@ describe("Sundial Metadata", () => {
         const result = unpackMetadata(validPackedMetadata);
 
         expect(result).toEqual({
-          magic: MAGIC_SD01,
+          magic: MAGIC_SNDL,
           version: METADATA_VERSION,
           txType: TxType.Deposit,
           depositId: VALID_UUID,
@@ -267,9 +229,8 @@ describe("Sundial Metadata", () => {
 
         for (const txType of txTypes) {
           const packed = packMetadata({
+            ...BASE_METADATA,
             txType,
-            depositId: VALID_UUID,
-            providerXonlyPubkey: VALID_PUBKEY,
           });
 
           const unpacked = unpackMetadata(packed);
@@ -332,28 +293,16 @@ describe("Sundial Metadata", () => {
 
   describe("round-trip tests", () => {
     test("should preserve all fields through pack/unpack cycle", () => {
-      const original = {
-        magic: MAGIC_SD01,
-        txType: TxType.YieldWithdrawal,
-        depositId: VALID_UUID,
-        providerXonlyPubkey: VALID_PUBKEY,
-        flags: 0xabcd,
-      };
-
-      const packed = packMetadata(original);
+      const packed = packMetadata(BASE_METADATA);
       const unpacked = unpackMetadata(packed);
 
-      expect(unpacked).toEqual({
-        ...original,
-        version: METADATA_VERSION,
-      });
+      expect(unpacked).toEqual(BASE_METADATA);
     });
 
     test("should work with UUID without dashes", () => {
       const original = {
-        txType: TxType.Distribution,
+        ...BASE_METADATA,
         depositId: VALID_UUID_NO_DASHES,
-        providerXonlyPubkey: VALID_PUBKEY,
       };
 
       const packed = packMetadata(original);
@@ -372,8 +321,7 @@ describe("Sundial Metadata", () => {
 
       for (const pubkey of pubkeys) {
         const packed = packMetadata({
-          txType: TxType.UserWithdrawal,
-          depositId: VALID_UUID,
+          ...BASE_METADATA,
           providerXonlyPubkey: pubkey,
         });
 
@@ -387,9 +335,7 @@ describe("Sundial Metadata", () => {
 
       for (const flags of flagValues) {
         const packed = packMetadata({
-          txType: TxType.Deposit,
-          depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY,
+          ...BASE_METADATA,
           flags,
         });
 
@@ -434,7 +380,7 @@ describe("Sundial Metadata", () => {
         const result = MetadataUtils.pack_string(jsonString);
         const unpacked = MetadataUtils.unpack(result);
         
-        expect(unpacked.magic).toBe(MAGIC_SD01);
+        expect(unpacked.magic).toBe(MAGIC_SNDL);
         expect(unpacked.version).toBe(METADATA_VERSION);
         expect(unpacked.flags).toBe(0);
       });
@@ -465,12 +411,7 @@ describe("Sundial Metadata", () => {
     describe("hex string input", () => {
       test("should pack valid hex metadata string", () => {
         // First create valid packed metadata
-        const originalPacked = MetadataUtils.pack({
-          txType: TxType.Distribution,
-          depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY,
-          flags: 0x5678
-        });
+        const originalPacked = MetadataUtils.pack(BASE_METADATA);
         const hexString = originalPacked.toString('hex');
         
         const result = MetadataUtils.pack_string(hexString);
@@ -495,11 +436,7 @@ describe("Sundial Metadata", () => {
       });
 
       test("should handle uppercase and lowercase hex", () => {
-        const originalPacked = MetadataUtils.pack({
-          txType: TxType.UserWithdrawal,
-          depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY
-        });
+        const originalPacked = MetadataUtils.pack(BASE_METADATA);
         
         const upperHex = originalPacked.toString('hex').toUpperCase();
         const lowerHex = originalPacked.toString('hex').toLowerCase();
@@ -556,11 +493,7 @@ describe("Sundial Metadata", () => {
       });
 
       test("should create OP_RETURN output from hex string", () => {
-        const originalPacked = MetadataUtils.pack({
-          txType: TxType.Distribution,
-          depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY
-        });
+        const originalPacked = MetadataUtils.pack(BASE_METADATA);
         const hexString = originalPacked.toString('hex');
         
         const output = MetadataUtils.toOutput(hexString);
@@ -573,7 +506,7 @@ describe("Sundial Metadata", () => {
 
   describe("constants", () => {
     test("should export correct constants", () => {
-      expect(MAGIC_SD01).toBe("SD01");
+      expect(MAGIC_SNDL).toBe("SNDL");
       expect(METADATA_VERSION).toBe(0x01);
       expect(METADATA_LENGTH).toBe(60);
     });
@@ -588,37 +521,26 @@ describe("Sundial Metadata", () => {
 
   describe("binary format validation", () => {
     test("should have correct field layout", () => {
-      const metadata = {
-        txType: TxType.Deposit,
-        depositId: VALID_UUID,
-        providerXonlyPubkey: VALID_PUBKEY,
-        flags: 0x1234,
-      };
-
-      const packed = packMetadata(metadata);
+      const packed = packMetadata(BASE_METADATA);
 
       // Check magic (bytes 0-3)
-      expect(packed.toString("ascii", 0, 4)).toBe(MAGIC_SD01);
+      expect(packed.toString("ascii", 0, 4)).toBe(MAGIC_SNDL);
 
       // Check version (byte 4)
       expect(packed.readUInt8(4)).toBe(METADATA_VERSION);
 
       // Check txType (byte 5)
-      expect(packed.readUInt8(5)).toBe(TxType.Deposit);
+      expect(packed.readUInt8(5)).toBe(BASE_METADATA.txType);
 
       // Check flags (bytes 54-55)
-      expect(packed.readUInt16BE(54)).toBe(0x1234);
+      expect(packed.readUInt16BE(54)).toBe(BASE_METADATA.flags);
 
       // Check total length
       expect(packed.length).toBe(60);
     });
 
     test("should have valid checksum", () => {
-      const packed = packMetadata({
-        txType: TxType.Deposit,
-        depositId: VALID_UUID,
-        providerXonlyPubkey: VALID_PUBKEY,
-      });
+      const packed = packMetadata(BASE_METADATA);
 
       // If unpack doesn't throw, checksum is valid
       expect(() => unpackMetadata(packed)).not.toThrow();

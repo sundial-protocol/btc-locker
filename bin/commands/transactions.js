@@ -8,7 +8,9 @@ import chalk from "chalk";
 import { ScriptUtils, TransactionUtils } from "../../dist/esm/index.js";
 import BitcoinAPI from "../../dist/esm/bitcoin-api.js";
 import { NETWORKS } from "../../dist/esm/utils/network.js";
+import { TxType } from "../../dist/esm/utils/metadata.js";
 import { initLocker, displayResult } from "./shared.js";
+import crypto from "crypto";
 
 /**
  * Setup transaction commands
@@ -52,6 +54,8 @@ export function setupTransactionCommands(program) {
       "Fee priority: high, medium, low",
       "medium",
     )
+    .option("--deposit-id <uuid>", "Deposit ID (UUID v4) for Sundial metadata")
+    .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
@@ -103,6 +107,12 @@ export function setupTransactionCommands(program) {
       "Fee priority: high, medium, low",
       "medium",
     )
+    .option("--deposit-id <uuid>", "Deposit ID (UUID v4) for Sundial metadata")
+    .option(
+      "--provider-pubkey <hex>",
+      "Yield-provider x-only public key (64 hex chars)",
+    )
+    .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
@@ -134,9 +144,14 @@ export function setupTransactionCommands(program) {
       "Protocol fee amount in satoshis (required if fee-address is provided)",
     )
     .option(
-      "--metadata <string>",
-      "Optional metadata to include in transaction (max 80 bytes)",
+      "--deposit-id <uuid>",
+      "Deposit ID (UUID v4); auto-generated if omitted",
     )
+    .option(
+      "--provider-pubkey <hex>",
+      "Yield-provider x-only public key (64 hex chars)",
+    )
+    .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
@@ -174,6 +189,12 @@ export function setupTransactionCommands(program) {
       "--protocol-fee-amount <satoshis>",
       "Protocol fee amount in satoshis (required if fee-address is provided)",
     )
+    .option("--deposit-id <uuid>", "Deposit ID (UUID v4) for Sundial metadata")
+    .option(
+      "--provider-pubkey <hex>",
+      "Yield-provider x-only public key (64 hex chars)",
+    )
+    .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
@@ -239,7 +260,6 @@ async function handleLockCommand(cmdOptions, parentOptions) {
   let fromPrivateKey = cmdOptions.fromKey;
   let toAddress = cmdOptions.to;
   let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
-  let priority = parsePriority(cmdOptions.priority || "medium");
 
   // Interactive prompts if options not provided
   if (!fromPrivateKey || !toAddress || !amount) {
@@ -462,7 +482,8 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
   let fromPrivateKey = cmdOptions.fromKey;
   let toAddress = cmdOptions.to;
   let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
-  let memo = cmdOptions.memo;
+  let depositId = cmdOptions.depositId;
+  let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
   let priority = parsePriority(cmdOptions.priority || "medium");
 
   // Interactive prompts if options not provided
@@ -496,22 +517,47 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
       },
       {
         type: "input",
-        name: "memo",
-        message: "Enter optional memo for this distribution:",
-        when: () => !memo,
+        name: "depositId",
+        message:
+          "Enter deposit ID (UUID v4) for Sundial metadata (press enter to skip):",
+        when: () => !depositId,
+        validate: (input) => {
+          if (!input) return true;
+          return (
+            /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(input) ||
+            "Must be a valid UUID v4"
+          );
+        },
       },
     ]);
 
     fromPrivateKey = fromPrivateKey || answers.fromPrivateKey;
     toAddress = toAddress || answers.toAddress;
     amount = amount || parseInt(answers.amount);
-    memo = memo || answers.memo;
+    depositId = depositId || answers.depositId || undefined;
   }
 
   try {
     // Generate address from private key to check balance
     const keyPair = await locker.generateKeyPairFromPrivateKey(fromPrivateKey);
     const fromAddress = keyPair.address;
+
+    // Derive provider x-only pubkey from the sender's key (distribute is always called by the provider)
+    const providerPubkey = bitcoin.toXOnly(keyPair.publicKey);
+    console.log(chalk.gray(`Provider x-only pubkey: ${providerPubkey}`));
+
+    // Build Sundial metadata if deposit ID is available
+    let metadata;
+    if (depositId) {
+      metadata = {
+        magic: "SNDL",
+        version: 1,
+        txType: TxType.Distribution,
+        depositId,
+        providerXonlyPubkey: providerPubkey,
+        flags,
+      };
+    }
 
     console.log(chalk.blue(`Checking balance for ${fromAddress}...`));
 
@@ -563,7 +609,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
       timelockAddress: toAddress,
       amount: amount,
       priority: priority,
-      metadata: memo,
+      metadata: metadata,
     });
 
     // Sign the transaction
@@ -584,7 +630,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
         amount: amount,
         change: totalInputValue - amount - feeInfo.actualFee,
       },
-      memo: memo,
+      metadata: metadata,
     };
 
     const result = {
@@ -611,7 +657,11 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
           distributionResult.distribution.change,
         ),
       },
-      memo: distributionResult.memo,
+      metadata: metadata ? {
+        type: "Distribution (0x03)",
+        depositId: metadata.depositId,
+        provider: metadata.providerXonlyPubkey,
+      } : undefined,
     };
 
     displayResult(
@@ -627,10 +677,10 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
     }
 
     // Ask for confirmation before broadcasting
-    const confirmationMessage = memo
+    const confirmationMessage = metadata
       ? `Distribute ${TransactionUtils.satoshisToBTC(
           distributionResult.distribution.amount,
-        )} BTC yield to timelock with ${distributionResult.fee} sat fee (${distributionResult.feeRate} sat/byte)?\nMemo: ${memo}`
+        )} BTC yield to timelock with ${distributionResult.fee} sat fee (${distributionResult.feeRate} sat/byte)?\nDeposit ID: ${metadata.depositId}`
       : `Distribute ${TransactionUtils.satoshisToBTC(
           distributionResult.distribution.amount,
         )} BTC yield to timelock with ${distributionResult.fee} sat fee (${distributionResult.feeRate} sat/byte)?`;
@@ -670,8 +720,12 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
       ),
     );
 
-    if (memo) {
-      console.log(chalk.cyan(`📝 Memo: ${memo}`));
+    if (metadata) {
+      console.log(chalk.gray(`📝 Sundial Metadata:`));
+      console.log(chalk.gray(`   Type: Distribution (0x03)`));
+      console.log(chalk.gray(`   Deposit ID: ${metadata.depositId}`));
+      console.log(chalk.gray(`   Provider: ${metadata.providerXonlyPubkey}`));
+      if (metadata.flags) console.log(chalk.gray(`   Flags: 0x${metadata.flags.toString(16).padStart(4, "0")}`));
     }
 
     if (parentOptions.network === "testnet") {
@@ -953,7 +1007,9 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
-  let metadata = cmdOptions.metadata;
+  let depositId = cmdOptions.depositId;
+  let providerPubkey = bitcoin.toXOnly(cmdOptions.providerPubkey);
+  let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
 
   // Validate fee parameters
   if (feeAddress && !protocolFeeAmount) {
@@ -1063,15 +1119,29 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
         },
         {
           type: "input",
-          name: "metadata",
+          name: "providerPubkey",
           message:
-            "Enter optional metadata for transaction (max 80 bytes, press enter to skip):",
-          when: () => !metadata,
+            "Enter yield-provider x-only public key (64 hex chars, press enter to skip):",
+          when: () => !providerPubkey,
           validate: (input) => {
-            if (!input) return true; // Optional field
+            if (!input) return true;
             return (
-              Buffer.byteLength(input, "utf8") <= 80 ||
-              "Metadata must be 80 bytes or less"
+              (/^[0-9a-fA-F]{64}$/.test(input)) ||
+              "Must be a 64-character hex string (32-byte x-only pubkey)"
+            );
+          },
+        },
+        {
+          type: "input",
+          name: "depositId",
+          message:
+            "Enter deposit ID (UUID v4, press enter to auto-generate):",
+          when: () => !depositId,
+          validate: (input) => {
+            if (!input) return true;
+            return (
+              /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(input) ||
+              "Must be a valid UUID v4"
             );
           },
         },
@@ -1089,7 +1159,27 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
         (answers.protocolFeeAmount
           ? parseInt(answers.protocolFeeAmount)
           : undefined);
-      metadata = metadata || answers.metadata || undefined;
+      providerPubkey = providerPubkey || answers.providerPubkey || undefined;
+      depositId = depositId || answers.depositId || undefined;
+    }
+
+    // Auto-generate deposit ID if not provided
+    if (!depositId) {
+      depositId = crypto.randomUUID();
+      console.log(chalk.gray(`Auto-generated deposit ID: ${depositId}`));
+    }
+
+    // Build Sundial metadata if provider pubkey is available
+    let metadata;
+    if (providerPubkey) {
+      metadata = {
+        magic: "SNDL",
+        version: 1,
+        txType: TxType.Deposit,
+        depositId,
+        providerXonlyPubkey: providerPubkey,
+        flags,
+      };
     }
 
     // Generate key pair from private key
@@ -1253,7 +1343,11 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
       );
 
       if (metadata) {
-        console.log(chalk.gray(`📝 Metadata: ${metadata}`));
+        console.log(chalk.gray(`📝 Sundial Metadata:`));
+        console.log(chalk.gray(`   Type: Deposit (0x01)`));
+        console.log(chalk.gray(`   Deposit ID: ${depositId}`));
+        console.log(chalk.gray(`   Provider: ${providerPubkey}`));
+        if (flags) console.log(chalk.gray(`   Flags: 0x${flags.toString(16).padStart(4, "0")}`));
       }
     }
 
@@ -1320,6 +1414,9 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
+  let depositId = cmdOptions.depositId;
+  let providerPubkey = bitcoin.toXOnly(cmdOptions.providerPubkey);
+  let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
 
   // Validate fee parameters
   if (feeAddress && !protocolFeeAmount) {
@@ -1425,6 +1522,33 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
             );
           },
         },
+        {
+          type: "input",
+          name: "providerPubkey",
+          message:
+            "Enter yield-provider x-only public key (64 hex chars, press enter to skip):",
+          when: () => !providerPubkey,
+          validate: (input) => {
+            if (!input) return true;
+            return (
+              /^[0-9a-fA-F]{64}$/.test(input) ||
+              "Must be a 64-character hex string (32-byte x-only pubkey)"
+            );
+          },
+        },
+        {
+          type: "input",
+          name: "depositId",
+          message: "Enter deposit ID (UUID v4) for Sundial metadata:",
+          when: (answers) => answers.providerPubkey || providerPubkey,
+          validate: (input) => {
+            if (!input) return "Deposit ID is required when provider pubkey is given";
+            return (
+              /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(input) ||
+              "Must be a valid UUID v4"
+            );
+          },
+        },
       ]);
 
       escrowAddress = escrowAddress || answers.escrowAddress;
@@ -1439,6 +1563,21 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
         (answers.protocolFeeAmount
           ? parseInt(answers.protocolFeeAmount)
           : undefined);
+      providerPubkey = providerPubkey || answers.providerPubkey || undefined;
+      depositId = depositId || answers.depositId || undefined;
+    }
+
+    // Build Sundial metadata if provider pubkey and deposit ID are available
+    let metadata;
+    if (providerPubkey && depositId) {
+      metadata = {
+        magic: "SNDL",
+        version: 1,
+        txType: TxType.UserWithdrawal,
+        depositId,
+        providerXonlyPubkey: providerPubkey,
+        flags,
+      };
     }
 
     // Calculate destination address from private key if not provided
@@ -1557,6 +1696,7 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
       priority: priority,
       feeAddress,
       protocolFeeAmount,
+      metadata,
     });
 
     // Sign the transaction with the single private key
@@ -1637,6 +1777,14 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
       };
     }
 
+    if (metadata) {
+      result.sundial_metadata = {
+        type: "UserWithdrawal (0x04)",
+        depositId: metadata.depositId,
+        provider: metadata.providerXonlyPubkey,
+      };
+    }
+
     displayResult(result, parentOptions, "Dawn Withdrawal Transaction Created");
 
     if (cmdOptions.dryRun) {
@@ -1671,6 +1819,14 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
         chalk.green("Dawn withdrawal transaction broadcasted successfully!"),
       );
       console.log(chalk.blue(`Transaction ID: ${broadcastResult.txid}`));
+
+      if (metadata) {
+        console.log(chalk.gray(`📝 Sundial Metadata:`));
+        console.log(chalk.gray(`   Type: UserWithdrawal (0x04)`));
+        console.log(chalk.gray(`   Deposit ID: ${metadata.depositId}`));
+        console.log(chalk.gray(`   Provider: ${metadata.providerXonlyPubkey}`));
+        if (metadata.flags) console.log(chalk.gray(`   Flags: 0x${metadata.flags.toString(16).padStart(4, "0")}`));
+      }
 
       if (parentOptions.network === "testnet") {
         console.log(
@@ -1711,6 +1867,10 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
     priority: priorityStr = "medium",
     dryRun,
   } = cmdOptions;
+
+  let depositId = cmdOptions.depositId;
+  let providerPubkey = bitcoin.toXOnly(cmdOptions.providerPubkey);
+  let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
 
   const priority = parsePriority(priorityStr);
 
@@ -1781,6 +1941,33 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
           default: false,
           when: afterDeadline === undefined,
         },
+        {
+          type: "input",
+          name: "providerPubkey",
+          message:
+            "Enter yield-provider x-only public key (64 hex chars, press enter to skip):",
+          when: () => !providerPubkey,
+          validate: (input) => {
+            if (!input) return true;
+            return (
+              /^[0-9a-fA-F]{64}$/.test(input) ||
+              "Must be a 64-character hex string (32-byte x-only pubkey)"
+            );
+          },
+        },
+        {
+          type: "input",
+          name: "depositId",
+          message: "Enter deposit ID (UUID v4) for Sundial metadata:",
+          when: (answers) => answers.providerPubkey || providerPubkey,
+          validate: (input) => {
+            if (!input) return "Deposit ID is required when provider pubkey is given";
+            return (
+              /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(input) ||
+              "Must be a valid UUID v4"
+            );
+          },
+        },
       ]);
 
       scriptAddress = scriptAddress || answers.scriptAddress;
@@ -1789,6 +1976,21 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
       destinationAddress = destinationAddress || answers.destinationAddress;
       afterDeadline =
         afterDeadline !== undefined ? afterDeadline : answers.afterDeadline;
+      providerPubkey = providerPubkey || answers.providerPubkey || undefined;
+      depositId = depositId || answers.depositId || undefined;
+    }
+
+    // Build Sundial metadata if provider pubkey and deposit ID are available
+    let metadata;
+    if (providerPubkey && depositId) {
+      metadata = {
+        magic: "SNDL",
+        version: 1,
+        txType: TxType.YieldWithdrawal,
+        depositId,
+        providerXonlyPubkey: providerPubkey,
+        flags,
+      };
     }
 
     console.log(chalk.blue(`Checking UTXOs for ${scriptAddress}...`));
@@ -1875,6 +2077,7 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
       spendAfterDeadline: afterDeadline,
       priority: priority,
       currentTime: Date.now(),
+      metadata,
     });
 
     // Sign the transaction
@@ -1913,6 +2116,14 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
       spending_path: afterDeadline ? "After deadline" : "Before deadline",
     };
 
+    if (metadata) {
+      result.sundial_metadata = {
+        type: "YieldWithdrawal (0x02)",
+        depositId: metadata.depositId,
+        provider: metadata.providerXonlyPubkey,
+      };
+    }
+
     displayResult(result, parentOptions, "Escrow Spending Transaction Created");
 
     // Broadcast if not dry run
@@ -1937,6 +2148,14 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
         const broadcastResult = await api.broadcastTransaction(txHex);
         console.log(chalk.green("Transaction broadcasted successfully!"));
         console.log(chalk.blue(`Transaction ID: ${broadcastResult.txid}`));
+
+        if (metadata) {
+          console.log(chalk.gray(`📝 Sundial Metadata:`));
+          console.log(chalk.gray(`   Type: YieldWithdrawal (0x02)`));
+          console.log(chalk.gray(`   Deposit ID: ${metadata.depositId}`));
+          console.log(chalk.gray(`   Provider: ${metadata.providerXonlyPubkey}`));
+          if (metadata.flags) console.log(chalk.gray(`   Flags: 0x${metadata.flags.toString(16).padStart(4, "0")}`));
+        }
 
         if (parentOptions.network === "testnet") {
           console.log(

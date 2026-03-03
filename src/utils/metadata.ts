@@ -2,7 +2,7 @@
  * Sundial OP_RETURN metadata encoder/decoder
  *
  * Schema (60 bytes total):
- *   4 bytes  — magic ("SD01" or future versions)
+ *   4 bytes  — magic ("SNDL" or future versions)
  *   1 byte   — version (0x01)
  *   1 byte   — tx_type (1 = deposit, 2 = repayment)
  *  16 bytes  — deposit_id (UUID v4 raw bytes)
@@ -20,8 +20,8 @@ import * as bitcoin from "bitcoinjs-lib";
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /** Accepted magic strings (4 ASCII bytes each) */
-export const MAGIC_SD01 = "SD01";
-const VALID_MAGICS = new Set([MAGIC_SD01]);
+export const MAGIC_SNDL = "SNDL";
+const VALID_MAGICS = new Set([MAGIC_SNDL]);
 
 /** Current protocol version */
 export const METADATA_VERSION = 0x01;
@@ -50,7 +50,7 @@ export enum TxType {
 
 /** Decoded metadata object returned by {@link unpackMetadata} */
 export interface SundialMetadata {
-  /** 4-char magic string ("SD01" or future versions) */
+  /** 4-char magic string ("SNDL" or future versions) */
   magic: string;
   /** Protocol version byte */
   version: number;
@@ -126,7 +126,7 @@ function bytesToUuid(buf: Buffer, offset: number): string {
  */
 export default class MetadataUtils {
   // Export constants as static properties
-  static readonly MAGIC_SD01 = MAGIC_SD01;
+  static readonly MAGIC_SNDL = MAGIC_SNDL;
   static readonly METADATA_VERSION = METADATA_VERSION;
   static readonly METADATA_LENGTH = METADATA_LENGTH;
   static readonly TxType = TxType;
@@ -135,7 +135,7 @@ export default class MetadataUtils {
    * Pack a Sundial metadata payload into a 60-byte Buffer suitable for OP_RETURN.
    *
    * @param opts          - Metadata fields to encode
-   * @param opts.magic    - Magic identifier, must be `"SD01"` or some future value (default `"SD01"`)
+   * @param opts.magic    - Magic identifier, must be `"SNDL"` or some future value (default `"SNDL"`)
    * @param opts.txType   - Transaction type (Deposit, YieldWithdrawal, Distribution, UserWithdrawal)
    * @param opts.depositId - UUID v4 string identifying the deposit
    * @param opts.providerXonlyPubkey - 32-byte x-only public key as a 64-char hex string
@@ -151,14 +151,8 @@ export default class MetadataUtils {
    * });
    * ```
    */
-  static pack(opts: {
-    magic?: string;
-    txType: TxType;
-    depositId: string;
-    providerXonlyPubkey: string;
-    flags?: number;
-  }): Buffer {
-    const magic = opts.magic ?? MAGIC_SD01;
+  static pack(opts: SundialMetadata): Buffer {
+    const magic = opts.magic ?? MAGIC_SNDL;
 
     // ── Validate inputs ──────────────────────────────────────────────────────
     if (!VALID_MAGICS.has(magic)) {
@@ -318,7 +312,7 @@ export default class MetadataUtils {
    * ```ts
    * // JSON string
    * const jsonStr = JSON.stringify({
-   *   magic: "SD01",
+   *   magic: "SNDL",
    *   version: 1,
    *   txType: 1,
    *   depositId: "550e8400-e29b-41d4-a716-446655440000",
@@ -328,7 +322,7 @@ export default class MetadataUtils {
    * const buffer = MetadataUtils.pack_string(jsonStr);
    * 
    * // Hex string (60 bytes)
-   * const hexStr = "SD01010100..."; // 60-byte hex string
+   * const hexStr = "SNDL010100..."; // 60-byte hex string
    * const buffer2 = MetadataUtils.pack_string(hexStr);
    * ```
    */
@@ -353,7 +347,7 @@ export default class MetadataUtils {
         
         // Set defaults for optional fields if not present
         const metadata: SundialMetadata = {
-          magic: parsed.magic || MAGIC_SD01,
+          magic: parsed.magic || MAGIC_SNDL,
           version: parsed.version || METADATA_VERSION,
           txType: parsed.txType,
           depositId: parsed.depositId,
