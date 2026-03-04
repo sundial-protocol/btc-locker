@@ -59,6 +59,8 @@ export class BTCLocker extends BTCLockerCore {
       network = NETWORKS[network];
     } else if (!network) {
       network = NETWORKS.testnet;
+    } else if (typeof network === "object" && network.info && network.name) {
+      // network is already a NetworkType object, use it as-is
     } else {
       throw new Error(`Unknown network: ${network}`);
     }
