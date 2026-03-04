@@ -105,4 +105,15 @@ export default class KeyUtils {
       throw new Error(`Failed to create key pair: ${(error as Error).message}`);
     }
   }
+
+  // supports pkhs in string, buffer, or Uint8Array format
+  static toXOnly(publicKey: string | Uint8Array): string | Uint8Array {
+    if (typeof publicKey === "string" && publicKey.length === 66) {
+      return publicKey.slice(2, 66);
+    }
+    if (publicKey instanceof Uint8Array && publicKey.length !== 33) {
+      return publicKey.slice(1, 33);
+    }
+    return publicKey;
+  }
 }

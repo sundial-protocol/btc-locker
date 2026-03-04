@@ -5,7 +5,7 @@
 import * as bitcoin from "bitcoinjs-lib";
 import inquirer from "inquirer";
 import chalk from "chalk";
-import { ScriptUtils, TransactionUtils } from "../../dist/esm/index.js";
+import { KeyUtils, ScriptUtils, TransactionUtils } from "../../dist/esm/index.js";
 import BitcoinAPI from "../../dist/esm/bitcoin-api.js";
 import { NETWORKS } from "../../dist/esm/utils/network.js";
 import { TxType } from "../../dist/esm/utils/metadata.js";
@@ -543,7 +543,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
     const fromAddress = keyPair.address;
 
     // Derive provider x-only pubkey from the sender's key (distribute is always called by the provider)
-    const providerPubkey = bitcoin.toXOnly(keyPair.publicKey);
+    const providerPubkey = KeyUtils.toXOnly(keyPair.publicKey);
     console.log(chalk.gray(`Provider x-only pubkey: ${providerPubkey}`));
 
     // Build Sundial metadata if deposit ID is available
@@ -1008,7 +1008,7 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
   let depositId = cmdOptions.depositId;
-  let providerPubkey = bitcoin.toXOnly(cmdOptions.providerPubkey);
+  let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
 
   // Validate fee parameters
@@ -1415,7 +1415,7 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
   let depositId = cmdOptions.depositId;
-  let providerPubkey = bitcoin.toXOnly(cmdOptions.providerPubkey);
+  let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
 
   // Validate fee parameters
@@ -1869,7 +1869,7 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
   } = cmdOptions;
 
   let depositId = cmdOptions.depositId;
-  let providerPubkey = bitcoin.toXOnly(cmdOptions.providerPubkey);
+  let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
 
   const priority = parsePriority(priorityStr);
