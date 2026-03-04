@@ -55,8 +55,12 @@ export class BTCLocker extends BTCLockerCore {
   public readonly dawnStakingManager: DawnStakingManager;
 
   constructor(network?: NetworkType | string) {
-    if (typeof network === "string") {
-      network = NETWORKS[network] || NETWORKS.testnet;
+    if (typeof network === "string" && NETWORKS[network]) {
+      network = NETWORKS[network];
+    } else if (!network) {
+      network = NETWORKS.testnet;
+    } else {
+      throw new Error(`Unknown network: ${network}`);
     }
 
     super(network);
