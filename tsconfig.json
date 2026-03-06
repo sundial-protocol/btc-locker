@@ -21,7 +21,7 @@
     "pretty": true,
     "incremental": true,
     "tsBuildInfoFile": "./dist/.tsbuildinfo",
-    "types": ["node", "jest"],
+    "types": ["node"],
     "typeRoots": ["./node_modules/@types", "./types"]
   },
   "include": [
