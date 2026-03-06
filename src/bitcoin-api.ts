@@ -7,7 +7,6 @@ import https from "https";
 import type { UTXO } from "./types";
 import type { NetworkType } from "./utils/network";
 
-
 /**
  * Bitcoin UTXO with API status information
  * @interface ApiUTXO
@@ -65,24 +64,26 @@ export default class BitcoinAPI {
   constructor(network: NetworkType, apiProvider: ApiProvider = "mempool") {
     // Validate network support
     if (network.name === "regtest") {
-      throw new Error("Regtest network is not supported. Use 'bitcoin' or 'testnet' instead.");
+      throw new Error(
+        "Regtest network is not supported. Use 'bitcoin' or 'testnet' instead.",
+      );
     }
-    
+
     this.network = network;
     this.apiProvider = apiProvider;
     this.baseUrls = {
       mempool: {
         bitcoin: "https://mempool.space/api",
-        testnet: "https://mempool.space/testnet/api"
+        testnet: "https://mempool.space/testnet/api",
       },
       blockstream: {
         bitcoin: "https://blockstream.info/api",
-        testnet: "https://blockstream.info/testnet/api"
+        testnet: "https://blockstream.info/testnet/api",
       },
       blockcypher: {
         bitcoin: "https://api.blockcypher.com/v1/btc/main",
-        testnet: "https://api.blockcypher.com/v1/btc/test3"
-      }
+        testnet: "https://api.blockcypher.com/v1/btc/test3",
+      },
     };
 
     this.baseUrl = this.baseUrls[this.apiProvider][this.network.name];
@@ -126,7 +127,12 @@ export default class BitcoinAPI {
   /**
    * Make HTTP request
    */
-  async makeRequest(endpoint: string, method: "GET" | "POST" = "GET", data: any = null): Promise<any> {
+  async makeRequest(
+    endpoint: string,
+    method: "GET" | "POST" = "GET",
+    data: any = null,
+    // eslint-disable-next-line
+  ): Promise<any> {
     return new Promise((resolve, reject) => {
       const url = `${this.baseUrl}${endpoint}`;
       const urlObj = new URL(url);
@@ -145,7 +151,8 @@ export default class BitcoinAPI {
       if (data && method !== "GET") {
         const postData = JSON.stringify(data);
         if (options.headers) {
-          (options.headers as any)["Content-Length"] = Buffer.byteLength(postData);
+          (options.headers as any)["Content-Length"] =
+            Buffer.byteLength(postData);
         }
       }
 
@@ -208,7 +215,9 @@ export default class BitcoinAPI {
       }
       throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(`Failed to get address info: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to get address info: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -222,7 +231,7 @@ export default class BitcoinAPI {
         this.apiProvider === "blockstream"
       ) {
         const rawUtxos = await this.makeRequest(`/address/${address}/utxo`);
-        
+
         // Return flat UTXO structure with status attached
         return rawUtxos.map((rawUtxo: any) => ({
           txid: rawUtxo.txid,
@@ -231,12 +240,12 @@ export default class BitcoinAPI {
           status: rawUtxo.status || {
             confirmed: rawUtxo.status?.confirmed || false,
             block_height: rawUtxo.status?.block_height,
-            block_hash: rawUtxo.status?.block_hash
-          }
+            block_hash: rawUtxo.status?.block_hash,
+          },
         }));
       } else if (this.apiProvider === "blockcypher") {
         const result = await this.makeRequest(
-          `/addrs/${address}?unspentOnly=true&includeScript=true`
+          `/addrs/${address}?unspentOnly=true&includeScript=true`,
         );
         return (
           result.txrefs?.map((utxo: any) => ({
@@ -254,18 +263,26 @@ export default class BitcoinAPI {
       throw new Error("Unsupported API provider");
     } catch (error) {
       const errorMsg = (error as Error).message;
-      
+
       // If using mempool and network error occurs, try blockstream as fallback
-      if (this.apiProvider === "mempool" && (errorMsg.includes("invalid network") || errorMsg.includes("API Error 400"))) {
-        console.warn(`Mempool API failed for ${address}, trying Blockstream as fallback...`);
+      if (
+        this.apiProvider === "mempool" &&
+        (errorMsg.includes("invalid network") ||
+          errorMsg.includes("API Error 400"))
+      ) {
+        console.warn(
+          `Mempool API failed for ${address}, trying Blockstream as fallback...`,
+        );
         try {
           const fallbackApi = new BitcoinAPI(this.network, "blockstream");
           return await fallbackApi.getAddressUtxos(address);
         } catch (fallbackError) {
-          throw new Error(`Failed to get UTXOs (tried multiple APIs): ${errorMsg}; Fallback: ${(fallbackError as Error).message}`);
+          throw new Error(
+            `Failed to get UTXOs (tried multiple APIs): ${errorMsg}; Fallback: ${(fallbackError as Error).message}`,
+          );
         }
       }
-      
+
       throw new Error(`Failed to get UTXOs: ${errorMsg}`);
     }
   }
@@ -305,14 +322,19 @@ export default class BitcoinAPI {
       }
       throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(`Failed to broadcast transaction: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to broadcast transaction: ${(error as Error).message}`,
+      );
     }
   }
 
   /**
    * Make broadcast request (for raw hex data)
    */
-  async makeBroadcastRequest(endpoint: string, txHex: string): Promise<BroadcastResult> {
+  async makeBroadcastRequest(
+    endpoint: string,
+    txHex: string,
+  ): Promise<BroadcastResult> {
     return new Promise((resolve, reject) => {
       const url = `${this.baseUrl}${endpoint}`;
       const urlObj = new URL(url);
@@ -368,7 +390,9 @@ export default class BitcoinAPI {
       }
       throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(`Failed to get fee estimates: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to get fee estimates: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -389,7 +413,9 @@ export default class BitcoinAPI {
       }
       throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(`Failed to get block height: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to get block height: ${(error as Error).message}`,
+      );
     }
   }
 }

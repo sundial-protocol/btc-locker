@@ -51,7 +51,7 @@ export interface EscrowSpendingSigningParams {
   /** Whether this is spending after deadline (affects validation) */
   spendAfterDeadline: boolean;
   /** Optional metadata for the transaction */
-  metadata?: SundialMetadata | string,
+  metadata?: SundialMetadata | string;
 }
 
 /**
@@ -229,7 +229,11 @@ export class EscrowManager extends BTCLockerCore {
 
     // Validate timing for after-deadline spending
     const currentTimeSeconds = Math.floor(currentTime / 1000);
-    if (spendAfterDeadline && currentTimeSeconds <= scriptData.locktime!) {
+    if (
+      spendAfterDeadline &&
+      scriptData.locktime &&
+      currentTimeSeconds <= scriptData.locktime
+    ) {
       throw new Error(
         `Cannot spend after deadline yet. Current time: ${currentTimeSeconds}, Deadline: ${scriptData.locktime}`,
       );
@@ -240,8 +244,8 @@ export class EscrowManager extends BTCLockerCore {
       const psbt = new bitcoin.Psbt({ network: this.network });
 
       // Set locktime and sequence based on spending path
-      if (spendAfterDeadline) {
-        psbt.locktime = scriptData.locktime!;
+      if (spendAfterDeadline && scriptData.locktime) {
+        psbt.setLocktime(scriptData.locktime);
       }
 
       // Add input
@@ -250,27 +254,34 @@ export class EscrowManager extends BTCLockerCore {
 
       // For P2SH scripts, we need to use nonWitnessUtxo instead of witnessUtxo
       // Try to get the full previous transaction
-      let inputData: any = {
+      let inputData = {
         hash: utxoTxId,
         index: utxoIndex,
         sequence: sequence,
         redeemScript: redeemScript,
+        nonWitnessUtxo: Buffer.alloc(0),
       };
 
       if (previousTransaction) {
         // Use provided previous transaction
-        inputData.nonWitnessUtxo = previousTransaction;
+        inputData = {
+          ...inputData,
+          nonWitnessUtxo: Buffer.from(previousTransaction),
+        };
       } else {
         try {
           // Try to fetch the full previous transaction for nonWitnessUtxo
           const txHex = await this.api.getTransaction(utxoTxId);
-          inputData.nonWitnessUtxo = Buffer.from(txHex, "hex");
+          inputData = {
+            ...inputData,
+            nonWitnessUtxo: Buffer.from(txHex, "hex"),
+          };
         } catch (error) {
           // For P2SH scripts, we must have the full previous transaction
           // Cannot use witnessUtxo as it's only for SegWit scripts
           throw new Error(
             `Failed to fetch previous transaction ${utxoTxId}. P2SH escrow scripts require the full previous transaction for signing. ` +
-            `API error: ${(error as Error).message}. Please provide the previous transaction manually using the previousTransaction parameter.`
+              `API error: ${(error as Error).message}. Please provide the previous transaction manually using the previousTransaction parameter.`,
           );
         }
       }
@@ -301,7 +312,7 @@ export class EscrowManager extends BTCLockerCore {
         value: BigInt(outputAmount),
       });
 
-      if(params.metadata) {
+      if (params.metadata) {
         psbt.addOutput(MetadataUtils.toOutput(params.metadata));
       }
 

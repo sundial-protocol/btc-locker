@@ -9,7 +9,10 @@ export default class ValidationUtils {
    * @returns Validated locktime as number
    * @throws If locktime is invalid
    */
-  static validateLocktime(locktime: any, paramName: string = "locktime"): number {
+  static validateLocktime(
+    locktime: string | number,
+    paramName: string = "locktime",
+  ): number {
     if (locktime === undefined || locktime === null) {
       throw new Error(`${paramName} cannot be undefined or null`);
     }
@@ -30,7 +33,11 @@ export default class ValidationUtils {
    * @returns Validated amount as number
    * @throws If amount is invalid
    */
-  static validateAmount(amount: any, paramName: string = "amount", allowZero: boolean = false): number {
+  static validateAmount(
+    amount: string | number,
+    paramName: string = "amount",
+    allowZero: boolean = false,
+  ): number {
     if (amount === undefined || amount === null) {
       throw new Error(`${paramName} cannot be undefined or null`);
     }
@@ -41,7 +48,9 @@ export default class ValidationUtils {
     }
 
     if (allowZero ? amountNumber < 0 : amountNumber <= 0) {
-      throw new Error(`${paramName} must be ${allowZero ? 'non-negative' : 'positive'}`);
+      throw new Error(
+        `${paramName} must be ${allowZero ? "non-negative" : "positive"}`,
+      );
     }
 
     return amountNumber;
@@ -54,11 +63,15 @@ export default class ValidationUtils {
    * @param feeAmount - Transaction fee
    * @throws If insufficient funds
    */
-  static validateSufficientFunds(totalInputValue: number, outputValue: number, feeAmount: number): void {
+  static validateSufficientFunds(
+    totalInputValue: number,
+    outputValue: number,
+    feeAmount: number,
+  ): void {
     const totalRequired = outputValue + feeAmount;
     if (totalInputValue < totalRequired) {
       throw new Error(
-        `Insufficient funds. Required: ${totalRequired} sat, Available: ${totalInputValue} sat`
+        `Insufficient funds. Required: ${totalRequired} sat, Available: ${totalInputValue} sat`,
       );
     }
   }

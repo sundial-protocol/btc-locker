@@ -4,6 +4,7 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { ECPairInterface } from "ecpair";
+import { ECPairFactoryType } from "../types";
 
 /**
  * Key validation and conversion utilities
@@ -16,21 +17,28 @@ export default class KeyUtils {
    * @returns Public key as Buffer
    * @throws If public key is invalid
    */
-  static validateAndConvertPublicKey(publicKey: Buffer | string, paramName: string = "publicKey"): Buffer {
+  static validateAndConvertPublicKey(
+    publicKey: Buffer | string,
+    paramName: string = "publicKey",
+  ): Buffer {
     if (publicKey === undefined || publicKey === null) {
       throw new Error(`${paramName} cannot be undefined or null`);
     }
 
     let publicKeyBuffer: Buffer;
-    
+
     if (typeof publicKey === "string") {
       if (!/^[0-9a-fA-F]+$/.test(publicKey)) {
-        throw new Error(`${paramName} string must contain only hexadecimal characters`);
+        throw new Error(
+          `${paramName} string must contain only hexadecimal characters`,
+        );
       }
       try {
         publicKeyBuffer = Buffer.from(publicKey, "hex");
       } catch (error) {
-        throw new Error(`Invalid ${paramName} hex string: ${(error as Error).message}`);
+        throw new Error(
+          `Invalid ${paramName} hex string: ${(error as Error).message}`,
+        );
       }
     } else if (Buffer.isBuffer(publicKey)) {
       publicKeyBuffer = publicKey;
@@ -41,7 +49,7 @@ export default class KeyUtils {
     // Validate public key length
     if (publicKeyBuffer.length !== 33 && publicKeyBuffer.length !== 65) {
       throw new Error(
-        `Invalid ${paramName} length: ${publicKeyBuffer.length}. Expected 33 (compressed) or 65 (uncompressed) bytes`
+        `Invalid ${paramName} length: ${publicKeyBuffer.length}. Expected 33 (compressed) or 65 (uncompressed) bytes`,
       );
     }
 
@@ -55,21 +63,28 @@ export default class KeyUtils {
    * @returns Private key as Buffer
    * @throws If private key is invalid
    */
-  static validateAndConvertPrivateKey(privateKey: Buffer | string, paramName: string = "privateKey"): Buffer {
+  static validateAndConvertPrivateKey(
+    privateKey: Buffer | string,
+    paramName: string = "privateKey",
+  ): Buffer {
     if (privateKey === undefined || privateKey === null) {
       throw new Error(`${paramName} cannot be undefined or null`);
     }
 
     let privateKeyBuffer: Buffer;
-    
+
     if (typeof privateKey === "string") {
       if (!/^[0-9a-fA-F]+$/.test(privateKey)) {
-        throw new Error(`${paramName} string must contain only hexadecimal characters`);
+        throw new Error(
+          `${paramName} string must contain only hexadecimal characters`,
+        );
       }
       try {
         privateKeyBuffer = Buffer.from(privateKey, "hex");
       } catch (error) {
-        throw new Error(`Invalid ${paramName} hex string: ${(error as Error).message}`);
+        throw new Error(
+          `Invalid ${paramName} hex string: ${(error as Error).message}`,
+        );
       }
     } else if (Buffer.isBuffer(privateKey)) {
       privateKeyBuffer = privateKey;
@@ -79,7 +94,9 @@ export default class KeyUtils {
 
     // Validate private key length
     if (privateKeyBuffer.length !== 32) {
-      throw new Error(`Invalid ${paramName} length: ${privateKeyBuffer.length}. Expected 32 bytes`);
+      throw new Error(
+        `Invalid ${paramName} length: ${privateKeyBuffer.length}. Expected 32 bytes`,
+      );
     }
 
     return privateKeyBuffer;
@@ -94,9 +111,9 @@ export default class KeyUtils {
    * @throws If private key is invalid
    */
   static createKeyPair(
-    privateKey: Buffer | string, 
-    ECPairFactory: any, 
-    network?: bitcoin.Network
+    privateKey: Buffer | string,
+    ECPairFactory: ECPairFactoryType,
+    network?: bitcoin.Network,
   ): ECPairInterface {
     try {
       const privateKeyBuffer = this.validateAndConvertPrivateKey(privateKey);

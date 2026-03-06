@@ -122,21 +122,21 @@ export class YieldDistributor extends BTCLockerCore {
       );
     }
 
-    let inputs: YieldInput[];
+    let inputs: YieldInput[] = [];
 
     if (providedInputs) {
       // Use provided inputs
       inputs = providedInputs;
-    } else {
+    } else if (api && sourceAddress) {
       // Fetch UTXOs from address
-      const apiUtxos = await api!.getAddressUtxos(sourceAddress!);
+      const apiUtxos = await api.getAddressUtxos(sourceAddress);
       inputs = apiUtxos.filter((utxo) => utxo.status.confirmed);
+    }
 
-      if (inputs.length === 0) {
-        throw new Error(
-          `No confirmed UTXOs available at address ${sourceAddress}`,
-        );
-      }
+    if (inputs.length === 0) {
+      throw new Error(
+        `No confirmed UTXOs available at address ${sourceAddress}`,
+      );
     }
 
     const psbt = new bitcoin.Psbt({ network: this.network });
@@ -145,10 +145,10 @@ export class YieldDistributor extends BTCLockerCore {
     const feeRate = await FeeUtils.queryChainFeeRates(priority);
     const outputCount = () => {
       let count = 1;
-      if(metadata) count += 1;
+      if (metadata) count += 1;
       if (params.changeAddress) count += 1;
       return count;
-    } // yield output + optional change
+    }; // yield output + optional change
 
     const estimatedFee = FeeUtils.estimateFee(
       inputs.length,
@@ -194,7 +194,7 @@ export class YieldDistributor extends BTCLockerCore {
       });
     }
 
-    if(metadata) {
+    if (metadata) {
       psbt.addOutput(MetadataUtils.toOutput(metadata));
     }
 
@@ -213,7 +213,7 @@ export class YieldDistributor extends BTCLockerCore {
   async signAndSubmitYieldDistribution(
     signingParams: YieldDistributionSigningParams,
     metadata?: string,
-    api?: any,
+    api?: BitcoinAPI,
   ): Promise<YieldDistributionResult> {
     const signedTx = await this.signTransaction(
       signingParams.unsignedTransaction,

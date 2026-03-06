@@ -1,8 +1,6 @@
 /**
  * Common TypeScript interfaces and types for btc-locker
  */
-
-import * as bitcoin from "bitcoinjs-lib";
 import { BIP32Factory } from "bip32";
 import { ECPairFactory } from "ecpair";
 
@@ -77,7 +75,7 @@ export interface TransactionResult {
 
 export interface TimelockConfig {
   locktime: number;
-  type: 'absolute' | 'relative';
+  type: "absolute" | "relative";
 }
 
 export interface EscrowConfig {
@@ -102,17 +100,32 @@ export interface YieldConfig {
   }>;
 }
 
-
-
 export interface ECCLib {
   isPoint(p: Uint8Array): boolean;
   isPrivate(p: Uint8Array): boolean;
   pointFromScalar(sk: Uint8Array, compressed?: boolean): Uint8Array | null;
-  [key: string]: any;
 }
 
 export interface InitializedECC {
   ecc: ECCLib;
-  bip32: ReturnType<typeof BIP32Factory>;
-  ECPair: ReturnType<typeof ECPairFactory>;
+  bip32: BIP32FactoryType;
+  ECPair: ECPairFactoryType;
+}
+
+export type ECPairFactoryType = ReturnType<typeof ECPairFactory>;
+export type BIP32FactoryType = ReturnType<typeof BIP32Factory>;
+
+export interface PsbtInputData {
+  partialSig?: Array<{
+    signature: Buffer;
+    pubkey: Buffer;
+  }>;
+  redeemScript?: Buffer;
+  witnessScript?: Buffer;
+  witnessUtxo?: {
+    value: number;
+    script: Buffer;
+  };
+  nonWitnessUtxo?: Buffer;
+  sighashType?: number;
 }

@@ -6,6 +6,7 @@ import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore, getECC } from "./core";
 import type { UTXO, TransactionResult } from "../types";
 import MetadataUtils, { SundialMetadata } from "../utils/metadata";
+import BitcoinAPI from "../bitcoin-api";
 
 /**
  * Transaction output specification
@@ -100,7 +101,7 @@ export interface TransactionSubmissionParams {
   /** Signed transaction hex */
   signedTransaction: string;
   /** Optional API instance for broadcasting */
-  api?: any;
+  api?: BitcoinAPI;
 }
 
 /**
@@ -170,10 +171,6 @@ export class TransactionManager extends BTCLockerCore {
       if ((error as Error).message.includes("Timelock has not expired")) {
         throw error; // Re-throw timelock errors
       }
-      console.warn(
-        "Could not parse locktime from script:",
-        (error as Error).message,
-      );
     }
 
     // Create transaction manually for better P2SH support
@@ -189,7 +186,11 @@ export class TransactionManager extends BTCLockerCore {
       const txHash = Buffer.from(utxo.txid, "hex").reverse();
       // If this is a timelock script (locktime exists and has passed validation above),
       // use sequence < 0xffffffff to enable locktime checking
-      psbt.addInput({ hash: txHash, index: utxo.vout, sequence: locktime ? 0xfffffffe : 0xffffffff });
+      psbt.addInput({
+        hash: txHash,
+        index: utxo.vout,
+        sequence: locktime ? 0xfffffffe : 0xffffffff,
+      });
     });
 
     // Add outputs
@@ -293,17 +294,22 @@ export class TransactionManager extends BTCLockerCore {
         // Add witness UTXO script if missing
         const input = psbt.data.inputs[i];
         if (input.witnessUtxo && !input.witnessUtxo.script.length) {
-          input.witnessUtxo.script = bitcoin.payments.p2wpkh({
-            pubkey: keyPair.publicKey,
-            network: this.network,
-          }).output!;
+          input.witnessUtxo.script =
+            bitcoin.payments.p2wpkh({
+              pubkey: keyPair.publicKey,
+              network: this.network,
+            }).output ??
+            (() => {
+              throw new Error("Failed to generate P2WPKH output script");
+            })();
         }
 
         try {
           psbt.signInput(i, keyPair);
         } catch (error) {
-          console.warn(`Could not sign input ${i}:`, (error as Error).message);
-          throw error;
+          throw new Error(
+            `Could not sign input ${i}: ${(error as Error).message}`,
+          );
         }
       }
 
@@ -422,7 +428,7 @@ export class TransactionManager extends BTCLockerCore {
    */
   async signAndSubmitTransaction(
     signingParams: TransactionSigningParams,
-    submissionParams?: { api?: any },
+    submissionParams?: { api?: BitcoinAPI },
   ): Promise<TransactionResult> {
     const signedTx = await this.signTransactionLegacy(signingParams);
 

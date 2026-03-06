@@ -40,12 +40,20 @@ export class KeyPairGenerator extends BTCLockerCore {
       network: this.network,
     });
 
+    if (!keyPair.privateKey) {
+      throw new Error("Failed to generate private key");
+    }
+
+    if (!keyPair.publicKey) {
+      throw new Error("Failed to generate public key");
+    }
+
     if (!address) {
       throw new Error("Failed to generate address from key pair");
     }
 
     return {
-      privateKey: keyPair.privateKey!.toString("hex"),
+      privateKey: keyPair.privateKey.toString("hex"),
       publicKey: keyPair.publicKey.toString("hex"),
       address,
     };
@@ -61,7 +69,9 @@ export class KeyPairGenerator extends BTCLockerCore {
    * const keyPair = await generator.generateKeyPairFromPrivateKey('1234567890abcdef...');
    * console.log(keyPair.address);
    */
-  async generateKeyPairFromPrivateKey(privateKeyHex: string): Promise<ExtendedKeyPair> {
+  async generateKeyPairFromPrivateKey(
+    privateKeyHex: string,
+  ): Promise<ExtendedKeyPair> {
     await this.ensureInitialized();
     const { ECPair } = getECC();
 
@@ -73,12 +83,20 @@ export class KeyPairGenerator extends BTCLockerCore {
       network: this.network,
     });
 
+    if (!keyPair.privateKey) {
+      throw new Error("Failed to generate private key");
+    }
+
+    if (!keyPair.publicKey) {
+      throw new Error("Failed to generate public key");
+    }
+
     if (!address) {
       throw new Error("Failed to generate address from private key");
     }
 
     return {
-      privateKey: keyPair.privateKey!.toString("hex"),
+      privateKey: keyPair.privateKey.toString("hex"),
       publicKey: keyPair.publicKey.toString("hex"),
       address,
       keyPair, // Include keyPair object for signing

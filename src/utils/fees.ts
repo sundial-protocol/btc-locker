@@ -140,12 +140,7 @@ export default class FeeUtils {
           return result.medium;
       }
     } catch (error) {
-      // Fallback to reasonable default values if API fails
-      console.warn(
-        `Failed to get fee rates from ${apiProvider}: ${(error as Error).message}`,
-      );
-      // If the API call fails, return a default fee rate
-      return 10;
+      throw new Error(`Failed to query fee rates: ${(error as Error).message}`);
     }
   }
 }

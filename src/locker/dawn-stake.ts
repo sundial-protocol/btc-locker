@@ -174,7 +174,7 @@ export interface DawnWithdrawalParams {
   /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
   protocolFeeAmount?: number;
   /** Optional arbitrary string metadata to include in transaction (max 80 bytes) */
-  metadata?:  SundialMetadata | string;
+  metadata?: SundialMetadata | string;
 }
 
 /**
@@ -661,7 +661,7 @@ export class DawnStakingManager extends BTCLockerCore {
       try {
         const selectedUtxos = this.selectUtxos(availableInputs, targetAmount);
         inputs = selectedUtxos.map((utxo) => ({ value: utxo.value }));
-      } catch (error) {
+      } catch {
         // If we can't select enough UTXOs, use all available for calculation
         inputs = availableInputs.map((utxo) => ({ value: utxo.value }));
       }
@@ -800,13 +800,13 @@ export class DawnStakingManager extends BTCLockerCore {
     }
 
     // Calculate script addresses if not provided
-    let escrowAddress =
+    const escrowAddress =
       providedEscrowAddress ??
       ScriptUtils.createScriptAddress(
         Buffer.from(escrowRedeemScript, "hex"),
         this.network,
       );
-    let timelockAddress =
+    const timelockAddress =
       providedTimelockAddress ??
       ScriptUtils.createScriptAddress(
         Buffer.from(timelockRedeemScript, "hex"),
@@ -898,16 +898,6 @@ export class DawnStakingManager extends BTCLockerCore {
         const timestampBytes = script.slice(2, 6);
         const timestamp = timestampBytes.readUInt32LE(0);
 
-        console.log(
-          `Debug: Escrow - Current time: ${currentTime}, Script deadline: ${timestamp}`,
-        );
-        console.log(
-          `Debug: Escrow - Current time human: ${new Date(currentTime * 1000).toISOString()}`,
-        );
-        console.log(
-          `Debug: Escrow - Deadline human: ${new Date(timestamp * 1000).toISOString()}`,
-        );
-
         // Validate that we're past the deadline
         if (currentTime < timestamp) {
           throw new Error(
@@ -934,16 +924,6 @@ export class DawnStakingManager extends BTCLockerCore {
         // Extract timestamp (next 4 bytes after push opcode)
         const timestampBytes = script.slice(1, 5);
         const timestamp = timestampBytes.readUInt32LE(0);
-
-        console.log(
-          `Debug: Timelock - Current time: ${currentTime}, Script deadline: ${timestamp}`,
-        );
-        console.log(
-          `Debug: Timelock - Current time human: ${new Date(currentTime * 1000).toISOString()}`,
-        );
-        console.log(
-          `Debug: Timelock - Deadline human: ${new Date(timestamp * 1000).toISOString()}`,
-        );
 
         // Validate that we're past the deadline
         if (currentTime < timestamp) {
