@@ -4,8 +4,8 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore, getECC } from "./core";
-import type { UTXO, TransactionResult } from "../types";
-import MetadataUtils, { SundialMetadata } from "../utils/metadata";
+import type { UTXO, TransactionResult, BaseTransactionParams } from "../types";
+import MetadataUtils from "../utils/metadata";
 import BitcoinAPI from "../bitcoin-api";
 
 /**
@@ -23,9 +23,10 @@ export interface TransactionOutput {
 /**
  * Parameters for creating spending transactions
  * @interface SpendingTransactionParams
+ * @extends BaseTransactionParams
  * @description Configuration for spending from time-locked Bitcoin scripts
  */
-export interface SpendingTransactionParams {
+export interface SpendingTransactionParams extends BaseTransactionParams {
   /** Array of unspent transaction outputs to spend */
   inputs: UTXO[];
   /** Output destinations and amounts */
@@ -34,16 +35,15 @@ export interface SpendingTransactionParams {
   redeemScript: string;
   /** Optional locktime for the transaction */
   locktime?: number;
-  /** Optional metadata for the transaction */
-  metadata?: SundialMetadata | string;
 }
 
 /**
  * Parameters for creating funding transactions
  * @interface FundingTransactionParams
+ * @extends BaseTransactionParams
  * @description Configuration for creating transactions that fund Bitcoin scripts
  */
-export interface FundingTransactionParams {
+export interface FundingTransactionParams extends BaseTransactionParams {
   /** Array of unspent transaction outputs to use as funding */
   inputs: UTXO[];
   /** Output destinations and amounts */
@@ -78,18 +78,6 @@ export interface SpendingTransactionSigningParams {
   privateKeys: string[];
   /** Redeem script for spending transactions */
   redeemScript: string;
-}
-
-/**
- * Parameters for signing funding transactions
- * @interface FundingTransactionSigningParams
- * @description Configuration for signing unsigned funding transactions
- */
-export interface FundingTransactionSigningParams {
-  /** Unsigned transaction hex or PSBT */
-  unsignedTransaction: string;
-  /** Private keys for signing the transaction */
-  privateKeys: string[];
 }
 
 /**

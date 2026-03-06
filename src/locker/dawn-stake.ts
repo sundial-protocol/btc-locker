@@ -6,18 +6,27 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core";
-import type { UTXO, ScriptInfo } from "../types";
+import type {
+  UTXO,
+  ScriptInfo,
+  TransactionResult,
+  BaseTransactionParams,
+  ProtocolFeeParams,
+} from "../types";
 import { ApiUTXO } from "../bitcoin-api";
 import { FeeUtils, ScriptUtils } from "../utils";
 import { FeePriorities } from "../utils/fees";
-import MetadataUtils, { SundialMetadata } from "../utils/metadata";
+import MetadataUtils from "../utils/metadata";
 
 /**
  * Parameters for Dawn staking transactions
  * @interface DawnStakingParams
+ * @extends BaseTransactionParams
+ * @extends ProtocolFeeParams
  * @description Configuration for creating Dawn protocol staking transactions with dual outputs
  */
-export interface DawnStakingParams {
+export interface DawnStakingParams
+  extends BaseTransactionParams, ProtocolFeeParams {
   /** Array of unspent transaction outputs to stake (optional - will auto-select from address if not provided) */
   inputs?: UTXO[];
   /** Source address for automatic UTXO selection (required if inputs not provided) */
@@ -30,32 +39,17 @@ export interface DawnStakingParams {
   timelockAddress: string;
   /** Amount to send to timelock in satoshis */
   timelockAmount: number;
-  /** Optional change address for remaining funds */
-  changeAddress?: string;
   /** Fee priority levels for user-friendly fee selection */
   priority: FeePriorities;
-  /** Optional fee address for protocol fees */
-  feeAddress?: string;
-  /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
-  protocolFeeAmount?: number;
-  /** Optional arbitrary string metadata to include in transaction (max 80 bytes) */
-  metadata?: SundialMetadata | string;
 }
 
 /**
  * Result of Dawn staking transaction
  * @interface DawnStakingResult
+ * @extends TransactionResult
  * @description Transaction result with detailed output breakdown for Dawn staking
  */
-export interface DawnStakingResult {
-  /** Transaction in hexadecimal format */
-  hex: string;
-  /** Transaction ID (hash) */
-  txid: string;
-  /** Transaction size in bytes */
-  size: number;
-  /** Transaction fee in satoshis */
-  fee: number;
+export interface DawnStakingResult extends TransactionResult {
   /** Output breakdown */
   outputs: {
     /** Amount sent to escrow in satoshis */
@@ -66,8 +60,6 @@ export interface DawnStakingResult {
     protocolFeeAmount?: number;
     /** Optional change amount in satoshis */
     changeAmount?: number;
-    /** Optional metadata included in transaction */
-    metadata?: string;
   };
 }
 
@@ -75,7 +67,7 @@ export interface DawnStakingResult {
  * Parameters for Dawn staking with script data
  * @interface DawnStakingWithScriptParams
  * @description Configuration for creating Dawn staking transactions with provided timelock script information
- * @extends Omit<DawnStakingParams, timelockAddress'>
+ * @extends Omit<DawnStakingParams, 'timelockAddress'>
  */
 export interface DawnStakingWithScriptParams extends Omit<
   DawnStakingParams,
@@ -150,9 +142,12 @@ export interface DawnStakingCalculationResult {
 /**
  * Parameters for Dawn withdrawal
  * @interface DawnWithdrawalParams
+ * @extends BaseTransactionParams
+ * @extends ProtocolFeeParams
  * @description Configuration for withdrawing from both escrow and timelock Dawn staking outputs
  */
-export interface DawnWithdrawalParams {
+export interface DawnWithdrawalParams
+  extends BaseTransactionParams, ProtocolFeeParams {
   /** Array of escrow inputs to withdraw from (optional - will fetch all UTXOs from escrow address if not provided) */
   escrowInputs?: UTXO[];
   /** Escrow script address (optional - will be calculated from escrowRedeemScript if not provided) */
@@ -169,28 +164,15 @@ export interface DawnWithdrawalParams {
   destination: string;
   /** Fee priority levels for user-friendly fee selection */
   priority: FeePriorities;
-  /** Optional fee address for protocol fees */
-  feeAddress?: string;
-  /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
-  protocolFeeAmount?: number;
-  /** Optional arbitrary string metadata to include in transaction (max 80 bytes) */
-  metadata?: SundialMetadata | string;
 }
 
 /**
  * Result of Dawn withdrawal
  * @interface DawnWithdrawalResult
+ * @extends TransactionResult
  * @description Transaction result with detailed input and output information for Dawn withdrawal
  */
-export interface DawnWithdrawalResult {
-  /** Transaction in hexadecimal format */
-  hex: string;
-  /** Transaction ID (hash) */
-  txid: string;
-  /** Transaction size in bytes */
-  size: number;
-  /** Transaction fee in satoshis */
-  fee: number;
+export interface DawnWithdrawalResult extends TransactionResult {
   /** Input details */
   inputs: {
     /** Total value from escrow inputs in satoshis */
@@ -208,57 +190,7 @@ export interface DawnWithdrawalResult {
     destinationValue: number;
     /** Optional protocol fee amount in satoshis */
     protocolFeeAmount?: number;
-    /** Optional metadata included in transaction */
-    metadata?: string;
   };
-}
-
-/**
- * Parameters for signing a Dawn staking transaction
- * @interface DawnStakingSigningParams
- * @description Configuration for signing an unsigned Dawn staking PSBT
- */
-export interface DawnStakingSigningParams {
-  /** Unsigned PSBT in base64 format */
-  unsignedPsbt: string;
-  /** Private key for signing in hex format */
-  privateKey: string;
-  /** Array of input UTXOs for witness data (optional - will be extracted from PSBT if not provided) */
-  inputs?: UTXO[];
-}
-
-/**
- * Parameters for Dawn withdrawal transaction
- * @interface DawnWithdrawalCreationParams
- * @description Configuration for creating an unsigned Dawn withdrawal transaction
- */
-export interface DawnWithdrawalCreationParams extends Omit<
-  DawnWithdrawalParams,
-  "privateKey"
-> {
-  // All parameters except privateKey
-}
-
-/**
- * Parameters for signing a Dawn withdrawal transaction
- * @interface DawnWithdrawalSigningParams
- * @description Configuration for signing an unsigned Dawn withdrawal PSBT
- */
-export interface DawnWithdrawalSigningParams {
-  /** Unsigned PSBT in base64 format */
-  unsignedPsbt: string;
-  /** Private key for signing escrow inputs in hex format */
-  escrowPrivateKey?: string;
-  /** Private key for signing timelock inputs in hex format */
-  timelockPrivateKey?: string;
-  /** Array of escrow inputs (optional - will be extracted from PSBT if not provided) */
-  escrowInputs?: UTXO[];
-  /** Escrow redeem script in hexadecimal format */
-  escrowRedeemScript: string;
-  /** Array of timelock inputs (optional - will be extracted from PSBT if not provided) */
-  timelockInputs?: UTXO[];
-  /** Timelock redeem script in hexadecimal format */
-  timelockRedeemScript: string;
 }
 
 /**

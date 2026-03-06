@@ -3,6 +3,8 @@
  */
 import { BIP32Factory } from "bip32";
 import { ECPairFactory } from "ecpair";
+import { FeePriorities } from "./utils/fees";
+import type { SundialMetadata } from "./utils/metadata";
 
 /**
  * Bitcoin key pair with private key, public key, and address
@@ -71,6 +73,34 @@ export interface TransactionResult {
   size: number;
   /** Transaction fee in satoshis */
   fee: number;
+  /** Optional metadata associated with the transaction */
+  metadata?: string;
+}
+
+/**
+ * Base parameters shared by all transaction creation functions
+ * @interface BaseTransactionParams
+ * @description Provides common fields (fee priority, metadata) used across all transaction builders
+ */
+export interface BaseTransactionParams {
+  /** Fee priority for the transaction */
+  priority?: FeePriorities;
+  /** Optional metadata to attach to the transaction */
+  metadata?: SundialMetadata | string;
+}
+
+/**
+ * Protocol fee parameters for transactions that support protocol fees
+ * @interface ProtocolFeeParams
+ * @description Mixin for transactions that support protocol-level fees and change outputs
+ */
+export interface ProtocolFeeParams {
+  /** Optional fee address for protocol fees */
+  feeAddress?: string;
+  /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
+  protocolFeeAmount?: number;
+  /** Optional change address for remaining funds */
+  changeAddress?: string;
 }
 
 export interface TimelockConfig {

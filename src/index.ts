@@ -22,11 +22,7 @@ import {
   MetadataUtils,
   Utils,
 } from "./utils";
-import {
-  BTCLockerError,
-  ValidationError,
-  TimelockError,
-} from "./errors";
+import { BTCLockerError, ValidationError, TimelockError } from "./errors";
 import BitcoinAPI from "./bitcoin-api";
 
 // Export all types and interfaces
@@ -35,6 +31,8 @@ export type {
   ScriptInfo,
   UTXO,
   TransactionResult,
+  BaseTransactionParams,
+  ProtocolFeeParams,
   TimelockConfig,
   EscrowConfig,
   DawnStakeConfig,
@@ -50,19 +48,15 @@ export { FeePriorities } from "./utils/fees";
 export { TxType, packMetadata, unpackMetadata } from "./utils/metadata";
 
 // Export additional interfaces from individual modules
-export type { 
+export type {
   EscrowSpendingTransaction,
   EscrowSpendingParams,
-  EscrowSpendingSigningParams
+  EscrowSpendingSigningParams,
 } from "./locker/escrow";
 
-export type {
-  SundialMetadata
-} from "./utils/metadata";
+export type { SundialMetadata } from "./utils/metadata";
 
-export type {
-  ExtendedKeyPair
-} from "./locker/keypair";
+export type { ExtendedKeyPair } from "./locker/keypair";
 
 export type {
   DawnStakingResult,
@@ -73,8 +67,6 @@ export type {
   DawnStakingCalculationParams,
   DawnWithdrawalParams,
   DawnWithdrawalResult,
-  DawnStakingSigningParams,
-  DawnWithdrawalSigningParams
 } from "./locker/dawn-stake";
 
 export type {
@@ -84,14 +76,13 @@ export type {
   TransactionSigningParams,
   TransactionSubmissionParams,
   SpendingTransactionSigningParams,
-  FundingTransactionSigningParams
 } from "./locker/transactions";
 
 export type {
   YieldDistributionParams,
   YieldDistributionResult,
   YieldInput,
-  YieldDistributionSigningParams
+  YieldDistributionSigningParams,
 } from "./locker/yield";
 
 // Export BitcoinAPI types and interfaces
@@ -101,7 +92,7 @@ export type {
   AddressInfo,
   ApiUTXO,
   FeeEstimates,
-  BroadcastResult
+  BroadcastResult,
 } from "./bitcoin-api";
 
 import { NETWORKS } from "./utils/network";
@@ -117,7 +108,9 @@ export { EscrowManager } from "./locker/escrow";
  * // Using string network name
  * const locker = await createBTCLocker('testnet');
  */
-export async function createBTCLocker(network: string = "testnet"): Promise<BTCLocker> {
+export async function createBTCLocker(
+  network: string = "testnet",
+): Promise<BTCLocker> {
   const networkType = NETWORKS[network] || NETWORKS.testnet;
   const locker = new BTCLocker(networkType);
   await locker.init();

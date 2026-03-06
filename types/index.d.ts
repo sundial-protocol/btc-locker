@@ -35,23 +35,34 @@ export interface TransactionResult {
   fee: number;
 }
 
+export interface BaseTransactionParams {
+  priority?: FeePriorities;
+  metadata?: SundialMetadata | string;
+}
+
+export interface ProtocolFeeParams {
+  feeAddress?: string;
+  protocolFeeAmount?: number;
+  changeAddress?: string;
+}
+
 export declare class BTCLocker {
   constructor(network?: any);
 
   createTimelockScript(
     locktime: number,
-    publicKey: string | Buffer
+    publicKey: string | Buffer,
   ): ScriptInfo;
   createRelativeTimelockScript(
     sequence: number,
-    publicKey: string | Buffer
+    publicKey: string | Buffer,
   ): ScriptInfo;
   createSpendingTransaction(
     scriptInfo: ScriptInfo,
     utxos: UTXO[],
     destinationAddress: string,
     fee: number,
-    privateKeys: (string | Buffer)[]
+    privateKeys: (string | Buffer)[],
   ): TransactionResult;
   isTimelockExpired(locktime: number, currentTime?: number): boolean;
   generateKeyPair(): KeyPair;
@@ -125,7 +136,10 @@ export declare class MetadataUtils {
   static unpack(buf: Buffer): SundialMetadata;
   static pack_string(s: string): Buffer;
   static isSundialMetadata(buf: Buffer | Uint8Array): boolean;
-  static toOutput(metadata: SundialMetadata | string): { script: Buffer; value: bigint };
+  static toOutput(metadata: SundialMetadata | string): {
+    script: Buffer;
+    value: bigint;
+  };
   static packMetadata: typeof MetadataUtils.pack;
   static unpackMetadata: typeof MetadataUtils.unpack;
 }
@@ -143,16 +157,13 @@ export enum FeePriorities {
 
 // ── Dawn Staking ─────────────────────────────────────────────────────────────
 
-export interface DawnStakingParams {
+export interface DawnStakingParams
+  extends BaseTransactionParams, ProtocolFeeParams {
   inputs?: UTXO[];
   sourceAddress: string;
   escrowAddress: string;
   escrowAmount: number;
   timelockAddress: string;
   timelockAmount: number;
-  changeAddress?: string;
   priority: FeePriorities;
-  feeAddress?: string;
-  protocolFeeAmount?: number;
-  metadata?: SundialMetadata | string;
 }

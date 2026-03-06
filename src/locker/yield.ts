@@ -6,9 +6,9 @@ import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core";
 import { FeeUtils } from "../utils";
 import { FeePriorities } from "../utils/fees";
-import type { UTXO } from "../types";
+import type { UTXO, BaseTransactionParams, TransactionResult } from "../types";
 import BitcoinAPI from "../bitcoin-api";
-import MetadataUtils, { SundialMetadata } from "../utils/metadata";
+import MetadataUtils from "../utils/metadata";
 
 /**
  * Yield input type
@@ -19,9 +19,10 @@ export type YieldInput = UTXO;
 /**
  * Parameters for yield distribution
  * @interface YieldDistributionParams
+ * @extends BaseTransactionParams
  * @description Configuration for distributing yield from time-locked Bitcoin funds
  */
-export interface YieldDistributionParams {
+export interface YieldDistributionParams extends BaseTransactionParams {
   /** Array of unspent transaction outputs from timelock (optional - will fetch from address if not provided) */
   inputs?: YieldInput[];
   /** Source address for automatic UTXO selection (required if inputs not provided) */
@@ -32,32 +33,19 @@ export interface YieldDistributionParams {
   timelockAddress: string;
   /** Amount to distribute in satoshis */
   amount: number;
-  /** Optional metadata for the distribution */
-  metadata?: SundialMetadata | string;
   /** Optional change address for remaining funds */
   changeAddress?: string;
-  /** Fee priority levels for user-friendly fee selection */
-  priority?: FeePriorities;
 }
 
 /**
  * Result of yield distribution
  * @interface YieldDistributionResult
+ * @extends TransactionResult
  * @description Transaction result with additional yield distribution metadata
  */
-export interface YieldDistributionResult {
+export interface YieldDistributionResult extends TransactionResult {
   /** Bitcoin transaction object */
   transaction: bitcoin.Transaction;
-  /** Transaction in hexadecimal format */
-  hex: string;
-  /** Transaction ID (hash) */
-  txid: string;
-  /** Transaction size in bytes */
-  size: number;
-  /** Transaction fee in satoshis */
-  fee: number;
-  /** Metadata associated with the yield distribution */
-  metadata: string;
   /** Distribution details */
   distribution: {
     /** Amount distributed in satoshis */
@@ -75,7 +63,6 @@ export interface YieldDistributionResult {
  * @description Configuration for signing unsigned yield distribution transactions
  */
 export interface YieldDistributionSigningParams {
-  /** Unsigned transaction hex or PSBT */
   unsignedTransaction: string;
   /** Private key for signing the distribution transaction */
   privateKey: string;

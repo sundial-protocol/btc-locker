@@ -7,15 +7,20 @@ import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core";
 import { KeyUtils, ValidationUtils, ScriptUtils, FeeUtils } from "../utils";
 import { FeePriorities } from "../utils/fees";
-import type { ScriptInfo } from "../types";
+import type {
+  ScriptInfo,
+  TransactionResult,
+  BaseTransactionParams,
+} from "../types";
 import MetadataUtils, { SundialMetadata } from "../utils/metadata";
 
 /**
  * Escrow transaction creation parameters
  * @interface EscrowSpendingParams
+ * @extends BaseTransactionParams
  * @description Parameters for creating an unsigned escrow spending transaction
  */
-export interface EscrowSpendingParams {
+export interface EscrowSpendingParams extends BaseTransactionParams {
   /** Script data returned from createEscrowScript */
   scriptData: ScriptInfo;
   /** Transaction ID of the UTXO to spend */
@@ -28,14 +33,10 @@ export interface EscrowSpendingParams {
   outputAddress: string;
   /** Whether to spend after deadline (true) or before (false) */
   spendAfterDeadline: boolean;
-  /** Fee priority levels for user-friendly fee selection */
-  priority?: FeePriorities;
   /** Current time for validation (defaults to Date.now()) */
   currentTime?: number;
   /** Previous transaction buffer (for testing/validation) */
   previousTransaction?: Buffer | null;
-  /** Optional metadata to attach to the transaction */
-  metadata?: SundialMetadata | string;
 }
 
 /**
@@ -56,15 +57,8 @@ export interface EscrowSpendingSigningParams {
 
 /**
  * Escrow spending transaction result
- * @interface EscrowSpendingTransaction
- * @description Result of spending from an escrow script
  */
-export interface EscrowSpendingTransaction {
-  /** Transaction in hexadecimal format */
-  txHex: string;
-  /** Transaction ID (hash) */
-  txId: string;
-}
+export type EscrowSpendingTransaction = TransactionResult;
 
 /**
  * Time-based escrow script management class
@@ -333,7 +327,7 @@ export class EscrowManager extends BTCLockerCore {
    */
   async signAndSubmitEscrowSpendingTransaction(
     signingParams: EscrowSpendingSigningParams,
-  ): Promise<EscrowSpendingTransaction> {
+  ): Promise<TransactionResult> {
     const privateKeyString =
       typeof signingParams.privateKey === "string"
         ? signingParams.privateKey
@@ -346,10 +340,13 @@ export class EscrowManager extends BTCLockerCore {
     );
 
     const txid = await this.submitTransaction(signedTx, { api: this.api });
+    const tx = bitcoin.Transaction.fromHex(signedTx);
 
     return {
-      txHex: signedTx,
-      txId: txid,
+      hex: signedTx,
+      txid,
+      size: tx.virtualSize(),
+      fee: 0,
     };
   }
 }
