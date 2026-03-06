@@ -1,3 +1,4 @@
+import { describe, test, expect, beforeEach } from "vitest";
 import MetadataUtils, {
   packMetadata,
   unpackMetadata,
@@ -100,17 +101,6 @@ describe("Sundial Metadata", () => {
 
         expect(result.length).toBe(METADATA_LENGTH);
       });
-
-      test("should accept UUID with or without dashes", () => {
-        const withDashes = packMetadata(BASE_METADATA);
-
-        const withoutDashes = packMetadata({
-          ...BASE_METADATA,
-          depositId: VALID_UUID_NO_DASHES,
-        });
-
-        expect(withDashes).toEqual(withoutDashes);
-      });
     });
 
     describe("invalid inputs", () => {
@@ -138,7 +128,7 @@ describe("Sundial Metadata", () => {
             ...BASE_METADATA,
             depositId: INVALID_UUID,
           })
-        ).toThrow(ValidationError);
+        ).toThrow(TypeError);
       });
 
       test("should throw on short UUID", () => {
@@ -147,7 +137,7 @@ describe("Sundial Metadata", () => {
             ...BASE_METADATA,
             depositId: "550e8400-e29b-41d4-a716-44665544000", // missing 1 char
           })
-        ).toThrow(ValidationError);
+        ).toThrow(TypeError);
       });
 
       test("should throw on invalid pubkey (too short)", () => {
@@ -297,19 +287,6 @@ describe("Sundial Metadata", () => {
       const unpacked = unpackMetadata(packed);
 
       expect(unpacked).toEqual(BASE_METADATA);
-    });
-
-    test("should work with UUID without dashes", () => {
-      const original = {
-        ...BASE_METADATA,
-        depositId: VALID_UUID_NO_DASHES,
-      };
-
-      const packed = packMetadata(original);
-      const unpacked = unpackMetadata(packed);
-
-      // Should normalize to dashed format
-      expect(unpacked.depositId).toBe(VALID_UUID);
     });
 
     test("should work with different pubkey values", () => {

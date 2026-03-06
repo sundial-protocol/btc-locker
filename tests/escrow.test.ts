@@ -1,7 +1,8 @@
 /**
- * @fileoverview Jest tests for EscrowManager
+ * @fileoverview Vitest tests for EscrowManager
  */
 
+import { describe, test, expect, beforeAll, beforeEach } from "vitest";
 import { EscrowManager } from "../src/locker/escrow";
 import { ECPairFactory, ECPairInterface } from "ecpair";
 import tinysecp from "@bitcoinerlab/secp256k1";
