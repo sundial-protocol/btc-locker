@@ -70,7 +70,8 @@
     "commander": "^11.1.0",
     "ecpair": "^2.1.0",
     "express": "^4.22.1",
-    "inquirer": "^8.2.6"
+    "inquirer": "^8.2.6",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.23.0",

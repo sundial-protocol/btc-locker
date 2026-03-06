@@ -16,6 +16,7 @@
 import { ValidationError } from "../errors";
 import { TxOutput } from "bitcoinjs-lib";
 import * as bitcoin from "bitcoinjs-lib";
+import { parse, stringify } from "uuid";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -79,44 +80,19 @@ const crc32Table: Uint32Array = (() => {
   return table;
 })();
 
-/** Compute CRC-32 over a Buffer region */
+/**
+ * Compute CRC-32 (IEEE 802.3) checksum over a Buffer region
+ * @param buf - Buffer to compute checksum over
+ * @param offset - Starting byte offset
+ * @param length - Number of bytes to include
+ * @returns CRC-32 checksum as unsigned 32-bit integer
+ */
 function crc32(buf: Buffer, offset: number, length: number): number {
   let crc = 0xffffffff;
   for (let i = offset; i < offset + length; i++) {
     crc = (crc >>> 8) ^ crc32Table[(crc ^ buf[i]) & 0xff];
   }
   return (crc ^ 0xffffffff) >>> 0;
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Convert a canonical UUID string to 16 raw bytes.
- *
- * Accepts formats with or without dashes:
- *  - `"550e8400-e29b-41d4-a716-446655440000"`
- *  - `"550e8400e29b41d4a716446655440000"`
- */
-function uuidToBytes(uuid: string): Buffer {
-  const hex = uuid.replace(/-/g, "");
-  if (hex.length !== 32 || !/^[0-9a-fA-F]{32}$/.test(hex)) {
-    throw new ValidationError(`Invalid UUID: "${uuid}"`);
-  }
-  return Buffer.from(hex, "hex");
-}
-
-/**
- * Convert 16 raw bytes back to canonical UUID string with dashes.
- */
-function bytesToUuid(buf: Buffer, offset: number): string {
-  const hex = buf.subarray(offset, offset + 16).toString("hex");
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20, 32),
-  ].join("-");
 }
 
 // ── Metadata Utils Class ─────────────────────────────────────────────────────
@@ -167,7 +143,7 @@ export default class MetadataUtils {
       );
     }
 
-    const depositIdBytes = uuidToBytes(opts.depositId);
+    const depositIdBytes = Buffer.from(parse(opts.depositId));
 
     const pubkeyHex = opts.providerXonlyPubkey;
     if (pubkeyHex.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(pubkeyHex)) {
@@ -274,7 +250,7 @@ export default class MetadataUtils {
     }
 
     // ── Deposit ID ───────────────────────────────────────────────────────────
-    const depositId = bytesToUuid(buf, OFF_DEPOSIT_ID);
+    const depositId = stringify(buf, OFF_DEPOSIT_ID);
 
     // ── Provider x-only pubkey ───────────────────────────────────────────────
     const providerXonlyPubkey = buf
@@ -389,6 +365,23 @@ export default class MetadataUtils {
     return Buffer.from(s, "utf8");
   }
 
+  /**
+   * Quick check whether a buffer looks like Sundial metadata by testing the
+   * magic bytes only. Does not validate the checksum or any other field.
+   * Use {@link unpack} after this returns `true` to fully validate and decode.
+   */
+  static isSundialMetadata(buf: Buffer | Uint8Array): boolean {
+    if (!buf || buf.length < OFF_MAGIC + 4) return false;
+    return VALID_MAGICS.has(
+      Buffer.from(buf.buffer, buf.byteOffset + OFF_MAGIC, 4).toString("ascii"),
+    );
+  }
+
+  /**
+   * Create an OP_RETURN transaction output containing packed Sundial metadata.
+   * @param metadata - Metadata object or JSON/hex string to pack
+   * @returns Transaction output with OP_RETURN script and zero value
+   */
   static toOutput(metadata: SundialMetadata | string): TxOutput {
     const metadataBuffer =
       typeof metadata === "string"

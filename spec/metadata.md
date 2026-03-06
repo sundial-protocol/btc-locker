@@ -168,18 +168,16 @@ Example transactions can be found here:
 
 ## Decoding from a Raw Transaction
 
-To extract metadata from a broadcast transaction, find the `OP_RETURN` output and unpack the data push:
+`MetadataUtils.isSundialMetadata(buf)` is a fast check that only tests whether the first 4 bytes match a valid magic string. It does not verify the checksum or any other field. Use it to filter candidate outputs before calling `unpack`:
 
 ```ts
 const tx = bitcoin.Transaction.fromHex(rawHex);
 for (const out of tx.outs) {
   const chunks = bitcoin.script.decompile(out.script);
   if (chunks && chunks[0] === bitcoin.opcodes.OP_RETURN && Buffer.isBuffer(chunks[1])) {
-    try {
-      const meta = MetadataUtils.unpack(chunks[1]);
+    if (MetadataUtils.isSundialMetadata(chunks[1])) {
+      const meta = MetadataUtils.unpack(chunks[1]); // full validation + decode
       console.log(meta.txType, meta.depositId);
-    } catch {
-      // Not Sundial metadata — ignore
     }
   }
 }

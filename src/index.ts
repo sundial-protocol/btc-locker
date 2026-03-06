@@ -46,6 +46,7 @@ export type {
 // Export NetworkType from utils/network
 export type { NetworkType } from "./utils/network";
 export { NETWORKS } from "./utils/network";
+export { FeePriorities } from "./utils/fees";
 
 // Export additional interfaces from individual modules
 export type { 
