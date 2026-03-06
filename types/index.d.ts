@@ -97,3 +97,62 @@ export declare class ValidationError extends BTCLockerError {
 export declare class TimelockError extends BTCLockerError {
   constructor(message: string);
 }
+
+// ── Metadata ─────────────────────────────────────────────────────────────────
+
+export enum TxType {
+  Deposit = 1,
+  YieldWithdrawal = 2,
+  Distribution = 3,
+  UserWithdrawal = 4,
+}
+
+export interface SundialMetadata {
+  magic: string;
+  version: number;
+  txType: TxType;
+  depositId: string;
+  providerXonlyPubkey: string;
+  flags: number;
+}
+
+export declare class MetadataUtils {
+  static readonly MAGIC_SNDL: string;
+  static readonly METADATA_VERSION: number;
+  static readonly METADATA_LENGTH: number;
+  static readonly TxType: typeof TxType;
+  static pack(opts: SundialMetadata): Buffer;
+  static unpack(buf: Buffer): SundialMetadata;
+  static pack_string(s: string): Buffer;
+  static isSundialMetadata(buf: Buffer | Uint8Array): boolean;
+  static toOutput(metadata: SundialMetadata | string): { script: Buffer; value: bigint };
+  static packMetadata: typeof MetadataUtils.pack;
+  static unpackMetadata: typeof MetadataUtils.unpack;
+}
+
+export declare function packMetadata(opts: SundialMetadata): Buffer;
+export declare function unpackMetadata(buf: Buffer): SundialMetadata;
+
+// ── Fees ─────────────────────────────────────────────────────────────────────
+
+export enum FeePriorities {
+  HIGH = "high",
+  MEDIUM = "medium",
+  LOW = "low",
+}
+
+// ── Dawn Staking ─────────────────────────────────────────────────────────────
+
+export interface DawnStakingParams {
+  inputs?: UTXO[];
+  sourceAddress: string;
+  escrowAddress: string;
+  escrowAmount: number;
+  timelockAddress: string;
+  timelockAmount: number;
+  changeAddress?: string;
+  priority: FeePriorities;
+  feeAddress?: string;
+  protocolFeeAmount?: number;
+  metadata?: SundialMetadata | string;
+}
