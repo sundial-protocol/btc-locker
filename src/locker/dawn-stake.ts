@@ -39,8 +39,6 @@ export interface DawnStakingParams
   timelockAddress: string;
   /** Amount to send to timelock in satoshis */
   timelockAmount: number;
-  /** Fee priority levels for user-friendly fee selection */
-  priority: FeePriorities;
 }
 
 /**
@@ -162,8 +160,6 @@ export interface DawnWithdrawalParams
   timelockRedeemScript: string;
   /** Destination address for withdrawn funds */
   destination: string;
-  /** Fee priority levels for user-friendly fee selection */
-  priority: FeePriorities;
 }
 
 /**
