@@ -3,10 +3,7 @@ import {
   BTCLocker,
   BTCLockerCore,
   KeyPairGenerator,
-  TimelockManager,
-  TransactionManager,
-  YieldDistributor,
-  DawnStakingManager,
+  SundialTransactionManager,
   BitcoinAPI,
   TimeUtils,
   ScriptUtils,
@@ -25,7 +22,7 @@ import {
   TxType,
   packMetadata,
   unpackMetadata,
-  EscrowManager,
+  ScriptManager,
 } from "../src/index";
 import defaultExport from "../src/index";
 
@@ -34,12 +31,9 @@ describe("src/index.ts exports", () => {
     expect(BTCLocker).toBeDefined();
     expect(BTCLockerCore).toBeDefined();
     expect(KeyPairGenerator).toBeDefined();
-    expect(TimelockManager).toBeDefined();
-    expect(TransactionManager).toBeDefined();
-    expect(YieldDistributor).toBeDefined();
-    expect(DawnStakingManager).toBeDefined();
+    expect(SundialTransactionManager).toBeDefined();
     expect(BitcoinAPI).toBeDefined();
-    expect(EscrowManager).toBeDefined();
+    expect(ScriptManager).toBeDefined();
   });
 
   test("should export all utility classes", () => {

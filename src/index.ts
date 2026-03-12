@@ -7,10 +7,8 @@ export * as bitcoin from "bitcoinjs-lib";
 import BTCLocker, {
   BTCLockerCore,
   KeyPairGenerator,
-  TimelockManager,
-  TransactionManager,
-  YieldDistributor,
-  DawnStakingManager,
+  SundialTransactionManager,
+  ScriptManager,
 } from "./locker/index";
 import {
   TimeUtils,
@@ -48,26 +46,39 @@ export { FeePriorities } from "./utils/fees";
 export { TxType, packMetadata, unpackMetadata } from "./utils/metadata";
 
 // Export additional interfaces from individual modules
-export type {
-  EscrowSpendingTransaction,
-  EscrowSpendingParams,
-  EscrowSpendingSigningParams,
-} from "./locker/escrow";
-
 export type { SundialMetadata } from "./utils/metadata";
 
 export type { ExtendedKeyPair } from "./locker/keypair";
 
 export type {
   DawnStakingResult,
-  DawnStakingWithScriptResult,
-  DawnStakingCalculationResult,
   DawnStakingParams,
+} from "./locker/transactions/staking/stake";
+
+export type {
+  DawnStakingWithScriptResult,
   DawnStakingWithScriptParams,
+} from "./locker/transactions/staking/stake-with-script";
+
+export type {
   DawnStakingCalculationParams,
+  DawnStakingCalculationResult,
+} from "./locker/transactions/staking/calculate";
+
+export type {
   DawnWithdrawalParams,
   DawnWithdrawalResult,
-} from "./locker/dawn-stake";
+} from "./locker/transactions/user-withdrawal";
+
+export type {
+  EscrowSpendingParams,
+  EscrowSpendingResult,
+} from "./locker/transactions/escrow-spending";
+
+export type {
+  YieldDistributionParams,
+  YieldDistributionResult,
+} from "./locker/transactions/yield-distribution";
 
 export type {
   SpendingTransactionParams,
@@ -76,14 +87,7 @@ export type {
   TransactionSigningParams,
   TransactionSubmissionParams,
   SpendingTransactionSigningParams,
-} from "./locker/transactions";
-
-export type {
-  YieldDistributionParams,
-  YieldDistributionResult,
-  YieldInput,
-  YieldDistributionSigningParams,
-} from "./locker/yield";
+} from "./locker/transactions/generic";
 
 // Export BitcoinAPI types and interfaces
 export type {
@@ -96,9 +100,6 @@ export type {
 } from "./bitcoin-api";
 
 import { NETWORKS } from "./utils/network";
-
-// Export the EscrowManager class
-export { EscrowManager } from "./locker/escrow";
 
 /**
  * Factory function to create an initialized BTCLocker instance
@@ -121,10 +122,8 @@ export {
   BTCLocker,
   BTCLockerCore,
   KeyPairGenerator,
-  TimelockManager,
-  TransactionManager,
-  YieldDistributor,
-  DawnStakingManager,
+  SundialTransactionManager,
+  ScriptManager,
   BitcoinAPI,
   TimeUtils,
   ScriptUtils,
@@ -144,10 +143,8 @@ export default {
   BTCLocker,
   BTCLockerCore,
   KeyPairGenerator,
-  TimelockManager,
-  TransactionManager,
-  YieldDistributor,
-  DawnStakingManager,
+  SundialTransactionManager,
+  ScriptManager,
   BitcoinAPI,
   createBTCLocker,
   TimeUtils,

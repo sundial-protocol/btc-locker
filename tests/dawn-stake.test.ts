@@ -1,13 +1,13 @@
 import { describe, test, expect, beforeAll, vi } from "vitest";
-import { DawnStakingManager } from "../src/locker/dawn-stake";
+import { SundialTransactionManager } from "../src/locker/transaction-manager";
 import { NETWORKS } from "../src/utils/network";
 import * as bitcoin from "bitcoinjs-lib";
 import tinysecp from "@bitcoinerlab/secp256k1";
 import { ECPairFactory } from "ecpair";
 import FeeUtils from "../src/utils/fees";
 
-describe("DawnStakingManager", () => {
-  let manager: DawnStakingManager;
+describe("SundialTransactionManager (Dawn Staking)", () => {
+  let manager: SundialTransactionManager;
   let testAddress: string;
   let testAddress2: string;
   let testAddress3: string;
@@ -32,7 +32,7 @@ describe("DawnStakingManager", () => {
     testAddress2 = makeAddress();
     testAddress3 = makeAddress();
 
-    manager = new DawnStakingManager(NETWORKS.testnet);
+    manager = new SundialTransactionManager(NETWORKS.testnet);
     await manager.init();
   });
 
@@ -411,8 +411,8 @@ describe("DawnStakingManager", () => {
   });
 });
 
-describe("DawnStakingManager (mocked fees)", () => {
-  let manager: DawnStakingManager;
+describe("SundialTransactionManager (mocked fees)", () => {
+  let manager: SundialTransactionManager;
   let testAddress: string;
   let testAddress2: string;
   let testAddress3: string;
@@ -439,7 +439,7 @@ describe("DawnStakingManager (mocked fees)", () => {
 
     vi.spyOn(FeeUtils, "queryChainFeeRates").mockResolvedValue(10);
 
-    manager = new DawnStakingManager(NETWORKS.testnet);
+    manager = new SundialTransactionManager(NETWORKS.testnet);
     await manager.init();
   });
 

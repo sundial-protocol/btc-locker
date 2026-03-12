@@ -10,6 +10,12 @@ import type { ECCLib, InitializedECC } from "../types";
 import { NetworkType, NETWORKS } from "../utils/network";
 import BitcoinAPI from "../bitcoin-api";
 
+/** Shared context for transaction-building functions */
+export interface LockerContext {
+  network: bitcoin.Network;
+  api: BitcoinAPI;
+}
+
 // ECC will be initialized asynchronously
 let ecc: ECCLib | null = null;
 let bip32: ReturnType<typeof BIP32Factory> | null = null;

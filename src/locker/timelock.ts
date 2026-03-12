@@ -1,10 +1,9 @@
 /**
- * @fileoverview Timelock script creation functionality
+ * @fileoverview Timelock script management — thin facade over ./scripts/timelock
  */
 
-import * as bitcoin from "bitcoinjs-lib";
 import { BTCLockerCore } from "./core";
-import { ScriptUtils, KeyUtils, ValidationUtils } from "../utils";
+import { createTimelockScript, createRelativeTimelockScript } from "./scripts";
 import type { ScriptInfo } from "../types";
 
 /**
@@ -12,86 +11,19 @@ import type { ScriptInfo } from "../types";
  * @class TimelockManager
  */
 export class TimelockManager extends BTCLockerCore {
-  /**
-   * Create a simple timelock script (absolute time)
-   * @async
-   * @param locktime - Unix timestamp (for time-based) or block height (for height-based)
-   * @param publicKey - Public key as buffer or hex string
-   * @returns Script details object
-   * @throws If locktime or publicKey is invalid
-   * @example
-   * const timelock = new TimelockManager();
-   * const script = await timelock.createTimelockScript(1640995200, publicKey);
-   * console.log(script.address);
-   */
-  async createTimelockScript(locktime: number, publicKey: Buffer | string): Promise<ScriptInfo> {
+  async createTimelockScript(
+    locktime: number,
+    publicKey: Buffer | string,
+  ): Promise<ScriptInfo> {
     await this.ensureInitialized();
-
-    // Validate inputs using shared utilities
-    const locktimeNumber = ValidationUtils.validateLocktime(locktime);
-    const publicKeyBuffer = KeyUtils.validateAndConvertPublicKey(publicKey);
-
-    try {
-      const redeemScript = bitcoin.script.compile([
-        bitcoin.script.number.encode(locktimeNumber),
-        bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
-        bitcoin.opcodes.OP_DROP,
-        publicKeyBuffer,
-        bitcoin.opcodes.OP_CHECKSIG,
-      ]);
-
-      const scriptHash = ScriptUtils.calculateScriptHash(Buffer.from(redeemScript));
-      const address = ScriptUtils.createScriptAddress(Buffer.from(redeemScript), this.network);
-
-      return {
-        redeemScript: Buffer.from(redeemScript).toString("hex"),
-        scriptHash,
-        address,
-        locktime: locktimeNumber,
-        publicKey: publicKeyBuffer.toString("hex"),
-        type: "timelock",
-      };
-    } catch (error) {
-      throw new Error(`Failed to create timelock script: ${(error as Error).message}`);
-    }
+    return createTimelockScript(this, locktime, publicKey);
   }
 
-  /**
-   * Create a relative timelock script (CSV - CheckSequenceVerify)
-   * @async
-   * @param sequence - Relative timelock value (blocks or time units)
-   * @param publicKey - Public key as buffer or hex string
-   * @returns Script details object
-   * @throws If sequence or publicKey is invalid
-   * @example
-   * const timelock = new TimelockManager();
-   * const script = await timelock.createRelativeTimelockScript(144, publicKey); // 1 day
-   * console.log(script.address);
-   */
-  async createRelativeTimelockScript(sequence: number, publicKey: Buffer | string): Promise<ScriptInfo> {
+  async createRelativeTimelockScript(
+    sequence: number,
+    publicKey: Buffer | string,
+  ): Promise<ScriptInfo> {
     await this.ensureInitialized();
-
-    // Validate public key using shared utility
-    const publicKeyBuffer = KeyUtils.validateAndConvertPublicKey(publicKey);
-
-    const redeemScript = bitcoin.script.compile([
-      bitcoin.script.number.encode(sequence),
-      bitcoin.opcodes.OP_CHECKSEQUENCEVERIFY,
-      bitcoin.opcodes.OP_DROP,
-      publicKeyBuffer,
-      bitcoin.opcodes.OP_CHECKSIG,
-    ]);
-
-    const scriptHash = ScriptUtils.calculateScriptHash(Buffer.from(redeemScript));
-    const address = ScriptUtils.createScriptAddress(Buffer.from(redeemScript), this.network);
-
-    return {
-      redeemScript: Buffer.from(redeemScript).toString("hex"),
-      scriptHash,
-      address,
-      sequence,
-      publicKey: publicKeyBuffer.toString("hex"),
-      type: "relative-timelock",
-    };
+    return createRelativeTimelockScript(this, sequence, publicKey);
   }
 }
