@@ -3,7 +3,7 @@ import {
   BTCLocker,
   BTCLockerCore,
   KeyPairGenerator,
-  SundialTransactionManager,
+  TransactionManager,
   BitcoinAPI,
   TimeUtils,
   ScriptUtils,
@@ -31,7 +31,7 @@ describe("src/index.ts exports", () => {
     expect(BTCLocker).toBeDefined();
     expect(BTCLockerCore).toBeDefined();
     expect(KeyPairGenerator).toBeDefined();
-    expect(SundialTransactionManager).toBeDefined();
+    expect(TransactionManager).toBeDefined();
     expect(BitcoinAPI).toBeDefined();
     expect(ScriptManager).toBeDefined();
   });

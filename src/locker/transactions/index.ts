@@ -31,7 +31,6 @@ export {
 export {
   createSpendingTransaction,
   createFundingTransaction,
-  TransactionManager,
   TransactionOutput,
   SpendingTransactionParams,
   FundingTransactionParams,

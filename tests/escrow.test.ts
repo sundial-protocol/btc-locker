@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect, beforeAll, beforeEach } from "vitest";
-import { SundialTransactionManager } from "../src/locker/transaction-manager";
+import { TransactionManager } from "../src/locker/transaction-manager";
 import { ScriptManager } from "../src/locker/script-manager";
 import { ECPairFactory, ECPairInterface } from "ecpair";
 import tinysecp from "@bitcoinerlab/secp256k1";
@@ -13,7 +13,7 @@ import { NETWORKS } from "../src/utils/network";
 
 describe("EscrowManager", () => {
   let escrow: ScriptManager;
-  let txManager: SundialTransactionManager;
+  let txManager: TransactionManager;
   let ECPair: ReturnType<typeof ECPairFactory>;
   let keyPair1: ECPairInterface, keyPair2: ECPairInterface;
   let pubKey1: Buffer, pubKey2: Buffer;
@@ -28,8 +28,8 @@ describe("EscrowManager", () => {
     escrow = new ScriptManager(NETWORKS.testnet);
     await escrow.init();
 
-    // Initialize SundialTransactionManager
-    txManager = new SundialTransactionManager(NETWORKS.testnet);
+    // Initialize TransactionManager
+    txManager = new TransactionManager(NETWORKS.testnet);
     await txManager.init();
 
     // Generate test key pairs

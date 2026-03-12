@@ -7,7 +7,7 @@ export * as bitcoin from "bitcoinjs-lib";
 import BTCLocker, {
   BTCLockerCore,
   KeyPairGenerator,
-  SundialTransactionManager,
+  TransactionManager,
   ScriptManager,
 } from "./locker/index";
 import {
@@ -122,7 +122,7 @@ export {
   BTCLocker,
   BTCLockerCore,
   KeyPairGenerator,
-  SundialTransactionManager,
+  TransactionManager,
   ScriptManager,
   BitcoinAPI,
   TimeUtils,
@@ -143,7 +143,7 @@ export default {
   BTCLocker,
   BTCLockerCore,
   KeyPairGenerator,
-  SundialTransactionManager,
+  TransactionManager,
   ScriptManager,
   BitcoinAPI,
   createBTCLocker,

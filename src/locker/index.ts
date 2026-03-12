@@ -4,7 +4,7 @@
 
 import { BTCLockerCore } from "./core";
 import { KeyPairGenerator } from "./keypair";
-import { SundialTransactionManager } from "./transaction-manager";
+import { TransactionManager } from "./transaction-manager";
 import { ScriptManager } from "./script-manager";
 import {
   DawnStakingParams,
@@ -38,7 +38,7 @@ import { YieldDistributionParams } from "..";
  */
 export class BTCLocker extends BTCLockerCore {
   public readonly keyPairGenerator: KeyPairGenerator;
-  public readonly sundialTransactionManager: SundialTransactionManager;
+  public readonly transactionManager: TransactionManager;
   public readonly scriptManager: ScriptManager;
 
   constructor(network?: NetworkType | string) {
@@ -56,7 +56,7 @@ export class BTCLocker extends BTCLockerCore {
 
     // Initialize component instances with the converted network object from parent
     this.keyPairGenerator = new KeyPairGenerator(network);
-    this.sundialTransactionManager = new SundialTransactionManager(network);
+    this.transactionManager = new TransactionManager(network);
     this.scriptManager = new ScriptManager(network);
   }
 
@@ -74,7 +74,7 @@ export class BTCLocker extends BTCLockerCore {
     // Initialize all components
     await Promise.all([
       this.keyPairGenerator.init(),
-      this.sundialTransactionManager.init(),
+      this.transactionManager.init(),
       this.scriptManager.init(),
     ]);
   }
@@ -265,9 +265,7 @@ export class BTCLocker extends BTCLockerCore {
   async createEscrowSpendingTransaction(
     params: EscrowSpendingParams,
   ): Promise<string> {
-    return this.sundialTransactionManager.createEscrowSpendingTransaction(
-      params,
-    );
+    return this.transactionManager.createEscrowSpendingTransaction(params);
   }
 
   /**
@@ -286,7 +284,7 @@ export class BTCLocker extends BTCLockerCore {
    * });
    */
   async distributeYield(params: YieldDistributionParams): Promise<string> {
-    return this.sundialTransactionManager.distributeYield(params);
+    return this.transactionManager.distributeYield(params);
   }
 
   /**
@@ -307,7 +305,7 @@ export class BTCLocker extends BTCLockerCore {
   async createDawnStakingTransaction(
     params: DawnStakingParams,
   ): Promise<string> {
-    return this.sundialTransactionManager.createDawnStakingTransaction(params);
+    return this.transactionManager.createDawnStakingTransaction(params);
   }
 
   /**
@@ -329,7 +327,7 @@ export class BTCLocker extends BTCLockerCore {
   async createDawnStakingTransactionWithScript(
     params: DawnStakingWithScriptParams,
   ): Promise<string> {
-    return this.sundialTransactionManager.createDawnStakingTransactionWithScript(
+    return this.transactionManager.createDawnStakingTransactionWithScript(
       params,
     );
   }
@@ -350,7 +348,7 @@ export class BTCLocker extends BTCLockerCore {
   async calculateDawnStakingAmounts(
     params: DawnStakingCalculationParams,
   ): Promise<DawnStakingCalculationResult> {
-    return this.sundialTransactionManager.calculateDawnStakingAmounts(params);
+    return this.transactionManager.calculateDawnStakingAmounts(params);
   }
 
   /**
@@ -371,9 +369,7 @@ export class BTCLocker extends BTCLockerCore {
   async createDawnWithdrawalTransaction(
     params: DawnWithdrawalParams,
   ): Promise<string> {
-    return this.sundialTransactionManager.createDawnWithdrawalTransaction(
-      params,
-    );
+    return this.transactionManager.createDawnWithdrawalTransaction(params);
   }
 
   /**
@@ -440,7 +436,7 @@ export class BTCLocker extends BTCLockerCore {
 // Export all individual components for modular usage
 export { BTCLockerCore } from "./core";
 export { KeyPairGenerator } from "./keypair";
-export { SundialTransactionManager } from "./transaction-manager";
+export { TransactionManager } from "./transaction-manager";
 export { ScriptManager } from "./script-manager";
 
 // Export type interfaces for external use

@@ -12,6 +12,8 @@ import {
   createDawnWithdrawalTransaction,
   createEscrowSpendingTransaction,
   distributeYield,
+  createSpendingTransaction,
+  createFundingTransaction,
   EscrowSpendingParams,
   DawnStakingCalculationParams,
   DawnStakingCalculationResult,
@@ -19,14 +21,16 @@ import {
   DawnStakingParams,
   DawnStakingWithScriptParams,
   YieldDistributionParams,
+  SpendingTransactionParams,
+  FundingTransactionParams,
 } from "./transactions";
 
 /**
  * Unified transaction manager for all btc-locker transaction types
- * @class SundialTransactionManager
+ * @class TransactionManager
  * @extends BTCLockerCore
  */
-export class SundialTransactionManager extends BTCLockerCore {
+export class TransactionManager extends BTCLockerCore {
   async createDawnStakingTransaction(p: DawnStakingParams) {
     await this.ensureInitialized();
     return createDawnStakingTransaction(this, p);
@@ -58,6 +62,16 @@ export class SundialTransactionManager extends BTCLockerCore {
     await this.ensureInitialized();
     return distributeYield(this, p);
   }
+
+  async createSpendingTransaction(p: SpendingTransactionParams) {
+    await this.ensureInitialized();
+    return createSpendingTransaction(this, p);
+  }
+
+  async createFundingTransaction(p: FundingTransactionParams) {
+    await this.ensureInitialized();
+    return createFundingTransaction(this, p);
+  }
 }
 
-export default SundialTransactionManager;
+export default TransactionManager;

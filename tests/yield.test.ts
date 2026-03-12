@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, vi } from "vitest";
-import { SundialTransactionManager } from "../src/locker/transaction-manager";
+import { TransactionManager } from "../src/locker/transaction-manager";
 import { NETWORKS } from "../src/utils/network";
 import * as bitcoin from "bitcoinjs-lib";
 import tinysecp from "@bitcoinerlab/secp256k1";
@@ -7,7 +7,7 @@ import { ECPairFactory } from "ecpair";
 import FeeUtils from "../src/utils/fees";
 
 describe("YieldDistributor", () => {
-  let txManager: SundialTransactionManager;
+  let txManager: TransactionManager;
   let testAddress: string;
 
   beforeAll(async () => {
@@ -24,7 +24,7 @@ describe("YieldDistributor", () => {
     });
     testAddress = address!;
 
-    txManager = new SundialTransactionManager(NETWORKS.testnet);
+    txManager = new TransactionManager(NETWORKS.testnet);
     await txManager.init();
   });
 
@@ -65,7 +65,7 @@ describe("YieldDistributor", () => {
 });
 
 describe("YieldDistributor (mocked fees)", () => {
-  let txManager: SundialTransactionManager;
+  let txManager: TransactionManager;
   let testAddress: string;
   let testAddress2: string;
   let ECPair: ReturnType<typeof ECPairFactory>;
@@ -96,7 +96,7 @@ describe("YieldDistributor (mocked fees)", () => {
 
     vi.spyOn(FeeUtils, "queryChainFeeRates").mockResolvedValue(10);
 
-    txManager = new SundialTransactionManager(NETWORKS.testnet);
+    txManager = new TransactionManager(NETWORKS.testnet);
     await txManager.init();
   });
 

@@ -192,19 +192,3 @@ export async function createFundingTransaction(
 
   return psbt.toBase64();
 }
-
-/**
- * Thin facade class for backward compatibility
- * @class TransactionManager
- */
-export class TransactionManager extends BTCLockerCore {
-  async createSpendingTransaction(p: SpendingTransactionParams) {
-    await this.ensureInitialized();
-    return createSpendingTransaction(this, p);
-  }
-
-  async createFundingTransaction(p: FundingTransactionParams) {
-    await this.ensureInitialized();
-    return createFundingTransaction(this, p);
-  }
-}

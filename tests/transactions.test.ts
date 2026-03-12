@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll } from "vitest";
-import { TransactionManager } from "../src/locker/transactions";
+import { TransactionManager } from "../src/locker/transaction-manager";
 import { NETWORKS } from "../src/utils/network";
 import * as bitcoin from "bitcoinjs-lib";
 import tinysecp from "@bitcoinerlab/secp256k1";
