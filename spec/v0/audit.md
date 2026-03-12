@@ -48,35 +48,35 @@ High-value attack surfaces:
 
 **C. Step-by-Step Reasoning**
 1. Key generation/input:
-`generateKeyPair`/`generateKeyPairFromPrivateKey` works, but operational handling is weak: CLI accepts and prints secrets openly ([base.js:61](/home/vicgenin/git/btc-locker/bin/commands/base.js:61), [transactions.js:25](/home/vicgenin/git/btc-locker/bin/commands/transactions.js:25), [base.js:121](/home/vicgenin/git/btc-locker/bin/commands/base.js:121)).
+`generateKeyPair`/`generateKeyPairFromPrivateKey` works, but operational handling is weak: CLI accepts and prints secrets openly ([base.js:61](bin/commands/base.js:61), [transactions.js:25](bin/commands/transactions.js:25), [base.js:121](bin/commands/base.js:121)).
 
 2. Script creation:
-Absolute and relative timelock scripts compile as expected ([timelock.ts:35](/home/vicgenin/git/btc-locker/src/locker/timelock.ts:35), [timelock.ts:77](/home/vicgenin/git/btc-locker/src/locker/timelock.ts:77)).
-Escrow script branch semantics are unsafe for intended policy: before-key branch has no deadline check ([escrow.ts:107](/home/vicgenin/git/btc-locker/src/locker/escrow.ts:107)).
+Absolute and relative timelock scripts compile as expected ([timelock.ts:35](src/locker/timelock.ts:35), [timelock.ts:77](src/locker/timelock.ts:77)).
+Escrow script branch semantics are unsafe for intended policy: before-key branch has no deadline check ([escrow.ts:107](src/locker/escrow.ts:107)).
 
 3. Address derivation:
-P2SH addresses are derived from redeem scripts ([scripts.ts:95](/home/vicgenin/git/btc-locker/src/utils/scripts.ts:95)). That is internally consistent, but demo/API/docs imply broader script types not implemented.
+P2SH addresses are derived from redeem scripts ([scripts.ts:95](src/utils/scripts.ts:95)). That is internally consistent, but demo/API/docs imply broader script types not implemented.
 
 4. Funding:
-Funding/staking/yield PSBT inputs are built with placeholder or assumed scripts ([transactions.ts:226](/home/vicgenin/git/btc-locker/src/locker/transactions.ts:226), [dawn-stake.ts:490](/home/vicgenin/git/btc-locker/src/locker/dawn-stake.ts:490), [yield.ts:144](/home/vicgenin/git/btc-locker/src/locker/yield.ts:144)). This is brittle for non-P2WPKH and can silently create invalid sign contexts.
+Funding/staking/yield PSBT inputs are built with placeholder or assumed scripts ([transactions.ts:226](src/locker/transactions.ts:226), [dawn-stake.ts:490](src/locker/dawn-stake.ts:490), [yield.ts:144](src/locker/yield.ts:144)). This is brittle for non-P2WPKH and can silently create invalid sign contexts.
 
 5. Lock enforcement:
-Local enforcement relies on `Date.now()` and simplistic parsing of scripts in some paths ([transactions.ts:150](/home/vicgenin/git/btc-locker/src/locker/transactions.ts:150), [dawn-stake.ts:905](/home/vicgenin/git/btc-locker/src/locker/dawn-stake.ts:905)). This is not consensus-equivalent and can produce false “ready to spend” states.
+Local enforcement relies on `Date.now()` and simplistic parsing of scripts in some paths ([transactions.ts:150](src/locker/transactions.ts:150), [dawn-stake.ts:905](src/locker/dawn-stake.ts:905)). This is not consensus-equivalent and can produce false “ready to spend” states.
 
 6. Unlocking/spending:
-`createSpendingTransaction` returns raw tx hex ([transactions.ts:197](/home/vicgenin/git/btc-locker/src/locker/transactions.ts:197)) but primary signing path expects PSBT base64 ([core.ts:163](/home/vicgenin/git/btc-locker/src/locker/core.ts:163)); CLI uses them together ([transactions.js:768](/home/vicgenin/git/btc-locker/bin/commands/transactions.js:768)). This mismatch makes intended lifecycle unreliable.
+`createSpendingTransaction` returns raw tx hex ([transactions.ts:197](src/locker/transactions.ts:197)) but primary signing path expects PSBT base64 ([core.ts:163](src/locker/core.ts:163)); CLI uses them together ([transactions.js:768](bin/commands/transactions.js:768)). This mismatch makes intended lifecycle unreliable.
 
 7. Yield/distribution:
-Change behavior is unsafe by default: falls back to recipient timelock address ([yield.ts:164](/home/vicgenin/git/btc-locker/src/locker/yield.ts:164)). A missing `changeAddress` can unintentionally transfer surplus.
+Change behavior is unsafe by default: falls back to recipient timelock address ([yield.ts:164](src/locker/yield.ts:164)). A missing `changeAddress` can unintentionally transfer surplus.
 
 8. CLI interaction:
-Many commands fetch and consume all confirmed UTXOs, increasing DoS sensitivity and fee unpredictability ([transactions.js:235](/home/vicgenin/git/btc-locker/bin/commands/transactions.js:235), [transactions.js:487](/home/vicgenin/git/btc-locker/bin/commands/transactions.js:487), [transactions.js:1299](/home/vicgenin/git/btc-locker/bin/commands/transactions.js:1299)).
+Many commands fetch and consume all confirmed UTXOs, increasing DoS sensitivity and fee unpredictability ([transactions.js:235](bin/commands/transactions.js:235), [transactions.js:487](bin/commands/transactions.js:487), [transactions.js:1299](bin/commands/transactions.js:1299)).
 
 **D. Findings**
 
 1. Escrow “before” key can spend forever (policy bypass)
 Severity: **Critical**  
-Affected: [escrow.ts:107](/home/vicgenin/git/btc-locker/src/locker/escrow.ts:107), [escrow.ts:199](/home/vicgenin/git/btc-locker/src/locker/escrow.ts:199), [scripts.js:158](/home/vicgenin/git/btc-locker/bin/commands/scripts.js:158)  
+Affected: [escrow.ts:107](src/locker/escrow.ts:107), [escrow.ts:199](src/locker/escrow.ts:199), [scripts.js:158](bin/commands/scripts.js:158)  
 Why it matters: Design intent claims “before deadline A, after deadline B”, but script enforces deadline only on one branch.  
 Exploit scenario: Holder of before-key waits past deadline and sweeps funds before after-key holder can spend.  
 Evidence: `OP_ELSE <beforePubKey> CHECKSIG` has no CLTV gate; time check in tx builder only blocks `spendAfterDeadline=true`.  
@@ -85,7 +85,7 @@ Type: **Design-level + implementation-level**.
 
 2. Dawn staking can unintentionally burn large fees when `changeAddress` is omitted
 Severity: **Critical**  
-Affected: [dawn-stake.ts:445](/home/vicgenin/git/btc-locker/src/locker/dawn-stake.ts:445), [dawn-stake.ts:525](/home/vicgenin/git/btc-locker/src/locker/dawn-stake.ts:525), [transactions.js:97](/home/vicgenin/git/btc-locker/bin/commands/transactions.js:97)  
+Affected: [dawn-stake.ts:445](src/locker/dawn-stake.ts:445), [dawn-stake.ts:525](src/locker/dawn-stake.ts:525), [transactions.js:97](bin/commands/transactions.js:97)  
 Why it matters: Positive change is silently not returned unless change address is provided.  
 Exploit scenario: User stakes small amount from a large UTXO set with no change address; remainder becomes miner fee.  
 Evidence: Change output added only if `changeAddress` exists; no fail-fast when significant change exists.  
@@ -94,7 +94,7 @@ Type: **Implementation-level + API design**.
 
 3. Private key leakage via CLI and demo usage patterns
 Severity: **High**  
-Affected: [transactions.js:25](/home/vicgenin/git/btc-locker/bin/commands/transactions.js:25), [base.js:61](/home/vicgenin/git/btc-locker/bin/commands/base.js:61), [base.js:121](/home/vicgenin/git/btc-locker/bin/commands/base.js:121), [demo/demo.html:136](/home/vicgenin/git/btc-locker/demo/demo.html:136)  
+Affected: [transactions.js:25](bin/commands/transactions.js:25), [base.js:61](bin/commands/base.js:61), [base.js:121](bin/commands/base.js:121), [demo/demo.html:136](demo/demo.html:136)  
 Why it matters: Keys in argv/history/stdout/files are straightforward theft targets.  
 Exploit scenario: Local attacker reads shell history, process list, CI logs, or world-readable key export file.  
 Evidence: Private keys are CLI flags, interactive plain-text fields, and rendered in demo output.  
@@ -103,7 +103,7 @@ Type: **Operational + implementation-level**.
 
 4. Relative timelock outputs are not safely spendable through provided flow
 Severity: **High**  
-Affected: [timelock.ts:77](/home/vicgenin/git/btc-locker/src/locker/timelock.ts:77), [transactions.ts:131](/home/vicgenin/git/btc-locker/src/locker/transactions.ts:131), [transactions.ts:185](/home/vicgenin/git/btc-locker/src/locker/transactions.ts:185)  
+Affected: [timelock.ts:77](src/locker/timelock.ts:77), [transactions.ts:131](src/locker/transactions.ts:131), [transactions.ts:185](src/locker/transactions.ts:185)  
 Why it matters: Users can create CSV scripts but spend path does not set/validate CSV sequence semantics.  
 Exploit scenario: Funds are sent to relative timelock address and later cannot be spent by library workflow.  
 Evidence: Spend path only detects CLTV and defaults sequence to final when no locktime found.  
@@ -112,7 +112,7 @@ Type: **Design-level + implementation-level**.
 
 5. Yield distribution unsafe default can overpay recipient with unintended change
 Severity: **High**  
-Affected: [yield.ts:159](/home/vicgenin/git/btc-locker/src/locker/yield.ts:159), [yield.ts:164](/home/vicgenin/git/btc-locker/src/locker/yield.ts:164)  
+Affected: [yield.ts:159](src/locker/yield.ts:159), [yield.ts:164](src/locker/yield.ts:164)  
 Why it matters: Missing `changeAddress` routes change to `timelockAddress`, potentially transferring far more than intended.  
 Exploit scenario: Provider intends 50k sats yield, signs tx from 1M sats, and accidentally sends ~949k extra to recipient side.  
 Evidence: `address: params.changeAddress || timelockAddress`.  
@@ -121,7 +121,7 @@ Type: **Implementation-level**.
 
 6. Transaction creation/signing interfaces are internally inconsistent
 Severity: **High**  
-Affected: [transactions.ts:122](/home/vicgenin/git/btc-locker/src/locker/transactions.ts:122), [transactions.ts:197](/home/vicgenin/git/btc-locker/src/locker/transactions.ts:197), [core.ts:163](/home/vicgenin/git/btc-locker/src/locker/core.ts:163), [transactions.js:768](/home/vicgenin/git/btc-locker/bin/commands/transactions.js:768)  
+Affected: [transactions.ts:122](src/locker/transactions.ts:122), [transactions.ts:197](src/locker/transactions.ts:197), [core.ts:163](src/locker/core.ts:163), [transactions.js:768](bin/commands/transactions.js:768)  
 Why it matters: Raw-hex outputs and PSBT signing paths are mixed, producing invalid lifecycle assumptions.  
 Exploit scenario: Operator believes spend tx is signed and ready, misses unlock window while repeatedly failing broadcast.  
 Evidence: Spend builder returns raw tx, signer expects PSBT base64; CLI wires them together.  
@@ -130,7 +130,7 @@ Type: **Implementation-level**.
 
 7. Missing cryptographic and timelock boundary validation can create unspendable/bypassable outputs
 Severity: **Medium**  
-Affected: [keys.ts:42](/home/vicgenin/git/btc-locker/src/utils/keys.ts:42), [validation.ts:18](/home/vicgenin/git/btc-locker/src/utils/validation.ts:18), [timelock.ts:71](/home/vicgenin/git/btc-locker/src/locker/timelock.ts:71)  
+Affected: [keys.ts:42](src/utils/keys.ts:42), [validation.ts:18](src/utils/validation.ts:18), [timelock.ts:71](src/locker/timelock.ts:71)  
 Why it matters: Length-only key validation and unbounded locktime/sequence allow invalid or dangerous scripts.  
 Exploit scenario: Caller passes non-curve pubkey or CSV disable-flag sequence; funds become unspendable or lock bypassed.  
 Evidence: No secp256k1 point validity check; locktime only non-negative integer; sequence not validated in relative scripts.  
@@ -139,7 +139,7 @@ Type: **Implementation-level**.
 
 8. UTXO and API processing are vulnerable to practical resource-abuse
 Severity: **Medium**  
-Affected: [transactions.js:235](/home/vicgenin/git/btc-locker/bin/commands/transactions.js:235), [transactions.js:487](/home/vicgenin/git/btc-locker/bin/commands/transactions.js:487), [dawn-stake.ts:991](/home/vicgenin/git/btc-locker/src/locker/dawn-stake.ts:991), [bitcoin-api.ts:153](/home/vicgenin/git/btc-locker/src/bitcoin-api.ts:153)  
+Affected: [transactions.js:235](bin/commands/transactions.js:235), [transactions.js:487](bin/commands/transactions.js:487), [dawn-stake.ts:991](src/locker/dawn-stake.ts:991), [bitcoin-api.ts:153](src/bitcoin-api.ts:153)  
 Why it matters: Dust flooding or large API payloads can degrade or block spending workflows.  
 Exploit scenario: Attacker sends many dust UTXOs to source/script addresses; CLI builds enormous txs and repeatedly fetches full prev tx hex for each input.  
 Evidence: “Use all confirmed UTXOs” patterns; no explicit caps; response body accumulated unbounded.  
@@ -148,7 +148,7 @@ Type: **Implementation-level + operational**.
 
 9. Demo API is unsafe if exposed and contains stale/nonexistent method contracts
 Severity: **Medium**  
-Affected: [demo/demo-server.js:87](/home/vicgenin/git/btc-locker/demo/demo-server.js:87), [demo/api-routes.js:149](/home/vicgenin/git/btc-locker/demo/api-routes.js:149), [demo/api-routes.js:375](/home/vicgenin/git/btc-locker/demo/api-routes.js:375), [demo/api-routes.js:451](/home/vicgenin/git/btc-locker/demo/api-routes.js:451)  
+Affected: [demo/demo-server.js:87](demo/demo-server.js:87), [demo/api-routes.js:149](demo/api-routes.js:149), [demo/api-routes.js:375](demo/api-routes.js:375), [demo/api-routes.js:451](demo/api-routes.js:451)  
 Why it matters: Exposed demo can be abused; docs claim security controls not actually present.  
 Exploit scenario: Internet user scripts key-derivation endpoints, triggers errors, and abuses unrestricted CORS/open API surface.  
 Evidence: Open CORS, no auth/rate-limit, and routes calling methods not present in current library.  
