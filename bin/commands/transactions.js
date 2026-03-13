@@ -487,7 +487,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
   let fromPrivateKey = cmdOptions.fromKey;
   let toAddress = cmdOptions.to;
   let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
-  let depositId = cmdOptions.depositId;
+  let subjectId = cmdOptions.subjectId;
   let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
   let priority = parsePriority(cmdOptions.priority || "medium");
 
@@ -522,10 +522,10 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
       },
       {
         type: "input",
-        name: "depositId",
+        name: "subjectId",
         message:
           "Enter deposit ID (UUID v4) for Sundial metadata (press enter to skip):",
-        when: () => !depositId,
+        when: () => !subjectId,
         validate: (input) => {
           if (!input) return true;
           return (
@@ -540,7 +540,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
     fromPrivateKey = fromPrivateKey || answers.fromPrivateKey;
     toAddress = toAddress || answers.toAddress;
     amount = amount || parseInt(answers.amount);
-    depositId = depositId || answers.depositId || undefined;
+    subjectId = subjectId || answers.subjectId || undefined;
   }
 
   try {
@@ -554,12 +554,12 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
 
     // Build Sundial metadata if deposit ID is available
     let metadata;
-    if (depositId) {
+    if (subjectId) {
       metadata = {
         magic: "SNDL",
         version: 1,
         txType: TxType.Distribution,
-        depositId,
+        subjectId,
         providerXonlyPubkey: providerPubkey,
         flags,
       };
@@ -666,7 +666,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
       metadata: metadata
         ? {
             type: "Distribution (0x03)",
-            depositId: metadata.depositId,
+            subjectId: metadata.subjectId,
             provider: metadata.providerXonlyPubkey,
           }
         : undefined,
@@ -684,7 +684,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
     const confirmationMessage = metadata
       ? `Distribute ${TransactionUtils.satoshisToBTC(
           distributionResult.distribution.amount,
-        )} BTC yield to timelock with ${distributionResult.fee} sat fee (${distributionResult.feeRate} sat/byte)?\nDeposit ID: ${metadata.depositId}`
+        )} BTC yield to timelock with ${distributionResult.fee} sat fee (${distributionResult.feeRate} sat/byte)?\nDeposit ID: ${metadata.subjectId}`
       : `Distribute ${TransactionUtils.satoshisToBTC(
           distributionResult.distribution.amount,
         )} BTC yield to timelock with ${distributionResult.fee} sat fee (${distributionResult.feeRate} sat/byte)?`;
@@ -727,7 +727,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
     if (metadata) {
       console.log(chalk.gray(`📝 Sundial Metadata:`));
       console.log(chalk.gray(`   Type: Distribution (0x03)`));
-      console.log(chalk.gray(`   Deposit ID: ${metadata.depositId}`));
+      console.log(chalk.gray(`   Deposit ID: ${metadata.subjectId}`));
       console.log(chalk.gray(`   Provider: ${metadata.providerXonlyPubkey}`));
       if (metadata.flags)
         console.log(
@@ -1016,7 +1016,7 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
-  let depositId = cmdOptions.depositId;
+  let subjectId = cmdOptions.subjectId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
 
@@ -1142,9 +1142,9 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
         },
         {
           type: "input",
-          name: "depositId",
+          name: "subjectId",
           message: "Enter deposit ID (UUID v4, press enter to auto-generate):",
-          when: () => !depositId,
+          when: () => !subjectId,
           validate: (input) => {
             if (!input) return true;
             return (
@@ -1169,13 +1169,13 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
           ? parseInt(answers.protocolFeeAmount)
           : undefined);
       providerPubkey = providerPubkey || answers.providerPubkey || undefined;
-      depositId = depositId || answers.depositId || undefined;
+      subjectId = subjectId || answers.subjectId || undefined;
     }
 
     // Auto-generate deposit ID if not provided
-    if (!depositId) {
-      depositId = crypto.randomUUID();
-      console.log(chalk.gray(`Auto-generated deposit ID: ${depositId}`));
+    if (!subjectId) {
+      subjectId = crypto.randomUUID();
+      console.log(chalk.gray(`Auto-generated deposit ID: ${subjectId}`));
     }
 
     // Build Sundial metadata if provider pubkey is available
@@ -1185,7 +1185,7 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
         magic: "SNDL",
         version: 1,
         txType: TxType.Deposit,
-        depositId,
+        subjectId,
         providerXonlyPubkey: providerPubkey,
         flags,
       };
@@ -1354,7 +1354,7 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
       if (metadata) {
         console.log(chalk.gray(`📝 Sundial Metadata:`));
         console.log(chalk.gray(`   Type: Deposit (0x01)`));
-        console.log(chalk.gray(`   Deposit ID: ${depositId}`));
+        console.log(chalk.gray(`   Deposit ID: ${subjectId}`));
         console.log(chalk.gray(`   Provider: ${providerPubkey}`));
         if (flags)
           console.log(
@@ -1426,7 +1426,7 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
-  let depositId = cmdOptions.depositId;
+  let subjectId = cmdOptions.subjectId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
 
@@ -1550,7 +1550,7 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
         },
         {
           type: "input",
-          name: "depositId",
+          name: "subjectId",
           message: "Enter deposit ID (UUID v4) for Sundial metadata:",
           when: (answers) => answers.providerPubkey || providerPubkey,
           validate: (input) => {
@@ -1578,17 +1578,17 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
           ? parseInt(answers.protocolFeeAmount)
           : undefined);
       providerPubkey = providerPubkey || answers.providerPubkey || undefined;
-      depositId = depositId || answers.depositId || undefined;
+      subjectId = subjectId || answers.subjectId || undefined;
     }
 
     // Build Sundial metadata if provider pubkey and deposit ID are available
     let metadata;
-    if (providerPubkey && depositId) {
+    if (providerPubkey && subjectId) {
       metadata = {
         magic: "SNDL",
         version: 1,
         txType: TxType.Withdrawal,
-        depositId,
+        subjectId,
         providerXonlyPubkey: providerPubkey,
         flags,
       };
@@ -1794,7 +1794,7 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
     if (metadata) {
       result.sundial_metadata = {
         type: "Withdrawal (0x04)",
-        depositId: metadata.depositId,
+        subjectId: metadata.subjectId,
         provider: metadata.providerXonlyPubkey,
       };
     }
@@ -1837,7 +1837,7 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
       if (metadata) {
         console.log(chalk.gray(`📝 Sundial Metadata:`));
         console.log(chalk.gray(`   Type: Withdrawal (0x04)`));
-        console.log(chalk.gray(`   Deposit ID: ${metadata.depositId}`));
+        console.log(chalk.gray(`   Deposit ID: ${metadata.subjectId}`));
         console.log(chalk.gray(`   Provider: ${metadata.providerXonlyPubkey}`));
         if (metadata.flags)
           console.log(
@@ -1887,7 +1887,7 @@ async function handleClaimCommand(cmdOptions, parentOptions) {
     dryRun,
   } = cmdOptions;
 
-  let depositId = cmdOptions.depositId;
+  let subjectId = cmdOptions.subjectId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
 
@@ -1976,7 +1976,7 @@ async function handleClaimCommand(cmdOptions, parentOptions) {
         },
         {
           type: "input",
-          name: "depositId",
+          name: "subjectId",
           message: "Enter deposit ID (UUID v4) for Sundial metadata:",
           when: (answers) => answers.providerPubkey || providerPubkey,
           validate: (input) => {
@@ -1998,17 +1998,17 @@ async function handleClaimCommand(cmdOptions, parentOptions) {
       afterDeadline =
         afterDeadline !== undefined ? afterDeadline : answers.afterDeadline;
       providerPubkey = providerPubkey || answers.providerPubkey || undefined;
-      depositId = depositId || answers.depositId || undefined;
+      subjectId = subjectId || answers.subjectId || undefined;
     }
 
     // Build Sundial metadata if provider pubkey and deposit ID are available
     let metadata;
-    if (providerPubkey && depositId) {
+    if (providerPubkey && subjectId) {
       metadata = {
         magic: "SNDL",
         version: 1,
         txType: TxType.Claim,
-        depositId,
+        subjectId,
         providerXonlyPubkey: providerPubkey,
         flags,
       };
@@ -2140,7 +2140,7 @@ async function handleClaimCommand(cmdOptions, parentOptions) {
     if (metadata) {
       result.sundial_metadata = {
         type: "Claim (0x02)",
-        depositId: metadata.depositId,
+        subjectId: metadata.subjectId,
         provider: metadata.providerXonlyPubkey,
       };
     }
@@ -2173,7 +2173,7 @@ async function handleClaimCommand(cmdOptions, parentOptions) {
         if (metadata) {
           console.log(chalk.gray(`📝 Sundial Metadata:`));
           console.log(chalk.gray(`   Type: Claim (0x02)`));
-          console.log(chalk.gray(`   Deposit ID: ${metadata.depositId}`));
+          console.log(chalk.gray(`   Deposit ID: ${metadata.subjectId}`));
           console.log(
             chalk.gray(`   Provider: ${metadata.providerXonlyPubkey}`),
           );

@@ -122,7 +122,7 @@ export interface SundialMetadata {
   magic: string;
   version: number;
   txType: TxType;
-  depositId: string;
+  subjectId: string;
   providerXonlyPubkey: string;
   flags: number;
 }

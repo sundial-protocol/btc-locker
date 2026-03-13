@@ -139,7 +139,7 @@ describe("YieldDistributor (mocked fees)", () => {
         amount: 50000,
         metadata: JSON.stringify({
           txType: 1,
-          depositId: "550e8400-e29b-41d4-a716-446655440000",
+          subjectId: "550e8400-e29b-41d4-a716-446655440000",
           providerXonlyPubkey: "a".repeat(64),
         }),
       });

@@ -58,7 +58,7 @@ export interface SundialMetadata {
   /** Transaction type */
   txType: TxType;
   /** UUID v4 as canonical string (e.g. "550e8400-e29b-41d4-a716-446655440000") */
-  depositId: string;
+  subjectId: string;
   /** 32-byte x-only public key as hex (64 hex chars) */
   providerXonlyPubkey: string;
   /** 2-byte flags field */
@@ -113,7 +113,7 @@ export default class MetadataUtils {
    * @param opts          - Metadata fields to encode
    * @param opts.magic    - Magic identifier, must be `"SNDL"` or some future value (default `"SNDL"`)
    * @param opts.txType   - Transaction type (Deposit, Claim, Distribution, Withdrawal)
-   * @param opts.depositId - UUID v4 string identifying the deposit
+   * @param opts.subjectId - UUID v4 string identifying the deposit
    * @param opts.providerXonlyPubkey - 32-byte x-only public key as a 64-char hex string
    * @param opts.flags    - Optional 2-byte flags (default `0x0000`)
    * @returns 60-byte Buffer
@@ -122,7 +122,7 @@ export default class MetadataUtils {
    * ```ts
    * const buf = MetadataUtils.pack({
    *   txType: MetadataUtils.TxType.Deposit,
-   *   depositId: "550e8400-e29b-41d4-a716-446655440000",
+   *   subjectId: "550e8400-e29b-41d4-a716-446655440000",
    *   providerXonlyPubkey: "a1b2c3...64-hex-chars",
    * });
    * ```
@@ -143,7 +143,7 @@ export default class MetadataUtils {
       );
     }
 
-    const depositIdBytes = Buffer.from(parse(opts.depositId));
+    const subjectIdBytes = Buffer.from(parse(opts.subjectId));
 
     const pubkeyHex = opts.providerXonlyPubkey;
     if (pubkeyHex.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(pubkeyHex)) {
@@ -173,7 +173,7 @@ export default class MetadataUtils {
     buf.writeUInt8(opts.txType, OFF_TX_TYPE);
 
     // Deposit ID (16 bytes)
-    depositIdBytes.copy(buf, OFF_DEPOSIT_ID);
+    subjectIdBytes.copy(buf, OFF_DEPOSIT_ID);
 
     // Provider x-only pubkey (32 bytes)
     pubkeyBytes.copy(buf, OFF_PROVIDER_KEY);
@@ -200,7 +200,7 @@ export default class MetadataUtils {
    * @example
    * ```ts
    * const meta = MetadataUtils.unpack(opReturnData);
-   * console.log(meta.depositId);  // "550e8400-e29b-41d4-a716-446655440000"
+   * console.log(meta.subjectId);  // "550e8400-e29b-41d4-a716-446655440000"
    * console.log(meta.txType);     // TxType.Deposit
    * ```
    */
@@ -250,7 +250,7 @@ export default class MetadataUtils {
     }
 
     // ── Deposit ID ───────────────────────────────────────────────────────────
-    const depositId = stringify(buf, OFF_DEPOSIT_ID);
+    const subjectId = stringify(buf, OFF_DEPOSIT_ID);
 
     // ── Provider x-only pubkey ───────────────────────────────────────────────
     const providerXonlyPubkey = buf
@@ -264,7 +264,7 @@ export default class MetadataUtils {
       magic,
       version,
       txType,
-      depositId,
+      subjectId,
       providerXonlyPubkey,
       flags,
     };
@@ -288,7 +288,7 @@ export default class MetadataUtils {
    *   magic: "SNDL",
    *   version: 1,
    *   txType: 1,
-   *   depositId: "550e8400-e29b-41d4-a716-446655440000",
+   *   subjectId: "550e8400-e29b-41d4-a716-446655440000",
    *   providerXonlyPubkey: "a".repeat(64),
    *   flags: 0
    * });
@@ -311,7 +311,7 @@ export default class MetadataUtils {
       // Validate it's a SundialMetadata object
       if (typeof parsed === "object" && parsed !== null) {
         // Check required fields exist
-        const requiredFields = ["txType", "depositId", "providerXonlyPubkey"];
+        const requiredFields = ["txType", "subjectId", "providerXonlyPubkey"];
         for (const field of requiredFields) {
           if (!(field in parsed)) {
             throw new ValidationError(`Missing required field: ${field}`);
@@ -323,7 +323,7 @@ export default class MetadataUtils {
           magic: parsed.magic || MAGIC_SNDL,
           version: parsed.version || METADATA_VERSION,
           txType: parsed.txType,
-          depositId: parsed.depositId,
+          subjectId: parsed.subjectId,
           providerXonlyPubkey: parsed.providerXonlyPubkey,
           flags: parsed.flags || 0,
         };

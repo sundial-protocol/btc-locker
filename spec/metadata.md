@@ -11,7 +11,7 @@ All multi-byte integers are **big-endian**. Total size: **60 bytes**.
 | 0      | 4    | `magic`               | ASCII  | Protocol identifier. Must be `"SNDL"`. |
 | 4      | 1    | `version`             | uint8  | Schema version. Currently `0x01`.      |
 | 5      | 1    | `txType`              | uint8  | Transaction type tag (see below).      |
-| 6      | 16   | `depositId`           | bytes  | UUID v4 in raw bytes (no dashes).      |
+| 6      | 16   | `subjectId`           | bytes  | UUID v4 in raw bytes (no dashes).      |
 | 22     | 32   | `providerXonlyPubkey` | bytes  | Yield-provider's x-only public key.    |
 | 54     | 2    | `flags`               | uint16 | Reserved flags. Default `0x0000`.      |
 | 56     | 4    | `checksum`            | uint32 | CRC-32 (IEEE 802.3) over bytes 0–55.   |
@@ -27,7 +27,7 @@ All multi-byte integers are **big-endian**. Total size: **60 bytes**.
 
 ### Field Details
 
-**`depositId`** — A UUID v4 identifying the deposit. Stored as 16 raw bytes on-chain. When represented in code, the canonical dashed string format is used (e.g. `"550e8400-e29b-41d4-a716-446655440000"`). Dashes are stripped before packing and re-inserted after unpacking.
+**`subjectId`** — A UUID v4 identifying the deposit. Stored as 16 raw bytes on-chain. When represented in code, the canonical dashed string format is used (e.g. `"550e8400-e29b-41d4-a716-446655440000"`). Dashes are stripped before packing and re-inserted after unpacking.
 
 **`providerXonlyPubkey`** — The 32-byte x-only public key of the yield provider. Represented as a 64-character hex string in the `SundialMetadata` interface. To derive from a compressed public key (33 bytes), strip the first byte (`02`/`03` prefix).
 
@@ -40,7 +40,7 @@ interface SundialMetadata {
   magic: string; // "SNDL"
   version: number; // 0x01
   txType: TxType; // 0x01–0x04
-  depositId: string; // UUID v4 with dashes
+  subjectId: string; // UUID v4 with dashes
   providerXonlyPubkey: string; // 64 hex chars
   flags: number; // 0x0000–0xFFFF
 }
@@ -57,7 +57,7 @@ const buf = MetadataUtils.pack({
   magic: "SNDL",
   version: 1,
   txType: TxType.Deposit,
-  depositId: "550e8400-e29b-41d4-a716-446655440000",
+  subjectId: "550e8400-e29b-41d4-a716-446655440000",
   providerXonlyPubkey: "ab12cd...".padEnd(64, "0"), // 64 hex chars
   flags: 0,
 });
@@ -71,7 +71,7 @@ const buf = MetadataUtils.pack({
 const buf = MetadataUtils.pack_string(
   JSON.stringify({
     txType: 1,
-    depositId: "550e8400-e29b-41d4-a716-446655440000",
+    subjectId: "550e8400-e29b-41d4-a716-446655440000",
     providerXonlyPubkey: "a".repeat(64),
   }),
 );
@@ -86,7 +86,7 @@ const buf2 = MetadataUtils.pack_string(buf.toString("hex"));
 
 ```ts
 const meta = MetadataUtils.unpack(opReturnData);
-// meta.depositId   → "550e8400-e29b-41d4-a716-446655440000"
+// meta.subjectId   → "550e8400-e29b-41d4-a716-446655440000"
 // meta.txType      → TxType.Deposit (0x01)
 // meta.providerXonlyPubkey → "ab12cd..."
 ```
@@ -102,7 +102,7 @@ psbt.addOutput(
     magic: "SNDL",
     version: 1,
     txType: TxType.Distribution,
-    depositId: "6e578f1c-fd1d-48be-ba29-61f5aadc27d7",
+    subjectId: "6e578f1c-fd1d-48be-ba29-61f5aadc27d7",
     providerXonlyPubkey: xOnlyPubkey,
     flags: 0,
   }),
@@ -118,14 +118,14 @@ The returned object has the shape `{ script: Buffer, value: BigInt(0) }` and is 
 
 ### Deposit (Dawn Stake)
 
-When a user deposits BTC, the CLI auto-generates a `depositId` if not provided and derives the provider pubkey from the `--provider-pubkey` flag. The metadata is attached to the staking transaction as an `OP_RETURN` output alongside the escrow, timelock, and change outputs.
+When a user deposits BTC, the CLI auto-generates a `subjectId` if not provided and derives the provider pubkey from the `--provider-pubkey` flag. The metadata is attached to the staking transaction as an `OP_RETURN` output alongside the escrow, timelock, and change outputs.
 
 ```ts
 const metadata = {
   magic: "SNDL",
   version: 1,
   txType: TxType.Deposit,
-  depositId: crypto.randomUUID(),
+  subjectId: crypto.randomUUID(),
   providerXonlyPubkey: providerPubkey,
   flags: 0,
 };
@@ -154,7 +154,7 @@ const psbt = await locker.createDistributionTransaction({
     magic: "SNDL",
     version: 1,
     txType: TxType.Distribution,
-    depositId,
+    subjectId,
     providerXonlyPubkey: providerPubkey,
     flags: 0,
   },
@@ -189,7 +189,7 @@ for (const out of tx.outs) {
   ) {
     if (MetadataUtils.isSundialMetadata(chunks[1])) {
       const meta = MetadataUtils.unpack(chunks[1]); // full validation + decode
-      console.log(meta.txType, meta.depositId);
+      console.log(meta.txType, meta.subjectId);
     }
   }
 }
@@ -204,7 +204,7 @@ Encoding and decoding both enforce these constraints:
 | `magic`               | Must be `"SNDL"`                                  |
 | `version`             | Must be `0x01`                                    |
 | `txType`              | Must be `0x01`–`0x04`                             |
-| `depositId`           | Valid 32-hex-char UUID (dashes optional on input) |
+| `subjectId`           | Valid 32-hex-char UUID (dashes optional on input) |
 | `providerXonlyPubkey` | Exactly 64 lowercase/uppercase hex characters     |
 | `flags`               | `0x0000`–`0xFFFF`                                 |
 | `checksum`            | CRC-32 must match on decode                       |

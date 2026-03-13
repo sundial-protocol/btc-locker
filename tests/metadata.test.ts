@@ -25,7 +25,7 @@ describe("Sundial Metadata", () => {
     magic: MAGIC_SNDL,
     version: METADATA_VERSION,
     txType: TxType.Deposit,
-    depositId: VALID_UUID,
+    subjectId: VALID_UUID,
     providerXonlyPubkey: VALID_PUBKEY,
     flags: METADATA_FLAGS,
   };
@@ -126,7 +126,7 @@ describe("Sundial Metadata", () => {
           expect(() =>
             packMetadata({
               ...BASE_METADATA,
-              depositId: INVALID_UUID,
+              subjectId: INVALID_UUID,
             }),
           ).toThrow(TypeError);
         });
@@ -135,7 +135,7 @@ describe("Sundial Metadata", () => {
           expect(() =>
             packMetadata({
               ...BASE_METADATA,
-              depositId: "550e8400-e29b-41d4-a716-44665544000", // missing 1 char
+              subjectId: "550e8400-e29b-41d4-a716-44665544000", // missing 1 char
             }),
           ).toThrow(TypeError);
         });
@@ -203,7 +203,7 @@ describe("Sundial Metadata", () => {
           magic: MAGIC_SNDL,
           version: METADATA_VERSION,
           txType: TxType.Deposit,
-          depositId: VALID_UUID,
+          subjectId: VALID_UUID,
           providerXonlyPubkey: VALID_PUBKEY,
           flags: 0x1234,
         });
@@ -230,8 +230,8 @@ describe("Sundial Metadata", () => {
 
       test("should preserve UUID format with dashes", () => {
         const result = unpackMetadata(validPackedMetadata);
-        expect(result.depositId).toBe(VALID_UUID);
-        expect(result.depositId.includes("-")).toBe(true);
+        expect(result.subjectId).toBe(VALID_UUID);
+        expect(result.subjectId.includes("-")).toBe(true);
       });
     });
 
@@ -327,7 +327,7 @@ describe("Sundial Metadata", () => {
       test("should pack valid JSON metadata string", () => {
         const metadataObj = {
           txType: TxType.Deposit,
-          depositId: VALID_UUID,
+          subjectId: VALID_UUID,
           providerXonlyPubkey: VALID_PUBKEY,
           flags: 0x1234,
         };
@@ -341,7 +341,7 @@ describe("Sundial Metadata", () => {
         // Verify it can be unpacked correctly
         const unpacked = MetadataUtils.unpack(result);
         expect(unpacked.txType).toBe(TxType.Deposit);
-        expect(unpacked.depositId).toBe(VALID_UUID);
+        expect(unpacked.subjectId).toBe(VALID_UUID);
         expect(unpacked.providerXonlyPubkey).toBe(VALID_PUBKEY);
         expect(unpacked.flags).toBe(0x1234);
       });
@@ -349,7 +349,7 @@ describe("Sundial Metadata", () => {
       test("should pack JSON with minimal required fields", () => {
         const metadataObj = {
           txType: TxType.Claim,
-          depositId: VALID_UUID,
+          subjectId: VALID_UUID,
           providerXonlyPubkey: VALID_PUBKEY,
         };
         const jsonString = JSON.stringify(metadataObj);
@@ -365,7 +365,7 @@ describe("Sundial Metadata", () => {
       test("should throw on missing required fields", () => {
         const invalidMetadata = {
           txType: TxType.Deposit,
-          depositId: VALID_UUID,
+          subjectId: VALID_UUID,
           // missing providerXonlyPubkey
         };
         const jsonString = JSON.stringify(invalidMetadata);
@@ -378,7 +378,7 @@ describe("Sundial Metadata", () => {
       test("should throw on invalid JSON metadata", () => {
         const invalidMetadata = {
           txType: 999, // invalid
-          depositId: VALID_UUID,
+          subjectId: VALID_UUID,
           providerXonlyPubkey: VALID_PUBKEY,
         };
         const jsonString = JSON.stringify(invalidMetadata);
@@ -484,7 +484,7 @@ describe("Sundial Metadata", () => {
       test("should create OP_RETURN output from JSON string", () => {
         const metadataObj = {
           txType: TxType.Deposit,
-          depositId: VALID_UUID,
+          subjectId: VALID_UUID,
           providerXonlyPubkey: VALID_PUBKEY,
         };
         const jsonString = JSON.stringify(metadataObj);

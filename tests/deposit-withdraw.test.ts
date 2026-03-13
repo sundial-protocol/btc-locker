@@ -513,7 +513,7 @@ describe("TransactionManager (mocked fees)", () => {
         timelockAmount: 200000,
         metadata: JSON.stringify({
           txType: 1,
-          depositId: "550e8400-e29b-41d4-a716-446655440000",
+          subjectId: "550e8400-e29b-41d4-a716-446655440000",
           providerXonlyPubkey: "a".repeat(64),
         }),
         priority: "medium" as any,
@@ -744,7 +744,7 @@ describe("TransactionManager (mocked fees)", () => {
         destination: testAddress,
         metadata: JSON.stringify({
           txType: 1,
-          depositId: "550e8400-e29b-41d4-a716-446655440000",
+          subjectId: "550e8400-e29b-41d4-a716-446655440000",
           providerXonlyPubkey: "a".repeat(64),
         }),
         priority: "medium" as any,
