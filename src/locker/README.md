@@ -15,11 +15,11 @@ src/locker/
 │   └── index.ts                   # Barrel
 └── transactions/                  # Standalone transaction construction functions
     ├── generic.ts                 # createSpendingTransaction, createFundingTransaction
-    ├── escrow-spending.ts         # createClaimTransaction
-    ├── user-withdrawal.ts         # createWithdrawalTransaction
-    ├── yield-distribution.ts      # createDistributionTransaction
+    ├── claim.ts         # createClaimTransaction
+    ├── withdrawal.ts         # createWithdrawalTransaction
+    ├── distribute.ts      # createDistributionTransaction
     ├── index.ts                   # Barrel
-    └── staking/
+    └── deposit/
         ├── deposit.ts               # createDepositTransaction
         ├── deposit-with-script.ts   # createDepositTransactionWithScript
         └── calculate.ts          # calculateDepositAmounts
@@ -74,9 +74,9 @@ Thin facade combining both script creation functions:
 Thin facade over all transaction construction functions:
 
 - `createSpendingTransaction` / `createFundingTransaction` → `transactions/generic.ts`
-- `createClaimTransaction` → `transactions/escrow-spending.ts`
-- `createWithdrawalTransaction` → `transactions/user-withdrawal.ts`
-- `createDistributionTransaction` → `transactions/yield-distribution.ts`
+- `createClaimTransaction` → `transactions/claim.ts`
+- `createWithdrawalTransaction` → `transactions/withdrawal.ts`
+- `createDistributionTransaction` → `transactions/distribute.ts`
 - `createDepositTransaction` → `transactions/staking/deposit.ts`
 - `createDepositTransactionWithScript` → `transactions/staking/deposit-with-script.ts`
 - `calculateDepositAmounts` → `transactions/staking/calculate.ts`
