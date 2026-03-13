@@ -10,7 +10,7 @@ Parameters:
 
 ```ts
 export interface DepositParams {
-  /** Array of unspent transaction outputs to stake (optional - will auto-select from address if not provided) */
+  /** Array of unspent transaction outputs to deposit (optional - will auto-select from address if not provided) */
   inputs?: UTXO[];
   /** Source address for automatic UTXO selection (required if inputs not provided) */
   sourceAddress: string;
@@ -214,7 +214,7 @@ flowchart LR
 
 ## User Withdraws Stake and Rewards
 
-Uses the DawnStakingManager's createWithdrawalTransaction to create a transaction that spends from the timelock output, which includes both the original stake and any accumulated rewards, as well as anything left over at the escrow address.
+Uses the DawnStakingManager's createWithdrawalTransaction to create a transaction that spends from the timelock output, which includes both the original deposit and any accumulated rewards, as well as anything left over at the escrow address.
 
 ```ts
 export interface WithdrawalParams {

@@ -2,32 +2,28 @@
   createDepositTransaction,
   DepositParams,
   DepositResult,
-} from "./staking/stake";
+} from "./deposit/deposit";
 export {
   createDepositTransactionWithScript,
   DepositWithScriptParams,
   DepositWithScriptResult,
-} from "./staking/stake-with-script";
+} from "./deposit/deposit-with-script";
 export {
   calculateDepositAmounts,
   DepositCalculationParams,
   DepositCalculationResult,
-} from "./staking/calculate";
+} from "./deposit/calculate";
 export {
   createWithdrawalTransaction,
   WithdrawalParams,
   WithdrawalResult,
-} from "./user-withdrawal";
-export {
-  createClaimTransaction,
-  ClaimParams,
-  ClaimResult,
-} from "./escrow-spending";
+} from "./withdraw";
+export { createClaimTransaction, ClaimParams, ClaimResult } from "./claim";
 export {
   createDistributionTransaction,
   DistributionParams,
   DistributionResult,
-} from "./yield-distribution";
+} from "./distribute";
 export {
   createSpendingTransaction,
   createFundingTransaction,

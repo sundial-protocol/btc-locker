@@ -1,5 +1,5 @@
 ﻿import type { LockerContext } from "../../core";
-import { createDepositTransaction, DepositParams } from "./stake";
+import { createDepositTransaction, DepositParams } from "./deposit";
 import { DepositResult, ScriptInfo } from "../../..";
 
 /**

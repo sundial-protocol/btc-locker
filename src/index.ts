@@ -53,32 +53,29 @@ export type { ExtendedKeyPair } from "./locker/keypair";
 export type {
   DepositResult,
   DepositParams,
-} from "./locker/transactions/staking/stake";
+} from "./locker/transactions/deposit/deposit";
 
 export type {
   DepositWithScriptResult,
   DepositWithScriptParams,
-} from "./locker/transactions/staking/stake-with-script";
+} from "./locker/transactions/deposit/deposit-with-script";
 
 export type {
   DepositCalculationParams,
   DepositCalculationResult,
-} from "./locker/transactions/staking/calculate";
+} from "./locker/transactions/deposit/calculate";
 
 export type {
   WithdrawalParams,
   WithdrawalResult,
-} from "./locker/transactions/user-withdrawal";
+} from "./locker/transactions/withdraw";
 
-export type {
-  ClaimParams,
-  ClaimResult,
-} from "./locker/transactions/escrow-spending";
+export type { ClaimParams, ClaimResult } from "./locker/transactions/claim";
 
 export type {
   DistributionParams,
   DistributionResult,
-} from "./locker/transactions/yield-distribution";
+} from "./locker/transactions/distribute";
 
 export type {
   SpendingTransactionParams,

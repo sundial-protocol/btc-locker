@@ -20,7 +20,7 @@ All multi-byte integers are **big-endian**. Total size: **60 bytes**.
 
 | Value  | Name           | Usage                                            |
 | ------ | -------------- | ------------------------------------------------ |
-| `0x01` | `Deposit`      | User stakes BTC into escrow + timelock.          |
+| `0x01` | `Deposit`      | User deposits BTC into escrow + timelock.        |
 | `0x02` | `Claim`        | Provider withdraws yield from escrow.            |
 | `0x03` | `Distribution` | Provider distributes yield to a timelock.        |
 | `0x04` | `Withdrawal`   | User withdraws principal from escrow + timelock. |
@@ -118,7 +118,7 @@ The returned object has the shape `{ script: Buffer, value: BigInt(0) }` and is 
 
 ### Deposit (Dawn Stake)
 
-When a user stakes BTC, the CLI auto-generates a `depositId` if not provided and derives the provider pubkey from the `--provider-pubkey` flag. The metadata is attached to the staking transaction as an `OP_RETURN` output alongside the escrow, timelock, and change outputs.
+When a user deposits BTC, the CLI auto-generates a `depositId` if not provided and derives the provider pubkey from the `--provider-pubkey` flag. The metadata is attached to the staking transaction as an `OP_RETURN` output alongside the escrow, timelock, and change outputs.
 
 ```ts
 const metadata = {

@@ -20,8 +20,8 @@ src/locker/
     ├── yield-distribution.ts      # createDistributionTransaction
     ├── index.ts                   # Barrel
     └── staking/
-        ├── stake.ts               # createDepositTransaction
-        ├── stake-with-script.ts   # createDepositTransactionWithScript
+        ├── deposit.ts               # createDepositTransaction
+        ├── deposit-with-script.ts   # createDepositTransactionWithScript
         └── calculate.ts          # calculateDepositAmounts
 ```
 
@@ -77,8 +77,8 @@ Thin facade over all transaction construction functions:
 - `createClaimTransaction` → `transactions/escrow-spending.ts`
 - `createWithdrawalTransaction` → `transactions/user-withdrawal.ts`
 - `createDistributionTransaction` → `transactions/yield-distribution.ts`
-- `createDepositTransaction` → `transactions/staking/stake.ts`
-- `createDepositTransactionWithScript` → `transactions/staking/stake-with-script.ts`
+- `createDepositTransaction` → `transactions/staking/deposit.ts`
+- `createDepositTransactionWithScript` → `transactions/staking/deposit-with-script.ts`
 - `calculateDepositAmounts` → `transactions/staking/calculate.ts`
 
 ### `index.ts` — BTCLocker (combined facade)
@@ -125,7 +125,7 @@ const unsignedPsbt = await txManager.createDepositTransaction(params);
 
 ```javascript
 import { createTimelockScript } from "./src/locker/scripts/timelock.js";
-import { createDepositTransaction } from "./src/locker/transactions/staking/stake.js";
+import { createDepositTransaction } from "./src/locker/transactions/staking/deposit.js";
 
 const script = await createTimelockScript(ctx, locktime, publicKey);
 const tx = await createDepositTransaction(ctx, params);

@@ -19,7 +19,7 @@ import type { LockerContext } from "../../core";
  */
 export interface DepositParams
   extends BaseTransactionParams, ProtocolFeeParams {
-  /** Array of unspent transaction outputs to stake (optional - will auto-select from address if not provided) */
+  /** Array of unspent transaction outputs to deposit (optional - will auto-select from address if not provided) */
   inputs?: UTXO[];
   /** Source address for automatic UTXO selection (required if inputs not provided) */
   sourceAddress: string;
