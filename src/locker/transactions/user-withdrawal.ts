@@ -1,4 +1,4 @@
-import * as bitcoin from "bitcoinjs-lib";
+﻿import * as bitcoin from "bitcoinjs-lib";
 import type {
   BaseTransactionParams,
   ProtocolFeeParams,
@@ -8,17 +8,17 @@ import type {
 import type { ApiUTXO } from "../../bitcoin-api";
 import { FeeUtils, ScriptUtils } from "../../utils";
 import { FeePriorities } from "../../utils/fees";
-import MetadataUtils from "../../utils/metadata";
+import MetadataUtils, { TxType } from "../../utils/metadata";
 import type { LockerContext } from "../core";
 
 /**
  * Parameters for Dawn withdrawal
- * @interface DawnWithdrawalParams
+ * @interface WithdrawalParams
  * @extends BaseTransactionParams
  * @extends ProtocolFeeParams
  * @description Configuration for withdrawing from both escrow and timelock Dawn staking outputs
  */
-export interface DawnWithdrawalParams
+export interface WithdrawalParams
   extends BaseTransactionParams, ProtocolFeeParams {
   /** Array of escrow inputs to withdraw from (optional - will fetch all UTXOs from escrow address if not provided) */
   escrowInputs?: UTXO[];
@@ -38,11 +38,11 @@ export interface DawnWithdrawalParams
 
 /**
  * Result of Dawn withdrawal
- * @interface DawnWithdrawalResult
+ * @interface WithdrawalResult
  * @extends TransactionResult
  * @description Transaction result with detailed input and output information for Dawn withdrawal
  */
-export interface DawnWithdrawalResult extends TransactionResult {
+export interface WithdrawalResult extends TransactionResult {
   /** Input details */
   inputs: {
     /** Total value from escrow inputs in satoshis */
@@ -63,9 +63,9 @@ export interface DawnWithdrawalResult extends TransactionResult {
   };
 }
 
-export async function createDawnWithdrawalTransaction(
+export async function createWithdrawalTransaction(
   ctx: LockerContext,
-  params: DawnWithdrawalParams,
+  params: WithdrawalParams,
 ): Promise<string> {
   const {
     escrowInputs: providedEscrowInputs,
@@ -283,7 +283,11 @@ export async function createDawnWithdrawalTransaction(
   }
 
   if (metadata) {
-    psbt.addOutput(MetadataUtils.toOutput(metadata));
+    const typedMetadata =
+      typeof metadata === "string"
+        ? metadata
+        : { ...metadata, txType: TxType.Withdrawal };
+    psbt.addOutput(MetadataUtils.toOutput(typedMetadata));
   }
 
   return psbt.toBase64();

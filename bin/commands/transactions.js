@@ -1,11 +1,15 @@
-/**
+﻿/**
  * Transaction commands for the BTC Locker CLI
  */
 
 import * as bitcoin from "bitcoinjs-lib";
 import inquirer from "inquirer";
 import chalk from "chalk";
-import { KeyUtils, ScriptUtils, TransactionUtils } from "../../dist/esm/index.js";
+import {
+  KeyUtils,
+  ScriptUtils,
+  TransactionUtils,
+} from "../../dist/esm/index.js";
 import BitcoinAPI from "../../dist/esm/bitcoin-api.js";
 import { NETWORKS } from "../../dist/esm/utils/network.js";
 import { TxType } from "../../dist/esm/utils/metadata.js";
@@ -524,8 +528,9 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
         validate: (input) => {
           if (!input) return true;
           return (
-            /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(input) ||
-            "Must be a valid UUID v4"
+            /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(
+              input,
+            ) || "Must be a valid UUID v4"
           );
         },
       },
@@ -604,7 +609,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
       value: utxo.value,
     }));
 
-    const unsignedPsbt = await locker.distributeYield({
+    const unsignedPsbt = await locker.createDistributionTransaction({
       inputs: txInputs,
       timelockAddress: toAddress,
       amount: amount,
@@ -657,11 +662,13 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
           distributionResult.distribution.change,
         ),
       },
-      metadata: metadata ? {
-        type: "Distribution (0x03)",
-        depositId: metadata.depositId,
-        provider: metadata.providerXonlyPubkey,
-      } : undefined,
+      metadata: metadata
+        ? {
+            type: "Distribution (0x03)",
+            depositId: metadata.depositId,
+            provider: metadata.providerXonlyPubkey,
+          }
+        : undefined,
     };
 
     displayResult(
@@ -725,7 +732,12 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
       console.log(chalk.gray(`   Type: Distribution (0x03)`));
       console.log(chalk.gray(`   Deposit ID: ${metadata.depositId}`));
       console.log(chalk.gray(`   Provider: ${metadata.providerXonlyPubkey}`));
-      if (metadata.flags) console.log(chalk.gray(`   Flags: 0x${metadata.flags.toString(16).padStart(4, "0")}`));
+      if (metadata.flags)
+        console.log(
+          chalk.gray(
+            `   Flags: 0x${metadata.flags.toString(16).padStart(4, "0")}`,
+          ),
+        );
     }
 
     if (parentOptions.network === "testnet") {
@@ -1126,7 +1138,7 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
           validate: (input) => {
             if (!input) return true;
             return (
-              (/^[0-9a-fA-F]{64}$/.test(input)) ||
+              /^[0-9a-fA-F]{64}$/.test(input) ||
               "Must be a 64-character hex string (32-byte x-only pubkey)"
             );
           },
@@ -1134,14 +1146,14 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
         {
           type: "input",
           name: "depositId",
-          message:
-            "Enter deposit ID (UUID v4, press enter to auto-generate):",
+          message: "Enter deposit ID (UUID v4, press enter to auto-generate):",
           when: () => !depositId,
           validate: (input) => {
             if (!input) return true;
             return (
-              /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(input) ||
-              "Must be a valid UUID v4"
+              /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(
+                input,
+              ) || "Must be a valid UUID v4"
             );
           },
         },
@@ -1229,7 +1241,7 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
     console.log(chalk.cyan("Creating Dawn staking transaction..."));
 
     // Create the unsigned Dawn staking transaction (fee calculation handled automatically)
-    const unsignedPsbt = await locker.createDawnStakingTransaction({
+    const unsignedPsbt = await locker.createDepositTransaction({
       inputs: txInputs,
       escrowAddress,
       escrowAmount,
@@ -1347,7 +1359,10 @@ async function handleDawnStakeCommand(cmdOptions, parentOptions) {
         console.log(chalk.gray(`   Type: Deposit (0x01)`));
         console.log(chalk.gray(`   Deposit ID: ${depositId}`));
         console.log(chalk.gray(`   Provider: ${providerPubkey}`));
-        if (flags) console.log(chalk.gray(`   Flags: 0x${flags.toString(16).padStart(4, "0")}`));
+        if (flags)
+          console.log(
+            chalk.gray(`   Flags: 0x${flags.toString(16).padStart(4, "0")}`),
+          );
       }
     }
 
@@ -1542,10 +1557,12 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
           message: "Enter deposit ID (UUID v4) for Sundial metadata:",
           when: (answers) => answers.providerPubkey || providerPubkey,
           validate: (input) => {
-            if (!input) return "Deposit ID is required when provider pubkey is given";
+            if (!input)
+              return "Deposit ID is required when provider pubkey is given";
             return (
-              /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(input) ||
-              "Must be a valid UUID v4"
+              /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(
+                input,
+              ) || "Must be a valid UUID v4"
             );
           },
         },
@@ -1573,7 +1590,7 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
       metadata = {
         magic: "SNDL",
         version: 1,
-        txType: TxType.UserWithdrawal,
+        txType: TxType.Withdrawal,
         depositId,
         providerXonlyPubkey: providerPubkey,
         flags,
@@ -1687,7 +1704,7 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
         : [];
 
     // Create unsigned dawn withdrawal transaction
-    const unsignedPsbt = await locker.createDawnWithdrawalTransaction({
+    const unsignedPsbt = await locker.createWithdrawalTransaction({
       escrowInputs: dawnEscrowInputs,
       escrowRedeemScript: escrowScript,
       timelockInputs: dawnTimelockInputs,
@@ -1779,7 +1796,7 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
 
     if (metadata) {
       result.sundial_metadata = {
-        type: "UserWithdrawal (0x04)",
+        type: "Withdrawal (0x04)",
         depositId: metadata.depositId,
         provider: metadata.providerXonlyPubkey,
       };
@@ -1822,10 +1839,15 @@ async function handleDawnWithdrawCommand(cmdOptions, parentOptions) {
 
       if (metadata) {
         console.log(chalk.gray(`📝 Sundial Metadata:`));
-        console.log(chalk.gray(`   Type: UserWithdrawal (0x04)`));
+        console.log(chalk.gray(`   Type: Withdrawal (0x04)`));
         console.log(chalk.gray(`   Deposit ID: ${metadata.depositId}`));
         console.log(chalk.gray(`   Provider: ${metadata.providerXonlyPubkey}`));
-        if (metadata.flags) console.log(chalk.gray(`   Flags: 0x${metadata.flags.toString(16).padStart(4, "0")}`));
+        if (metadata.flags)
+          console.log(
+            chalk.gray(
+              `   Flags: 0x${metadata.flags.toString(16).padStart(4, "0")}`,
+            ),
+          );
       }
 
       if (parentOptions.network === "testnet") {
@@ -1961,10 +1983,12 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
           message: "Enter deposit ID (UUID v4) for Sundial metadata:",
           when: (answers) => answers.providerPubkey || providerPubkey,
           validate: (input) => {
-            if (!input) return "Deposit ID is required when provider pubkey is given";
+            if (!input)
+              return "Deposit ID is required when provider pubkey is given";
             return (
-              /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(input) ||
-              "Must be a valid UUID v4"
+              /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(
+                input,
+              ) || "Must be a valid UUID v4"
             );
           },
         },
@@ -1986,7 +2010,7 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
       metadata = {
         magic: "SNDL",
         version: 1,
-        txType: TxType.YieldWithdrawal,
+        txType: TxType.Claim,
         depositId,
         providerXonlyPubkey: providerPubkey,
         flags,
@@ -2068,7 +2092,7 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
     }
 
     // Create unsigned spending transaction
-    const unsignedPsbt = await locker.createEscrowSpendingTransaction({
+    const unsignedPsbt = await locker.createClaimTransaction({
       scriptData: scriptInfo,
       utxoTxId: utxo.txid,
       utxoIndex: utxo.vout,
@@ -2118,7 +2142,7 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
 
     if (metadata) {
       result.sundial_metadata = {
-        type: "YieldWithdrawal (0x02)",
+        type: "Claim (0x02)",
         depositId: metadata.depositId,
         provider: metadata.providerXonlyPubkey,
       };
@@ -2151,10 +2175,17 @@ async function handleEscrowSpendCommand(cmdOptions, parentOptions) {
 
         if (metadata) {
           console.log(chalk.gray(`📝 Sundial Metadata:`));
-          console.log(chalk.gray(`   Type: YieldWithdrawal (0x02)`));
+          console.log(chalk.gray(`   Type: Claim (0x02)`));
           console.log(chalk.gray(`   Deposit ID: ${metadata.depositId}`));
-          console.log(chalk.gray(`   Provider: ${metadata.providerXonlyPubkey}`));
-          if (metadata.flags) console.log(chalk.gray(`   Flags: 0x${metadata.flags.toString(16).padStart(4, "0")}`));
+          console.log(
+            chalk.gray(`   Provider: ${metadata.providerXonlyPubkey}`),
+          );
+          if (metadata.flags)
+            console.log(
+              chalk.gray(
+                `   Flags: 0x${metadata.flags.toString(16).padStart(4, "0")}`,
+              ),
+            );
         }
 
         if (parentOptions.network === "testnet") {

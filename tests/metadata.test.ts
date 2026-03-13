@@ -60,132 +60,132 @@ describe("Sundial Metadata", () => {
 
   describe("Legacy function compatibility", () => {
     describe("packMetadata", () => {
-    describe("valid inputs", () => {
-      test("should pack deposit metadata with default values", () => {
-        const result = packMetadata(BASE_METADATA);
+      describe("valid inputs", () => {
+        test("should pack deposit metadata with default values", () => {
+          const result = packMetadata(BASE_METADATA);
 
-        expect(Buffer.isBuffer(result)).toBe(true);
-        expect(result.length).toBe(METADATA_LENGTH);
-      });
+          expect(Buffer.isBuffer(result)).toBe(true);
+          expect(result.length).toBe(METADATA_LENGTH);
+        });
 
-      test("should pack metadata for all transaction types", () => {
-        const txTypes = [
-          TxType.Deposit,
-          TxType.YieldWithdrawal,
-          TxType.Distribution,
-          TxType.UserWithdrawal,
-        ];
+        test("should pack metadata for all transaction types", () => {
+          const txTypes = [
+            TxType.Deposit,
+            TxType.Claim,
+            TxType.Distribution,
+            TxType.Withdrawal,
+          ];
 
-        for (const txType of txTypes) {
+          for (const txType of txTypes) {
+            const result = packMetadata({
+              ...BASE_METADATA,
+              txType,
+            });
+
+            expect(result.length).toBe(METADATA_LENGTH);
+          }
+        });
+
+        test("should pack metadata with custom magic", () => {
+          const result = packMetadata(BASE_METADATA);
+
+          expect(result.length).toBe(METADATA_LENGTH);
+        });
+
+        test("should pack metadata with custom flags", () => {
+          const flags = 0x1114;
           const result = packMetadata({
             ...BASE_METADATA,
-            txType
+            flags,
           });
 
           expect(result.length).toBe(METADATA_LENGTH);
-        }
+        });
       });
 
-      test("should pack metadata with custom magic", () => {
-        const result = packMetadata(BASE_METADATA);
-
-        expect(result.length).toBe(METADATA_LENGTH);
-      });
-
-      test("should pack metadata with custom flags", () => {
-        const flags = 0x1114;
-        const result = packMetadata({
-          ...BASE_METADATA,
-          flags,
+      describe("invalid inputs", () => {
+        test("should throw on invalid magic", () => {
+          expect(() =>
+            packMetadata({
+              ...BASE_METADATA,
+              magic: "XXXX",
+            }),
+          ).toThrow(ValidationError);
         });
 
-        expect(result.length).toBe(METADATA_LENGTH);
+        test("should throw on invalid txType", () => {
+          expect(() =>
+            packMetadata({
+              ...BASE_METADATA,
+              txType: 999 as TxType,
+            }),
+          ).toThrow(ValidationError);
+        });
+
+        test("should throw on invalid UUID", () => {
+          expect(() =>
+            packMetadata({
+              ...BASE_METADATA,
+              depositId: INVALID_UUID,
+            }),
+          ).toThrow(TypeError);
+        });
+
+        test("should throw on short UUID", () => {
+          expect(() =>
+            packMetadata({
+              ...BASE_METADATA,
+              depositId: "550e8400-e29b-41d4-a716-44665544000", // missing 1 char
+            }),
+          ).toThrow(TypeError);
+        });
+
+        test("should throw on invalid pubkey (too short)", () => {
+          expect(() =>
+            packMetadata({
+              ...BASE_METADATA,
+              providerXonlyPubkey: INVALID_PUBKEY_SHORT,
+            }),
+          ).toThrow(ValidationError);
+        });
+
+        test("should throw on invalid pubkey (too long)", () => {
+          expect(() =>
+            packMetadata({
+              ...BASE_METADATA,
+              providerXonlyPubkey: INVALID_PUBKEY_LONG,
+            }),
+          ).toThrow(ValidationError);
+        });
+
+        test("should throw on invalid pubkey (non-hex)", () => {
+          expect(() =>
+            packMetadata({
+              ...BASE_METADATA,
+              providerXonlyPubkey: "g".repeat(64), // invalid hex
+            }),
+          ).toThrow(ValidationError);
+        });
+
+        test("should throw on invalid flags (negative)", () => {
+          expect(() =>
+            packMetadata({
+              ...BASE_METADATA,
+              flags: -1,
+            }),
+          ).toThrow(ValidationError);
+        });
+
+        test("should throw on invalid flags (too large)", () => {
+          expect(() =>
+            packMetadata({
+              ...BASE_METADATA,
+              flags: 0x10000, // > 16-bit max
+            }),
+          ).toThrow(ValidationError);
+        });
       });
     });
-
-    describe("invalid inputs", () => {
-      test("should throw on invalid magic", () => {
-        expect(() =>
-          packMetadata({
-            ...BASE_METADATA,
-            magic: "XXXX",
-          })
-        ).toThrow(ValidationError);
-      });
-
-      test("should throw on invalid txType", () => {
-        expect(() =>
-          packMetadata({
-            ...BASE_METADATA,
-            txType: 999 as TxType,
-          })
-        ).toThrow(ValidationError);
-      });
-
-      test("should throw on invalid UUID", () => {
-        expect(() =>
-          packMetadata({
-            ...BASE_METADATA,
-            depositId: INVALID_UUID,
-          })
-        ).toThrow(TypeError);
-      });
-
-      test("should throw on short UUID", () => {
-        expect(() =>
-          packMetadata({
-            ...BASE_METADATA,
-            depositId: "550e8400-e29b-41d4-a716-44665544000", // missing 1 char
-          })
-        ).toThrow(TypeError);
-      });
-
-      test("should throw on invalid pubkey (too short)", () => {
-        expect(() =>
-          packMetadata({
-            ...BASE_METADATA,
-            providerXonlyPubkey: INVALID_PUBKEY_SHORT,
-          })
-        ).toThrow(ValidationError);
-      });
-
-      test("should throw on invalid pubkey (too long)", () => {
-        expect(() =>
-          packMetadata({
-            ...BASE_METADATA,
-            providerXonlyPubkey: INVALID_PUBKEY_LONG,
-          })
-        ).toThrow(ValidationError);
-      });
-
-      test("should throw on invalid pubkey (non-hex)", () => {
-        expect(() =>
-          packMetadata({
-            ...BASE_METADATA,
-            providerXonlyPubkey: "g".repeat(64), // invalid hex
-          })
-        ).toThrow(ValidationError);
-      });
-
-      test("should throw on invalid flags (negative)", () => {
-        expect(() =>
-          packMetadata({
-            ...BASE_METADATA,
-            flags: -1,
-          })
-        ).toThrow(ValidationError);
-      });
-
-      test("should throw on invalid flags (too large)", () => {
-        expect(() =>
-          packMetadata({
-            ...BASE_METADATA,
-            flags: 0x10000, // > 16-bit max
-          })
-        ).toThrow(ValidationError);
-      });
-    });
-  });
   });
 
   describe("unpackMetadata", () => {
@@ -212,9 +212,9 @@ describe("Sundial Metadata", () => {
       test("should unpack all transaction types", () => {
         const txTypes = [
           TxType.Deposit,
-          TxType.YieldWithdrawal,
+          TxType.Claim,
           TxType.Distribution,
-          TxType.UserWithdrawal,
+          TxType.Withdrawal,
         ];
 
         for (const txType of txTypes) {
@@ -238,7 +238,7 @@ describe("Sundial Metadata", () => {
     describe("invalid inputs", () => {
       test("should throw on non-Buffer input", () => {
         expect(() => unpackMetadata("not a buffer" as any)).toThrow(
-          ValidationError
+          ValidationError,
         );
       });
 
@@ -329,15 +329,15 @@ describe("Sundial Metadata", () => {
           txType: TxType.Deposit,
           depositId: VALID_UUID,
           providerXonlyPubkey: VALID_PUBKEY,
-          flags: 0x1234
+          flags: 0x1234,
         };
         const jsonString = JSON.stringify(metadataObj);
-        
+
         const result = MetadataUtils.pack_string(jsonString);
-        
+
         expect(Buffer.isBuffer(result)).toBe(true);
         expect(result.length).toBe(METADATA_LENGTH);
-        
+
         // Verify it can be unpacked correctly
         const unpacked = MetadataUtils.unpack(result);
         expect(unpacked.txType).toBe(TxType.Deposit);
@@ -348,15 +348,15 @@ describe("Sundial Metadata", () => {
 
       test("should pack JSON with minimal required fields", () => {
         const metadataObj = {
-          txType: TxType.YieldWithdrawal,
+          txType: TxType.Claim,
           depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY
+          providerXonlyPubkey: VALID_PUBKEY,
         };
         const jsonString = JSON.stringify(metadataObj);
-        
+
         const result = MetadataUtils.pack_string(jsonString);
         const unpacked = MetadataUtils.unpack(result);
-        
+
         expect(unpacked.magic).toBe(MAGIC_SNDL);
         expect(unpacked.version).toBe(METADATA_VERSION);
         expect(unpacked.flags).toBe(0);
@@ -365,23 +365,27 @@ describe("Sundial Metadata", () => {
       test("should throw on missing required fields", () => {
         const invalidMetadata = {
           txType: TxType.Deposit,
-          depositId: VALID_UUID
+          depositId: VALID_UUID,
           // missing providerXonlyPubkey
         };
         const jsonString = JSON.stringify(invalidMetadata);
-        
-        expect(() => MetadataUtils.pack_string(jsonString)).toThrow(ValidationError);
+
+        expect(() => MetadataUtils.pack_string(jsonString)).toThrow(
+          ValidationError,
+        );
       });
 
       test("should throw on invalid JSON metadata", () => {
         const invalidMetadata = {
           txType: 999, // invalid
           depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY
+          providerXonlyPubkey: VALID_PUBKEY,
         };
         const jsonString = JSON.stringify(invalidMetadata);
-        
-        expect(() => MetadataUtils.pack_string(jsonString)).toThrow(ValidationError);
+
+        expect(() => MetadataUtils.pack_string(jsonString)).toThrow(
+          ValidationError,
+        );
       });
     });
 
@@ -389,10 +393,10 @@ describe("Sundial Metadata", () => {
       test("should pack valid hex metadata string", () => {
         // First create valid packed metadata
         const originalPacked = MetadataUtils.pack(BASE_METADATA);
-        const hexString = originalPacked.toString('hex');
-        
+        const hexString = originalPacked.toString("hex");
+
         const result = MetadataUtils.pack_string(hexString);
-        
+
         expect(Buffer.isBuffer(result)).toBe(true);
         expect(result.length).toBe(METADATA_LENGTH);
         expect(result).toEqual(originalPacked);
@@ -400,27 +404,33 @@ describe("Sundial Metadata", () => {
 
       test("should throw on invalid hex string length", () => {
         const shortHexString = "a".repeat(118); // 118 chars instead of 120
-        
-        expect(() => MetadataUtils.pack_string(shortHexString)).toThrow(ValidationError);
-        expect(() => MetadataUtils.pack_string(shortHexString)).toThrow(/Invalid hex string length/);
+
+        expect(() => MetadataUtils.pack_string(shortHexString)).toThrow(
+          ValidationError,
+        );
+        expect(() => MetadataUtils.pack_string(shortHexString)).toThrow(
+          /Invalid hex string length/,
+        );
       });
 
       test("should throw on invalid hex metadata", () => {
         // Create 120 character hex string but with invalid content
         const invalidHex = "FF".repeat(60); // All 0xFF bytes won't have valid checksum
-        
-        expect(() => MetadataUtils.pack_string(invalidHex)).toThrow(ValidationError);
+
+        expect(() => MetadataUtils.pack_string(invalidHex)).toThrow(
+          ValidationError,
+        );
       });
 
       test("should handle uppercase and lowercase hex", () => {
         const originalPacked = MetadataUtils.pack(BASE_METADATA);
-        
-        const upperHex = originalPacked.toString('hex').toUpperCase();
-        const lowerHex = originalPacked.toString('hex').toLowerCase();
-        
+
+        const upperHex = originalPacked.toString("hex").toUpperCase();
+        const lowerHex = originalPacked.toString("hex").toLowerCase();
+
         const resultUpper = MetadataUtils.pack_string(upperHex);
         const resultLower = MetadataUtils.pack_string(lowerHex);
-        
+
         expect(resultUpper).toEqual(originalPacked);
         expect(resultLower).toEqual(originalPacked);
       });
@@ -428,29 +438,45 @@ describe("Sundial Metadata", () => {
 
     describe("invalid input types", () => {
       test("should throw on non-string input", () => {
-        expect(() => MetadataUtils.pack_string(123 as any)).toThrow(ValidationError);
-        expect(() => MetadataUtils.pack_string(null as any)).toThrow(ValidationError);
-        expect(() => MetadataUtils.pack_string(undefined as any)).toThrow(ValidationError);
-        expect(() => MetadataUtils.pack_string({} as any)).toThrow(ValidationError);
+        expect(() => MetadataUtils.pack_string(123 as any)).toThrow(
+          ValidationError,
+        );
+        expect(() => MetadataUtils.pack_string(null as any)).toThrow(
+          ValidationError,
+        );
+        expect(() => MetadataUtils.pack_string(undefined as any)).toThrow(
+          ValidationError,
+        );
+        expect(() => MetadataUtils.pack_string({} as any)).toThrow(
+          ValidationError,
+        );
       });
 
       test("should throw on invalid JSON string", () => {
         const invalidJson = "{ invalid json }";
-        
-        expect(() => MetadataUtils.pack_string(invalidJson)).toThrow(ValidationError);
+
+        expect(() => MetadataUtils.pack_string(invalidJson)).toThrow(
+          ValidationError,
+        );
       });
 
       test("should throw on non-hex, non-JSON string", () => {
         const randomString = "this is just a random string";
-        
-        expect(() => MetadataUtils.pack_string(randomString)).toThrow(ValidationError);
-        expect(() => MetadataUtils.pack_string(randomString)).toThrow(/must be either valid JSON/);
+
+        expect(() => MetadataUtils.pack_string(randomString)).toThrow(
+          ValidationError,
+        );
+        expect(() => MetadataUtils.pack_string(randomString)).toThrow(
+          /must be either valid JSON/,
+        );
       });
 
       test("should throw on hex string with invalid characters", () => {
         const invalidHex = "G".repeat(120); // G is not a valid hex character
-        
-        expect(() => MetadataUtils.pack_string(invalidHex)).toThrow(ValidationError);
+
+        expect(() => MetadataUtils.pack_string(invalidHex)).toThrow(
+          ValidationError,
+        );
       });
     });
 
@@ -459,22 +485,22 @@ describe("Sundial Metadata", () => {
         const metadataObj = {
           txType: TxType.Deposit,
           depositId: VALID_UUID,
-          providerXonlyPubkey: VALID_PUBKEY
+          providerXonlyPubkey: VALID_PUBKEY,
         };
         const jsonString = JSON.stringify(metadataObj);
-        
+
         const output = MetadataUtils.toOutput(jsonString);
-        
+
         expect(output.value).toBe(BigInt(0));
         expect(Buffer.isBuffer(output.script)).toBe(true);
       });
 
       test("should create OP_RETURN output from hex string", () => {
         const originalPacked = MetadataUtils.pack(BASE_METADATA);
-        const hexString = originalPacked.toString('hex');
-        
+        const hexString = originalPacked.toString("hex");
+
         const output = MetadataUtils.toOutput(hexString);
-        
+
         expect(output.value).toBe(BigInt(0));
         expect(Buffer.isBuffer(output.script)).toBe(true);
       });
@@ -490,9 +516,9 @@ describe("Sundial Metadata", () => {
 
     test("TxType enum should have correct values", () => {
       expect(TxType.Deposit).toBe(0x01);
-      expect(TxType.YieldWithdrawal).toBe(0x02);
+      expect(TxType.Claim).toBe(0x02);
       expect(TxType.Distribution).toBe(0x03);
-      expect(TxType.UserWithdrawal).toBe(0x04);
+      expect(TxType.Withdrawal).toBe(0x04);
     });
   });
 

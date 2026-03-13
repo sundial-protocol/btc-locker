@@ -1,7 +1,7 @@
-import * as bitcoin from "bitcoinjs-lib";
+﻿import * as bitcoin from "bitcoinjs-lib";
 import { FeeUtils } from "../../utils";
 import { FeePriorities } from "../../utils/fees";
-import MetadataUtils from "../../utils/metadata";
+import MetadataUtils, { TxType } from "../../utils/metadata";
 import type { LockerContext } from "../core";
 import {
   BaseTransactionParams,
@@ -12,11 +12,11 @@ import {
 
 /**
  * Parameters for yield distribution
- * @interface YieldDistributionParams
+ * @interface DistributionParams
  * @extends BaseTransactionParams
  * @description Configuration for distributing yield from time-locked Bitcoin funds
  */
-export interface YieldDistributionParams extends BaseTransactionParams {
+export interface DistributionParams extends BaseTransactionParams {
   /** Array of unspent transaction outputs from timelock (optional - will fetch from address if not provided) */
   inputs?: UTXO[];
   /** Source address for automatic UTXO selection (required if inputs not provided) */
@@ -33,11 +33,11 @@ export interface YieldDistributionParams extends BaseTransactionParams {
 
 /**
  * Result of yield distribution
- * @interface YieldDistributionResult
+ * @interface DistributionResult
  * @extends TransactionResult
  * @description Transaction result with additional yield distribution metadata
  */
-export interface YieldDistributionResult extends TransactionResult {
+export interface DistributionResult extends TransactionResult {
   /** Bitcoin transaction object */
   transaction: bitcoin.Transaction;
   /** Distribution details */
@@ -51,9 +51,9 @@ export interface YieldDistributionResult extends TransactionResult {
   };
 }
 
-export async function distributeYield(
+export async function createDistributionTransaction(
   ctx: LockerContext,
-  params: YieldDistributionParams,
+  params: DistributionParams,
 ): Promise<string> {
   const {
     inputs: providedInputs,
@@ -131,7 +131,11 @@ export async function distributeYield(
   }
 
   if (metadata) {
-    psbt.addOutput(MetadataUtils.toOutput(metadata));
+    const typedMetadata =
+      typeof metadata === "string"
+        ? metadata
+        : { ...metadata, txType: TxType.Distribution };
+    psbt.addOutput(MetadataUtils.toOutput(typedMetadata));
   }
 
   return psbt.toBase64();

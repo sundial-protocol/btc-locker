@@ -1,4 +1,4 @@
-import * as bitcoin from "bitcoinjs-lib";
+﻿import * as bitcoin from "bitcoinjs-lib";
 import type {
   BaseTransactionParams,
   ProtocolFeeParams,
@@ -7,17 +7,17 @@ import type {
 } from "../../../types";
 import { FeeUtils, TransactionUtils } from "../../../utils";
 import { FeePriorities } from "../../../utils/fees";
-import MetadataUtils from "../../../utils/metadata";
+import MetadataUtils, { TxType } from "../../../utils/metadata";
 import type { LockerContext } from "../../core";
 
 /**
  * Parameters for Dawn staking transactions
- * @interface DawnStakingParams
+ * @interface DepositParams
  * @extends BaseTransactionParams
  * @extends ProtocolFeeParams
  * @description Configuration for creating Dawn protocol staking transactions with dual outputs
  */
-export interface DawnStakingParams
+export interface DepositParams
   extends BaseTransactionParams, ProtocolFeeParams {
   /** Array of unspent transaction outputs to stake (optional - will auto-select from address if not provided) */
   inputs?: UTXO[];
@@ -35,11 +35,11 @@ export interface DawnStakingParams
 
 /**
  * Result of Dawn staking transaction
- * @interface DawnStakingResult
+ * @interface DepositResult
  * @extends TransactionResult
  * @description Transaction result with detailed output breakdown for Dawn staking
  */
-export interface DawnStakingResult extends TransactionResult {
+export interface DepositResult extends TransactionResult {
   /** Output breakdown */
   outputs: {
     /** Amount sent to escrow in satoshis */
@@ -53,9 +53,9 @@ export interface DawnStakingResult extends TransactionResult {
   };
 }
 
-export async function createDawnStakingTransaction(
+export async function createDepositTransaction(
   ctx: LockerContext,
-  params: DawnStakingParams,
+  params: DepositParams,
 ): Promise<string> {
   const {
     inputs: providedInputs,
@@ -228,7 +228,11 @@ export async function createDawnStakingTransaction(
     }
 
     if (metadata) {
-      psbt.addOutput(MetadataUtils.toOutput(metadata));
+      const typedMetadata =
+        typeof metadata === "string"
+          ? metadata
+          : { ...metadata, txType: TxType.Deposit };
+      psbt.addOutput(MetadataUtils.toOutput(typedMetadata));
     }
 
     return psbt.toBase64();

@@ -44,9 +44,9 @@ const OFF_CHECKSUM = 56;
 /** Transaction type tag stored in a single byte */
 export enum TxType {
   Deposit = 0x01,
-  YieldWithdrawal = 0x02,
+  Claim = 0x02,
   Distribution = 0x03,
-  UserWithdrawal = 0x04,
+  Withdrawal = 0x04,
 }
 
 /** Decoded metadata object returned by {@link unpackMetadata} */
@@ -112,7 +112,7 @@ export default class MetadataUtils {
    *
    * @param opts          - Metadata fields to encode
    * @param opts.magic    - Magic identifier, must be `"SNDL"` or some future value (default `"SNDL"`)
-   * @param opts.txType   - Transaction type (Deposit, YieldWithdrawal, Distribution, UserWithdrawal)
+   * @param opts.txType   - Transaction type (Deposit, Claim, Distribution, Withdrawal)
    * @param opts.depositId - UUID v4 string identifying the deposit
    * @param opts.providerXonlyPubkey - 32-byte x-only public key as a 64-char hex string
    * @param opts.flags    - Optional 2-byte flags (default `0x0000`)

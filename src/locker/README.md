@@ -1,4 +1,4 @@
-# BTCLocker Modular Architecture
+﻿# BTCLocker Modular Architecture
 
 ## File Structure
 
@@ -15,14 +15,14 @@ src/locker/
 │   └── index.ts                   # Barrel
 └── transactions/                  # Standalone transaction construction functions
     ├── generic.ts                 # createSpendingTransaction, createFundingTransaction
-    ├── escrow-spending.ts         # createEscrowSpendingTransaction
-    ├── user-withdrawal.ts         # createDawnWithdrawalTransaction
-    ├── yield-distribution.ts      # distributeYield
+    ├── escrow-spending.ts         # createClaimTransaction
+    ├── user-withdrawal.ts         # createWithdrawalTransaction
+    ├── yield-distribution.ts      # createDistributionTransaction
     ├── index.ts                   # Barrel
     └── staking/
-        ├── stake.ts               # createDawnStakingTransaction
-        ├── stake-with-script.ts   # createDawnStakingTransactionWithScript
-        └── calculate.ts          # calculateDawnStakingAmounts
+        ├── stake.ts               # createDepositTransaction
+        ├── stake-with-script.ts   # createDepositTransactionWithScript
+        └── calculate.ts          # calculateDepositAmounts
 ```
 
 ## Architecture Pattern
@@ -74,12 +74,12 @@ Thin facade combining both script creation functions:
 Thin facade over all transaction construction functions:
 
 - `createSpendingTransaction` / `createFundingTransaction` → `transactions/generic.ts`
-- `createEscrowSpendingTransaction` → `transactions/escrow-spending.ts`
-- `createDawnWithdrawalTransaction` → `transactions/user-withdrawal.ts`
-- `distributeYield` → `transactions/yield-distribution.ts`
-- `createDawnStakingTransaction` → `transactions/staking/stake.ts`
-- `createDawnStakingTransactionWithScript` → `transactions/staking/stake-with-script.ts`
-- `calculateDawnStakingAmounts` → `transactions/staking/calculate.ts`
+- `createClaimTransaction` → `transactions/escrow-spending.ts`
+- `createWithdrawalTransaction` → `transactions/user-withdrawal.ts`
+- `createDistributionTransaction` → `transactions/yield-distribution.ts`
+- `createDepositTransaction` → `transactions/staking/stake.ts`
+- `createDepositTransactionWithScript` → `transactions/staking/stake-with-script.ts`
+- `calculateDepositAmounts` → `transactions/staking/calculate.ts`
 
 ### `index.ts` — BTCLocker (combined facade)
 
@@ -96,7 +96,7 @@ const locker = await createBTCLocker("testnet");
 const keyPair = await locker.generateKeyPair();
 const script = await locker.createTimelockScript(locktime, publicKey);
 const escrow = await locker.createEscrowScript(deadline, beforeKey, afterKey);
-const tx = await locker.createDawnStakingTransaction(params);
+const tx = await locker.createDepositTransaction(params);
 ```
 
 ### Individual Managers (Granular Control)
@@ -118,17 +118,17 @@ const escrowScript = await scripts.createEscrowScript(
 
 const txManager = new SundialTransactionManager(network);
 await txManager.init();
-const unsignedPsbt = await txManager.createDawnStakingTransaction(params);
+const unsignedPsbt = await txManager.createDepositTransaction(params);
 ```
 
 ### Standalone Functions (Minimal / Tree-shakeable)
 
 ```javascript
 import { createTimelockScript } from "./src/locker/scripts/timelock.js";
-import { createDawnStakingTransaction } from "./src/locker/transactions/staking/stake.js";
+import { createDepositTransaction } from "./src/locker/transactions/staking/stake.js";
 
 const script = await createTimelockScript(ctx, locktime, publicKey);
-const tx = await createDawnStakingTransaction(ctx, params);
+const tx = await createDepositTransaction(ctx, params);
 ```
 
 ## Benefits

@@ -1,17 +1,17 @@
-import * as bitcoin from "bitcoinjs-lib";
+﻿import * as bitcoin from "bitcoinjs-lib";
 import { FeeUtils } from "../../utils";
 import { FeePriorities } from "../../utils/fees";
-import MetadataUtils from "../../utils/metadata";
+import MetadataUtils, { TxType } from "../../utils/metadata";
 import type { LockerContext } from "../core";
 import { BaseTransactionParams, ScriptInfo, TransactionResult } from "../..";
 
 /**
  * Escrow transaction creation parameters
- * @interface EscrowSpendingParams
+ * @interface ClaimParams
  * @extends BaseTransactionParams
  * @description Parameters for creating an unsigned escrow spending transaction
  */
-export interface EscrowSpendingParams extends BaseTransactionParams {
+export interface ClaimParams extends BaseTransactionParams {
   /** Script data returned from createEscrowScript */
   scriptData: ScriptInfo;
   /** Transaction ID of the UTXO to spend */
@@ -33,11 +33,11 @@ export interface EscrowSpendingParams extends BaseTransactionParams {
 /**
  * Escrow spending transaction result
  */
-export type EscrowSpendingResult = TransactionResult;
+export type ClaimResult = TransactionResult;
 
-export async function createEscrowSpendingTransaction(
+export async function createClaimTransaction(
   ctx: LockerContext,
-  params: EscrowSpendingParams,
+  params: ClaimParams,
 ): Promise<string> {
   const {
     scriptData,
@@ -145,7 +145,11 @@ export async function createEscrowSpendingTransaction(
     });
 
     if (params.metadata) {
-      psbt.addOutput(MetadataUtils.toOutput(params.metadata));
+      const typedMetadata =
+        typeof params.metadata === "string"
+          ? params.metadata
+          : { ...params.metadata, txType: TxType.Claim };
+      psbt.addOutput(MetadataUtils.toOutput(typedMetadata));
     }
 
     return psbt.toBase64();

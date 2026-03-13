@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, vi } from "vitest";
+﻿import { describe, test, expect, beforeAll, vi } from "vitest";
 import { TransactionManager } from "../src/locker/transaction-manager";
 import { NETWORKS } from "../src/utils/network";
 import * as bitcoin from "bitcoinjs-lib";
@@ -28,10 +28,10 @@ describe("YieldDistributor", () => {
     await txManager.init();
   });
 
-  describe("distributeYield", () => {
+  describe("createDistributionTransaction", () => {
     test("should throw error when no inputs and no sourceAddress+api", async () => {
       await expect(
-        txManager.distributeYield({
+        txManager.createDistributionTransaction({
           timelockAddress: testAddress,
           amount: 10000,
         }),
@@ -42,7 +42,7 @@ describe("YieldDistributor", () => {
 
     test("should throw error when sourceAddress given but no api", async () => {
       await expect(
-        txManager.distributeYield({
+        txManager.createDistributionTransaction({
           sourceAddress: testAddress,
           timelockAddress: testAddress,
           amount: 10000,
@@ -54,7 +54,7 @@ describe("YieldDistributor", () => {
 
     test("should throw error when empty inputs array", async () => {
       await expect(
-        txManager.distributeYield({
+        txManager.createDistributionTransaction({
           inputs: [],
           timelockAddress: testAddress,
           amount: 10000,
@@ -100,9 +100,9 @@ describe("YieldDistributor (mocked fees)", () => {
     await txManager.init();
   });
 
-  describe("distributeYield (happy path)", () => {
+  describe("createDistributionTransaction (happy path)", () => {
     test("should create unsigned PSBT with provided inputs", async () => {
-      const result = await txManager.distributeYield({
+      const result = await txManager.createDistributionTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 100000 }],
         timelockAddress: testAddress,
         amount: 50000,
@@ -118,7 +118,7 @@ describe("YieldDistributor (mocked fees)", () => {
     });
 
     test("should include change output when above dust", async () => {
-      const result = await txManager.distributeYield({
+      const result = await txManager.createDistributionTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
         timelockAddress: testAddress,
         amount: 50000,
@@ -133,7 +133,7 @@ describe("YieldDistributor (mocked fees)", () => {
     });
 
     test("should include metadata output", async () => {
-      const result = await txManager.distributeYield({
+      const result = await txManager.createDistributionTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
         timelockAddress: testAddress,
         amount: 50000,
@@ -152,7 +152,7 @@ describe("YieldDistributor (mocked fees)", () => {
     });
 
     test("should handle multiple inputs", async () => {
-      const result = await txManager.distributeYield({
+      const result = await txManager.createDistributionTransaction({
         inputs: [
           { txid: "a".repeat(64), vout: 0, value: 30000 },
           { txid: "b".repeat(64), vout: 1, value: 40000 },
@@ -185,7 +185,7 @@ describe("YieldDistributor (mocked fees)", () => {
         ]),
       };
 
-      const result = await txManager.distributeYield({
+      const result = await txManager.createDistributionTransaction({
         sourceAddress: testAddress,
         api: mockApi as any,
         timelockAddress: testAddress,

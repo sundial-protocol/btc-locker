@@ -1,4 +1,4 @@
-# Sundial OP_RETURN Metadata Specification
+﻿# Sundial OP_RETURN Metadata Specification
 
 Sundial embeds a 60-byte metadata payload in an `OP_RETURN` output on every protocol transaction. This document is the canonical reference for encoding and decoding that payload.
 
@@ -6,24 +6,24 @@ Sundial embeds a 60-byte metadata payload in an `OP_RETURN` output on every prot
 
 All multi-byte integers are **big-endian**. Total size: **60 bytes**.
 
-| Offset | Size | Field | Type | Description |
-|--------|------|-------|------|-------------|
-| 0 | 4 | `magic` | ASCII | Protocol identifier. Must be `"SNDL"`. |
-| 4 | 1 | `version` | uint8 | Schema version. Currently `0x01`. |
-| 5 | 1 | `txType` | uint8 | Transaction type tag (see below). |
-| 6 | 16 | `depositId` | bytes | UUID v4 in raw bytes (no dashes). |
-| 22 | 32 | `providerXonlyPubkey` | bytes | Yield-provider's x-only public key. |
-| 54 | 2 | `flags` | uint16 | Reserved flags. Default `0x0000`. |
-| 56 | 4 | `checksum` | uint32 | CRC-32 (IEEE 802.3) over bytes 0–55. |
+| Offset | Size | Field                 | Type   | Description                            |
+| ------ | ---- | --------------------- | ------ | -------------------------------------- |
+| 0      | 4    | `magic`               | ASCII  | Protocol identifier. Must be `"SNDL"`. |
+| 4      | 1    | `version`             | uint8  | Schema version. Currently `0x01`.      |
+| 5      | 1    | `txType`              | uint8  | Transaction type tag (see below).      |
+| 6      | 16   | `depositId`           | bytes  | UUID v4 in raw bytes (no dashes).      |
+| 22     | 32   | `providerXonlyPubkey` | bytes  | Yield-provider's x-only public key.    |
+| 54     | 2    | `flags`               | uint16 | Reserved flags. Default `0x0000`.      |
+| 56     | 4    | `checksum`            | uint32 | CRC-32 (IEEE 802.3) over bytes 0–55.   |
 
 ### Transaction Types
 
-| Value | Name | Usage |
-|-------|------|-------|
-| `0x01` | `Deposit` | User stakes BTC into escrow + timelock. |
-| `0x02` | `YieldWithdrawal` | Provider withdraws yield from escrow. |
-| `0x03` | `Distribution` | Provider distributes yield to a timelock. |
-| `0x04` | `UserWithdrawal` | User withdraws principal from escrow + timelock. |
+| Value  | Name           | Usage                                            |
+| ------ | -------------- | ------------------------------------------------ |
+| `0x01` | `Deposit`      | User stakes BTC into escrow + timelock.          |
+| `0x02` | `Claim`        | Provider withdraws yield from escrow.            |
+| `0x03` | `Distribution` | Provider distributes yield to a timelock.        |
+| `0x04` | `Withdrawal`   | User withdraws principal from escrow + timelock. |
 
 ### Field Details
 
@@ -37,12 +37,12 @@ All multi-byte integers are **big-endian**. Total size: **60 bytes**.
 
 ```ts
 interface SundialMetadata {
-  magic: string;            // "SNDL"
-  version: number;          // 0x01
-  txType: TxType;           // 0x01–0x04
-  depositId: string;        // UUID v4 with dashes
+  magic: string; // "SNDL"
+  version: number; // 0x01
+  txType: TxType; // 0x01–0x04
+  depositId: string; // UUID v4 with dashes
   providerXonlyPubkey: string; // 64 hex chars
-  flags: number;            // 0x0000–0xFFFF
+  flags: number; // 0x0000–0xFFFF
 }
 ```
 
@@ -68,11 +68,13 @@ const buf = MetadataUtils.pack({
 
 ```ts
 // From JSON
-const buf = MetadataUtils.pack_string(JSON.stringify({
-  txType: 1,
-  depositId: "550e8400-e29b-41d4-a716-446655440000",
-  providerXonlyPubkey: "a".repeat(64),
-}));
+const buf = MetadataUtils.pack_string(
+  JSON.stringify({
+    txType: 1,
+    depositId: "550e8400-e29b-41d4-a716-446655440000",
+    providerXonlyPubkey: "a".repeat(64),
+  }),
+);
 
 // From hex (round-tripped)
 const buf2 = MetadataUtils.pack_string(buf.toString("hex"));
@@ -95,14 +97,16 @@ const meta = MetadataUtils.unpack(opReturnData);
 
 ```ts
 // From a SundialMetadata object
-psbt.addOutput(MetadataUtils.toOutput({
-  magic: "SNDL",
-  version: 1,
-  txType: TxType.Distribution,
-  depositId: "6e578f1c-fd1d-48be-ba29-61f5aadc27d7",
-  providerXonlyPubkey: xOnlyPubkey,
-  flags: 0,
-}));
+psbt.addOutput(
+  MetadataUtils.toOutput({
+    magic: "SNDL",
+    version: 1,
+    txType: TxType.Distribution,
+    depositId: "6e578f1c-fd1d-48be-ba29-61f5aadc27d7",
+    providerXonlyPubkey: xOnlyPubkey,
+    flags: 0,
+  }),
+);
 
 // From a JSON or hex string
 psbt.addOutput(MetadataUtils.toOutput(metadataJsonString));
@@ -118,37 +122,40 @@ When a user stakes BTC, the CLI auto-generates a `depositId` if not provided and
 
 ```ts
 const metadata = {
-  magic: "SNDL", version: 1,
+  magic: "SNDL",
+  version: 1,
   txType: TxType.Deposit,
   depositId: crypto.randomUUID(),
   providerXonlyPubkey: providerPubkey,
   flags: 0,
 };
-const psbt = await locker.createDawnStakingTransaction({
-  inputs, 
-  escrowAddress, 
+const psbt = await locker.createDepositTransaction({
+  inputs,
+  escrowAddress,
   escrowAmount,
-  timelockAddress, 
-  timelockAmount, 
+  timelockAddress,
+  timelockAmount,
   changeAddress,
   metadata,
 });
 ```
+
 ### Distribution (Yield Payout)
 
 The provider distributes yield to a user's timelock address. The provider's x-only pubkey is derived from their signing key.
 
 ```ts
 const providerPubkey = KeyUtils.toXOnly(keyPair.publicKey); // strips prefix byte
-const psbt = await locker.distributeYield({
-  inputs, 
-  timelockAddress, 
+const psbt = await locker.createDistributionTransaction({
+  inputs,
+  timelockAddress,
   amount,
   metadata: {
-    magic: "SNDL", version: 1,
+    magic: "SNDL",
+    version: 1,
     txType: TxType.Distribution,
-    depositId, 
-    providerXonlyPubkey: providerPubkey, 
+    depositId,
+    providerXonlyPubkey: providerPubkey,
     flags: 0,
   },
 });
@@ -156,9 +163,10 @@ const psbt = await locker.distributeYield({
 
 ### Yield Withdrawal / User Withdrawal
 
-Same structure as above with `txType` set to `TxType.YieldWithdrawal` (`0x02`) or `TxType.UserWithdrawal` (`0x04`) respectively.
+Same structure as above with `txType` set to `TxType.Claim` (`0x02`) or `TxType.Withdrawal` (`0x04`) respectively.
 
 ### Example Transactions
+
 Example transactions can be found here:
 
 - [0x01: Deposit](https://mempool.space/testnet/tx/3a673e2b13aedae92bbe2589dcb161856aa26d86abc9e33541c8bf95ecf277c9)
@@ -174,7 +182,11 @@ Example transactions can be found here:
 const tx = bitcoin.Transaction.fromHex(rawHex);
 for (const out of tx.outs) {
   const chunks = bitcoin.script.decompile(out.script);
-  if (chunks && chunks[0] === bitcoin.opcodes.OP_RETURN && Buffer.isBuffer(chunks[1])) {
+  if (
+    chunks &&
+    chunks[0] === bitcoin.opcodes.OP_RETURN &&
+    Buffer.isBuffer(chunks[1])
+  ) {
     if (MetadataUtils.isSundialMetadata(chunks[1])) {
       const meta = MetadataUtils.unpack(chunks[1]); // full validation + decode
       console.log(meta.txType, meta.depositId);
@@ -187,14 +199,14 @@ for (const out of tx.outs) {
 
 Encoding and decoding both enforce these constraints:
 
-| Field | Constraint |
-|-------|-----------|
-| `magic` | Must be `"SNDL"` |
-| `version` | Must be `0x01` |
-| `txType` | Must be `0x01`–`0x04` |
-| `depositId` | Valid 32-hex-char UUID (dashes optional on input) |
-| `providerXonlyPubkey` | Exactly 64 lowercase/uppercase hex characters |
-| `flags` | `0x0000`–`0xFFFF` |
-| `checksum` | CRC-32 must match on decode |
+| Field                 | Constraint                                        |
+| --------------------- | ------------------------------------------------- |
+| `magic`               | Must be `"SNDL"`                                  |
+| `version`             | Must be `0x01`                                    |
+| `txType`              | Must be `0x01`–`0x04`                             |
+| `depositId`           | Valid 32-hex-char UUID (dashes optional on input) |
+| `providerXonlyPubkey` | Exactly 64 lowercase/uppercase hex characters     |
+| `flags`               | `0x0000`–`0xFFFF`                                 |
+| `checksum`            | CRC-32 must match on decode                       |
 
 Any violation throws a `ValidationError`.

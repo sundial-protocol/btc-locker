@@ -1,32 +1,32 @@
-export {
-  createDawnStakingTransaction,
-  DawnStakingParams,
-  DawnStakingResult,
+﻿export {
+  createDepositTransaction,
+  DepositParams,
+  DepositResult,
 } from "./staking/stake";
 export {
-  createDawnStakingTransactionWithScript,
-  DawnStakingWithScriptParams,
-  DawnStakingWithScriptResult,
+  createDepositTransactionWithScript,
+  DepositWithScriptParams,
+  DepositWithScriptResult,
 } from "./staking/stake-with-script";
 export {
-  calculateDawnStakingAmounts,
-  DawnStakingCalculationParams,
-  DawnStakingCalculationResult,
+  calculateDepositAmounts,
+  DepositCalculationParams,
+  DepositCalculationResult,
 } from "./staking/calculate";
 export {
-  createDawnWithdrawalTransaction,
-  DawnWithdrawalParams,
-  DawnWithdrawalResult,
+  createWithdrawalTransaction,
+  WithdrawalParams,
+  WithdrawalResult,
 } from "./user-withdrawal";
 export {
-  createEscrowSpendingTransaction,
-  EscrowSpendingParams,
-  EscrowSpendingResult,
+  createClaimTransaction,
+  ClaimParams,
+  ClaimResult,
 } from "./escrow-spending";
 export {
-  distributeYield,
-  YieldDistributionParams,
-  YieldDistributionResult,
+  createDistributionTransaction,
+  DistributionParams,
+  DistributionResult,
 } from "./yield-distribution";
 export {
   createSpendingTransaction,

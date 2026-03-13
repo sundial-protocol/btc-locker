@@ -1,15 +1,15 @@
-# User Stories of Staking Flow
+﻿# User Stories of Staking Flow
 
 The full v0 user stories for the staking flow. This is pre-server, so we assume discoverability and tracking via tx metadata (To be implemented)
 
 ## User Deposits Stake
 
-Uses DawnStakingManager's createDawnStakingTransaction to create a new staking transaction, which sends outputs to the Escrow and Timelock addresses.
+Uses DawnStakingManager's createDepositTransaction to create a new staking transaction, which sends outputs to the Escrow and Timelock addresses.
 
 Parameters:
 
 ```ts
-export interface DawnStakingParams {
+export interface DepositParams {
   /** Array of unspent transaction outputs to stake (optional - will auto-select from address if not provided) */
   inputs?: UTXO[];
   /** Source address for automatic UTXO selection (required if inputs not provided) */
@@ -50,7 +50,7 @@ flowchart LR
     MkEscrow --> EscrowP2SH[Escrow P2SH Address]
     MkEscrow --> EscrowScript[Escrow Redeem Script]
 
-    TimelockP2SH --> Tx{createDawnStakingTransaction}
+    TimelockP2SH --> Tx{createDepositTransaction}
     EscrowP2SH --> Tx
 
     TimelockScript -.-> Backend(Backend Storage)
@@ -87,10 +87,10 @@ flowchart LR
 
 ## Yield Provider Withdraws Stake
 
-Uses EscrowManager's createEscrowSpendingTransaction to create a transaction that spends from the escrow output
+Uses EscrowManager's createClaimTransaction to create a transaction that spends from the escrow output
 
 ```ts
-export interface EscrowSpendingParams {
+export interface ClaimParams {
   /** Script data returned from createEscrowScript */
   scriptData: ScriptInfo;
   /** Transaction ID of the UTXO to spend */
@@ -116,7 +116,7 @@ flowchart LR
     Wallet(Provider Wallet) --> PKH[Provider Pubkey]
 
     PKH --> Backend(Backend Storage)
-    PKH --> MkTx{createEscrowSpendingTransaction}
+    PKH --> MkTx{createClaimTransaction}
     User --> Backend
 
     Backend --> RedeemScript[Escrow Redeem Script]
@@ -150,10 +150,10 @@ flowchart LR
 
 ## Yield Provider Distributes Rewards
 
-Uses the YieldDistributor's distributeYield to create a transaction that sends rewards from the yield provider to the user's timelock address.
+Uses the YieldDistributor's createDistributionTransaction to create a transaction that sends rewards from the yield provider to the user's timelock address.
 
 ```ts
-export interface YieldDistributionParams {
+export interface DistributionParams {
   /** Array of unspent transaction outputs from timelock (optional - will fetch from address if not provided) */
   inputs?: YieldInput[];
   /** Source address for automatic UTXO selection (required if inputs not provided) */
@@ -179,7 +179,7 @@ flowchart LR
     Input(Provider Input) --> User
     Input --> Amount[Distribution Amount]
 
-    Amount --> MkTx{distributeYield}
+    Amount --> MkTx{createDistributionTransaction}
     User --> Backend(Backend Storage)
 
     Backend --> P2SH[Timelock P2SH Address]
@@ -214,10 +214,10 @@ flowchart LR
 
 ## User Withdraws Stake and Rewards
 
-Uses the DawnStakingManager's createDawnWithdrawalTransaction to create a transaction that spends from the timelock output, which includes both the original stake and any accumulated rewards, as well as anything left over at the escrow address.
+Uses the DawnStakingManager's createWithdrawalTransaction to create a transaction that spends from the timelock output, which includes both the original stake and any accumulated rewards, as well as anything left over at the escrow address.
 
 ```ts
-export interface DawnWithdrawalParams {
+export interface WithdrawalParams {
   /** Array of escrow inputs to withdraw from (optional - will fetch all UTXOs from escrow address if not provided) */
   escrowInputs?: UTXO[];
   /** Escrow script address (optional - will be calculated from escrowRedeemScript if not provided) */
@@ -252,7 +252,7 @@ flowchart LR
 
     Backend --> RedeemScript[Escrow, Timelock Redeem Scripts]
     Backend -.-> Addresses(Timelock, Escrow Addresses)
-    RedeemScript --> MkTx{createDawnWithdrawalTransaction}
+    RedeemScript --> MkTx{createWithdrawalTransaction}
 
     MkTx --> Selection[Input Selection]
     MkTx -.-> Addresses

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview BTCLocker modular components
  */
 
@@ -7,19 +7,19 @@ import { KeyPairGenerator } from "./keypair";
 import { TransactionManager } from "./transaction-manager";
 import { ScriptManager } from "./script-manager";
 import {
-  DawnStakingParams,
-  DawnStakingWithScriptParams,
-  DawnStakingCalculationParams,
-  DawnWithdrawalParams,
-  DawnStakingCalculationResult,
-  EscrowSpendingParams,
+  DepositParams,
+  DepositWithScriptParams,
+  DepositCalculationParams,
+  WithdrawalParams,
+  DepositCalculationResult,
+  ClaimParams,
   SpendingTransactionParams,
   FundingTransactionParams,
 } from "./transactions";
 import { KeyPair, ScriptInfo } from "../types";
 import { NETWORKS, type NetworkType } from "../utils/network";
 import BitcoinAPI from "../bitcoin-api";
-import { YieldDistributionParams } from "..";
+import { DistributionParams } from "..";
 
 /**
  * Combined BTCLocker class that includes all functionality
@@ -236,7 +236,7 @@ export class BTCLocker extends BTCLockerCore {
    * @example
    * const locker = new BTCLocker();
    * // Spend before deadline
-   * const tx = await locker.createEscrowSpendingTransaction(
+   * const tx = await locker.createClaimTransaction(
    *   scriptData,
    *   utxoTxId,
    *   0,
@@ -253,7 +253,7 @@ export class BTCLocker extends BTCLockerCore {
    * @returns Unsigned transaction as base64 PSBT
    * @example
    * const locker = new BTCLocker();
-   * const unsignedTx = await locker.createEscrowSpendingTransaction({
+   * const unsignedTx = await locker.createClaimTransaction({
    *   scriptData,
    *   utxoTxId,
    *   utxoIndex: 0,
@@ -262,10 +262,10 @@ export class BTCLocker extends BTCLockerCore {
    *   spendAfterDeadline: false
    * });
    */
-  async createEscrowSpendingTransaction(
-    params: EscrowSpendingParams,
+  async createClaimTransaction(
+    params: ClaimParams,
   ): Promise<string> {
-    return this.transactionManager.createEscrowSpendingTransaction(params);
+    return this.transactionManager.createClaimTransaction(params);
   }
 
   /**
@@ -276,15 +276,15 @@ export class BTCLocker extends BTCLockerCore {
    * @throws If insufficient funds or invalid parameters
    * @example
    * const locker = new BTCLocker();
-   * const unsignedTx = await locker.distributeYield({
+   * const unsignedTx = await locker.createDistributionTransaction({
    *   inputs: [{ txid: '...', vout: 0, value: 50000 }],
    *   timelockAddress: '3...',
    *   amount: 45000,
    *   memo: 'Quarterly yield distribution'
    * });
    */
-  async distributeYield(params: YieldDistributionParams): Promise<string> {
-    return this.transactionManager.distributeYield(params);
+  async createDistributionTransaction(params: DistributionParams): Promise<string> {
+    return this.transactionManager.createDistributionTransaction(params);
   }
 
   /**
@@ -294,7 +294,7 @@ export class BTCLocker extends BTCLockerCore {
    * @returns Unsigned transaction as base64 PSBT
    * @example
    * const locker = new BTCLocker();
-   * const unsignedTx = await locker.createDawnStakingTransaction({
+   * const unsignedTx = await locker.createDepositTransaction({
    *   inputs: [{ txid: '...', vout: 0, value: 500000 }],
    *   escrowAddress: '3ABC123...',
    *   escrowAmount: 100000,
@@ -302,10 +302,10 @@ export class BTCLocker extends BTCLockerCore {
    *   timelockAmount: 200000
    * });
    */
-  async createDawnStakingTransaction(
-    params: DawnStakingParams,
+  async createDepositTransaction(
+    params: DepositParams,
   ): Promise<string> {
-    return this.transactionManager.createDawnStakingTransaction(params);
+    return this.transactionManager.createDepositTransaction(params);
   }
 
   /**
@@ -316,7 +316,7 @@ export class BTCLocker extends BTCLockerCore {
    * @example
    * const locker = new BTCLocker();
    * const timelockScript = await locker.createTimelockScript(locktime, publicKey);
-   * const unsignedPsbt = await locker.createDawnStakingTransactionWithScript({
+   * const unsignedPsbt = await locker.createDepositTransactionWithScript({
    *   inputs: [{ txid: '...', vout: 0, value: 500000 }],
    *   escrowAddress: '3ABC123...',
    *   escrowAmount: 100000,
@@ -324,10 +324,10 @@ export class BTCLocker extends BTCLockerCore {
    *   timelockAmount: 200000
    * });
    */
-  async createDawnStakingTransactionWithScript(
-    params: DawnStakingWithScriptParams,
+  async createDepositTransactionWithScript(
+    params: DepositWithScriptParams,
   ): Promise<string> {
-    return this.transactionManager.createDawnStakingTransactionWithScript(
+    return this.transactionManager.createDepositTransactionWithScript(
       params,
     );
   }
@@ -335,20 +335,20 @@ export class BTCLocker extends BTCLockerCore {
   /**
    * Calculate optimal amounts for Dawn staking
    * @async
-   * @param {DawnStakingCalculationParams} params - Calculation parameters
-   * @returns {Promise<DawnStakingCalculationResult>} Calculation results
+   * @param {DepositCalculationParams} params - Calculation parameters
+   * @returns {Promise<DepositCalculationResult>} Calculation results
    * @example
    * const locker = new BTCLocker();
-   * const calculation = await locker.calculateDawnStakingAmounts({
+   * const calculation = await locker.calculateDepositAmounts({
    *   inputs: [{ value: 500000 }],
    *   desiredEscrowAmount: 100000,
    *   desiredTimelockAmount: 200000
    * });
    */
-  async calculateDawnStakingAmounts(
-    params: DawnStakingCalculationParams,
-  ): Promise<DawnStakingCalculationResult> {
-    return this.transactionManager.calculateDawnStakingAmounts(params);
+  async calculateDepositAmounts(
+    params: DepositCalculationParams,
+  ): Promise<DepositCalculationResult> {
+    return this.transactionManager.calculateDepositAmounts(params);
   }
 
   /**
@@ -359,17 +359,17 @@ export class BTCLocker extends BTCLockerCore {
    * @throws If insufficient funds or invalid parameters
    * @example
    * const locker = new BTCLocker();
-   * const unsignedTx = await locker.createDawnWithdrawalTransaction({
+   * const unsignedTx = await locker.createWithdrawalTransaction({
    *   escrowInputs: [{ txid: '...', vout: 0, value: 100000, redeemScript: '...' }],
    *   timelockInputs: [{ txid: '...', vout: 0, value: 200000, redeemScript: '...' }],
    *   destination: 'tb1q...',
    *   feeAmount: 2000
    * });
    */
-  async createDawnWithdrawalTransaction(
-    params: DawnWithdrawalParams,
+  async createWithdrawalTransaction(
+    params: WithdrawalParams,
   ): Promise<string> {
-    return this.transactionManager.createDawnWithdrawalTransaction(params);
+    return this.transactionManager.createWithdrawalTransaction(params);
   }
 
   /**
@@ -446,19 +446,19 @@ export type {
 } from "./transactions";
 
 export type {
-  DawnStakingParams,
-  DawnStakingWithScriptParams,
-  DawnStakingCalculationParams,
-  DawnWithdrawalParams,
-  DawnWithdrawalResult,
-  DawnStakingResult,
-  DawnStakingWithScriptResult,
-  EscrowSpendingParams,
+  DepositParams,
+  DepositWithScriptParams,
+  DepositCalculationParams,
+  WithdrawalParams,
+  WithdrawalResult,
+  DepositResult,
+  DepositWithScriptResult,
+  ClaimParams,
 } from "./transactions";
 
 export type {
-  YieldDistributionParams,
-  YieldDistributionResult,
+  DistributionParams,
+  DistributionResult,
 } from "./transactions";
 
 export default BTCLocker;

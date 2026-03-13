@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, vi } from "vitest";
+﻿import { describe, test, expect, beforeAll, vi } from "vitest";
 import { TransactionManager } from "../src/locker/transaction-manager";
 import { NETWORKS } from "../src/utils/network";
 import * as bitcoin from "bitcoinjs-lib";
@@ -36,10 +36,10 @@ describe("TransactionManager (Dawn Staking)", () => {
     await manager.init();
   });
 
-  describe("createDawnStakingTransaction", () => {
+  describe("createDepositTransaction", () => {
     test("should throw for empty inputs array", async () => {
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           inputs: [],
           sourceAddress: testAddress,
           escrowAddress: testAddress,
@@ -53,7 +53,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw when feeAddress given without protocolFeeAmount", async () => {
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
           sourceAddress: testAddress,
           escrowAddress: testAddress,
@@ -70,7 +70,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw when protocolFeeAmount given without feeAddress", async () => {
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
           sourceAddress: testAddress,
           escrowAddress: testAddress,
@@ -87,7 +87,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for non-string escrowAddress", async () => {
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
           sourceAddress: testAddress,
           escrowAddress: 12345 as any,
@@ -101,7 +101,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for non-positive escrowAmount", async () => {
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
           sourceAddress: testAddress,
           escrowAddress: testAddress,
@@ -115,7 +115,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for non-string timelockAddress", async () => {
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
           sourceAddress: testAddress,
           escrowAddress: testAddress,
@@ -129,7 +129,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for non-positive timelockAmount", async () => {
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
           sourceAddress: testAddress,
           escrowAddress: testAddress,
@@ -143,7 +143,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for invalid input values", async () => {
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           inputs: [{ txid: "a".repeat(64), vout: 0, value: -100 }],
           sourceAddress: testAddress,
           escrowAddress: testAddress,
@@ -157,7 +157,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for insufficient funds", async () => {
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           inputs: [{ txid: "a".repeat(64), vout: 0, value: 1000 }],
           sourceAddress: testAddress,
           escrowAddress: testAddress,
@@ -171,7 +171,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for below dust threshold escrow amount", async () => {
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           inputs: [{ txid: "a".repeat(64), vout: 0, value: 5000000 }],
           sourceAddress: testAddress,
           escrowAddress: testAddress,
@@ -185,7 +185,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for below dust threshold timelock amount", async () => {
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           inputs: [{ txid: "a".repeat(64), vout: 0, value: 5000000 }],
           sourceAddress: testAddress,
           escrowAddress: testAddress,
@@ -199,7 +199,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for below dust threshold protocol fee", async () => {
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           inputs: [{ txid: "a".repeat(64), vout: 0, value: 5000000 }],
           sourceAddress: testAddress,
           escrowAddress: testAddress,
@@ -214,10 +214,10 @@ describe("TransactionManager (Dawn Staking)", () => {
     });
   });
 
-  describe("createDawnStakingTransactionWithScript", () => {
+  describe("createDepositTransactionWithScript", () => {
     test("should throw for invalid timelockScript", async () => {
       await expect(
-        manager.createDawnStakingTransactionWithScript({
+        manager.createDepositTransactionWithScript({
           timelockScript: null as any,
           inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
           sourceAddress: testAddress,
@@ -231,7 +231,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for timelockScript without address", async () => {
       await expect(
-        manager.createDawnStakingTransactionWithScript({
+        manager.createDepositTransactionWithScript({
           timelockScript: {
             redeemScript: "abc",
             scriptHash: "def",
@@ -248,9 +248,9 @@ describe("TransactionManager (Dawn Staking)", () => {
     });
   });
 
-  describe("calculateDawnStakingAmounts", () => {
+  describe("calculateDepositAmounts", () => {
     test("should calculate amounts with provided inputs", async () => {
-      const result = await manager.calculateDawnStakingAmounts({
+      const result = await manager.calculateDepositAmounts({
         sourceAddress: testAddress,
         inputs: [{ value: 500000 }],
         desiredEscrowAmount: 100000,
@@ -267,7 +267,7 @@ describe("TransactionManager (Dawn Staking)", () => {
     });
 
     test("should detect insufficient funds", async () => {
-      const result = await manager.calculateDawnStakingAmounts({
+      const result = await manager.calculateDepositAmounts({
         sourceAddress: testAddress,
         inputs: [{ value: 1000 }],
         desiredEscrowAmount: 100000,
@@ -279,7 +279,7 @@ describe("TransactionManager (Dawn Staking)", () => {
     });
 
     test("should detect below dust threshold escrow", async () => {
-      const result = await manager.calculateDawnStakingAmounts({
+      const result = await manager.calculateDepositAmounts({
         sourceAddress: testAddress,
         inputs: [{ value: 500000 }],
         desiredEscrowAmount: 100,
@@ -291,7 +291,7 @@ describe("TransactionManager (Dawn Staking)", () => {
     });
 
     test("should detect below dust threshold timelock", async () => {
-      const result = await manager.calculateDawnStakingAmounts({
+      const result = await manager.calculateDepositAmounts({
         sourceAddress: testAddress,
         inputs: [{ value: 500000 }],
         desiredEscrowAmount: 100000,
@@ -304,7 +304,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for non-positive escrow amount", async () => {
       await expect(
-        manager.calculateDawnStakingAmounts({
+        manager.calculateDepositAmounts({
           sourceAddress: testAddress,
           inputs: [{ value: 500000 }],
           desiredEscrowAmount: 0,
@@ -315,7 +315,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for non-positive timelock amount", async () => {
       await expect(
-        manager.calculateDawnStakingAmounts({
+        manager.calculateDepositAmounts({
           sourceAddress: testAddress,
           inputs: [{ value: 500000 }],
           desiredEscrowAmount: 100000,
@@ -326,7 +326,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw for non-array inputs", async () => {
       await expect(
-        manager.calculateDawnStakingAmounts({
+        manager.calculateDepositAmounts({
           sourceAddress: testAddress,
           inputs: "bad" as any,
           desiredEscrowAmount: 100000,
@@ -336,7 +336,7 @@ describe("TransactionManager (Dawn Staking)", () => {
     });
 
     test("should calculate with include change and protocol fee", async () => {
-      const result = await manager.calculateDawnStakingAmounts({
+      const result = await manager.calculateDepositAmounts({
         sourceAddress: testAddress,
         inputs: [{ value: 500000 }],
         desiredEscrowAmount: 100000,
@@ -350,7 +350,7 @@ describe("TransactionManager (Dawn Staking)", () => {
     });
 
     test("should detect below dust protocol fee", async () => {
-      const result = await manager.calculateDawnStakingAmounts({
+      const result = await manager.calculateDepositAmounts({
         sourceAddress: testAddress,
         inputs: [{ value: 500000 }],
         desiredEscrowAmount: 100000,
@@ -363,10 +363,10 @@ describe("TransactionManager (Dawn Staking)", () => {
     });
   });
 
-  describe("createDawnWithdrawalTransaction", () => {
+  describe("createWithdrawalTransaction", () => {
     test("should throw when no inputs at all", async () => {
       await expect(
-        manager.createDawnWithdrawalTransaction({
+        manager.createWithdrawalTransaction({
           escrowInputs: [],
           escrowRedeemScript: "00",
           timelockInputs: [],
@@ -379,7 +379,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw when feeAddress given without protocolFeeAmount", async () => {
       await expect(
-        manager.createDawnWithdrawalTransaction({
+        manager.createWithdrawalTransaction({
           escrowInputs: [{ txid: "a".repeat(64), vout: 0, value: 100000 }],
           escrowRedeemScript: "00",
           timelockInputs: [],
@@ -395,7 +395,7 @@ describe("TransactionManager (Dawn Staking)", () => {
 
     test("should throw when protocolFeeAmount given without feeAddress", async () => {
       await expect(
-        manager.createDawnWithdrawalTransaction({
+        manager.createWithdrawalTransaction({
           escrowInputs: [{ txid: "a".repeat(64), vout: 0, value: 100000 }],
           escrowRedeemScript: "00",
           timelockInputs: [],
@@ -443,9 +443,9 @@ describe("TransactionManager (mocked fees)", () => {
     await manager.init();
   });
 
-  describe("createDawnStakingTransaction (happy path)", () => {
+  describe("createDepositTransaction (happy path)", () => {
     test("should create PSBT with escrow and timelock outputs", async () => {
-      const result = await manager.createDawnStakingTransaction({
+      const result = await manager.createDepositTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 5000000 }],
         sourceAddress: testAddress,
         escrowAddress: testAddress,
@@ -466,7 +466,7 @@ describe("TransactionManager (mocked fees)", () => {
     });
 
     test("should include protocol fee output", async () => {
-      const result = await manager.createDawnStakingTransaction({
+      const result = await manager.createDepositTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 5000000 }],
         sourceAddress: testAddress,
         escrowAddress: testAddress,
@@ -485,7 +485,7 @@ describe("TransactionManager (mocked fees)", () => {
     });
 
     test("should include change output", async () => {
-      const result = await manager.createDawnStakingTransaction({
+      const result = await manager.createDepositTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 5000000 }],
         sourceAddress: testAddress,
         escrowAddress: testAddress,
@@ -504,7 +504,7 @@ describe("TransactionManager (mocked fees)", () => {
     });
 
     test("should include metadata output", async () => {
-      const result = await manager.createDawnStakingTransaction({
+      const result = await manager.createDepositTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 5000000 }],
         sourceAddress: testAddress,
         escrowAddress: testAddress,
@@ -527,7 +527,7 @@ describe("TransactionManager (mocked fees)", () => {
     });
 
     test("should handle multiple inputs", async () => {
-      const result = await manager.createDawnStakingTransaction({
+      const result = await manager.createDepositTransaction({
         inputs: [
           { txid: "a".repeat(64), vout: 0, value: 200000 },
           { txid: "b".repeat(64), vout: 1, value: 300000 },
@@ -547,9 +547,9 @@ describe("TransactionManager (mocked fees)", () => {
     });
   });
 
-  describe("createDawnStakingTransactionWithScript (happy path)", () => {
+  describe("createDepositTransactionWithScript (happy path)", () => {
     test("should create PSBT using timelockScript address", async () => {
-      const result = await manager.createDawnStakingTransactionWithScript({
+      const result = await manager.createDepositTransactionWithScript({
         timelockScript: {
           address: testAddress2,
           redeemScript: "aabb",
@@ -572,7 +572,7 @@ describe("TransactionManager (mocked fees)", () => {
     });
   });
 
-  describe("createDawnWithdrawalTransaction (happy path)", () => {
+  describe("createWithdrawalTransaction (happy path)", () => {
     test("should create withdrawal with escrow inputs only", async () => {
       const ecc = (tinysecp as any).default || tinysecp;
       const ECPair = ECPairFactory(ecc);
@@ -602,7 +602,7 @@ describe("TransactionManager (mocked fees)", () => {
 
       vi.spyOn(manager.api, "getTransaction").mockResolvedValue(prevTxHex);
 
-      const result = await manager.createDawnWithdrawalTransaction({
+      const result = await manager.createWithdrawalTransaction({
         escrowInputs: [{ txid: prevTxId, vout: 0, value: 100000 }],
         escrowRedeemScript: Buffer.from(redeemScript).toString("hex"),
         timelockInputs: [],
@@ -654,7 +654,7 @@ describe("TransactionManager (mocked fees)", () => {
         },
       );
 
-      const result = await manager.createDawnWithdrawalTransaction({
+      const result = await manager.createWithdrawalTransaction({
         escrowInputs: [{ txid: prevTx1.getId(), vout: 0, value: 100000 }],
         escrowRedeemScript: Buffer.from(redeemScript).toString("hex"),
         timelockInputs: [{ txid: prevTx2.getId(), vout: 0, value: 200000 }],
@@ -694,7 +694,7 @@ describe("TransactionManager (mocked fees)", () => {
 
       vi.spyOn(manager.api, "getTransaction").mockResolvedValue(prevTx.toHex());
 
-      const result = await manager.createDawnWithdrawalTransaction({
+      const result = await manager.createWithdrawalTransaction({
         escrowInputs: [{ txid: prevTx.getId(), vout: 0, value: 500000 }],
         escrowRedeemScript: Buffer.from(redeemScript).toString("hex"),
         timelockInputs: [],
@@ -736,7 +736,7 @@ describe("TransactionManager (mocked fees)", () => {
 
       vi.spyOn(manager.api, "getTransaction").mockResolvedValue(prevTx.toHex());
 
-      const result = await manager.createDawnWithdrawalTransaction({
+      const result = await manager.createWithdrawalTransaction({
         escrowInputs: [{ txid: prevTx.getId(), vout: 0, value: 500000 }],
         escrowRedeemScript: Buffer.from(redeemScript).toString("hex"),
         timelockInputs: [],
@@ -760,7 +760,7 @@ describe("TransactionManager (mocked fees)", () => {
       const redeemScript = Buffer.from("00", "hex");
 
       await expect(
-        manager.createDawnWithdrawalTransaction({
+        manager.createWithdrawalTransaction({
           escrowInputs: [{ txid: "a".repeat(64), vout: 0, value: 600 }],
           escrowRedeemScript: redeemScript.toString("hex"),
           timelockInputs: [],
@@ -785,7 +785,7 @@ describe("TransactionManager (mocked fees)", () => {
       ]);
 
       await expect(
-        manager.createDawnWithdrawalTransaction({
+        manager.createWithdrawalTransaction({
           escrowInputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
           escrowRedeemScript: Buffer.from(redeemScript).toString("hex"),
           timelockInputs: [],
@@ -839,7 +839,7 @@ describe("TransactionManager (mocked fees)", () => {
 
       vi.spyOn(manager.api, "getTransaction").mockResolvedValue(prevTx.toHex());
 
-      const result = await manager.createDawnWithdrawalTransaction({
+      const result = await manager.createWithdrawalTransaction({
         escrowInputs: [{ txid: prevTx.getId(), vout: 0, value: 100000 }],
         escrowRedeemScript: Buffer.from(escrowRedeemScript).toString("hex"),
         timelockInputs: [],
@@ -864,7 +864,7 @@ describe("TransactionManager (mocked fees)", () => {
       const timelockRedeemScript = Buffer.from("00", "hex");
 
       await expect(
-        manager.createDawnWithdrawalTransaction({
+        manager.createWithdrawalTransaction({
           escrowInputs: [{ txid: "a".repeat(64), vout: 0, value: 100000 }],
           escrowRedeemScript: escrowRedeemScript.toString("hex"),
           timelockInputs: [],
@@ -888,7 +888,7 @@ describe("TransactionManager (mocked fees)", () => {
       const escrowRedeemScript = Buffer.from("00", "hex");
 
       await expect(
-        manager.createDawnWithdrawalTransaction({
+        manager.createWithdrawalTransaction({
           escrowInputs: [{ txid: "a".repeat(64), vout: 0, value: 100000 }],
           escrowRedeemScript: escrowRedeemScript.toString("hex"),
           timelockInputs: [],
@@ -951,7 +951,7 @@ describe("TransactionManager (mocked fees)", () => {
         network: bitcoin.networks.testnet,
       });
 
-      const result = await manager.createDawnWithdrawalTransaction({
+      const result = await manager.createWithdrawalTransaction({
         escrowInputs: [],
         escrowAddress: escrowP2sh.address!,
         escrowRedeemScript: Buffer.from(escrowRedeemScript).toString("hex"),
@@ -983,7 +983,7 @@ describe("TransactionManager (mocked fees)", () => {
         },
       ]);
 
-      const result = await manager.createDawnStakingTransaction({
+      const result = await manager.createDepositTransaction({
         sourceAddress: testAddress,
         escrowAddress: testAddress,
         escrowAmount: 100000,
@@ -1010,7 +1010,7 @@ describe("TransactionManager (mocked fees)", () => {
       ]);
 
       await expect(
-        manager.createDawnStakingTransaction({
+        manager.createDepositTransaction({
           sourceAddress: testAddress,
           escrowAddress: testAddress,
           escrowAmount: 100000,
@@ -1021,7 +1021,7 @@ describe("TransactionManager (mocked fees)", () => {
       ).rejects.toThrow("No confirmed UTXOs available");
     });
 
-    test("should auto-select UTXOs for calculateDawnStakingAmounts", async () => {
+    test("should auto-select UTXOs for calculateDepositAmounts", async () => {
       vi.spyOn(manager.api, "getAddressUtxos").mockResolvedValue([
         {
           txid: "f".repeat(64),
@@ -1031,7 +1031,7 @@ describe("TransactionManager (mocked fees)", () => {
         },
       ]);
 
-      const result = await manager.calculateDawnStakingAmounts({
+      const result = await manager.calculateDepositAmounts({
         sourceAddress: testAddress,
         desiredEscrowAmount: 100000,
         desiredTimelockAmount: 200000,
@@ -1051,7 +1051,7 @@ describe("TransactionManager (mocked fees)", () => {
         },
       ]);
 
-      const result = await manager.calculateDawnStakingAmounts({
+      const result = await manager.calculateDepositAmounts({
         sourceAddress: testAddress,
         desiredEscrowAmount: 100000,
         desiredTimelockAmount: 200000,
@@ -1105,7 +1105,7 @@ describe("TransactionManager (mocked fees)", () => {
         },
       );
 
-      const result = await manager.createDawnWithdrawalTransaction({
+      const result = await manager.createWithdrawalTransaction({
         escrowRedeemScript: Buffer.from(redeemScript).toString("hex"),
         timelockInputs: [{ txid: prevTx2.getId(), vout: 0, value: 200000 }],
         timelockRedeemScript: Buffer.from(redeemScript).toString("hex"),
@@ -1124,7 +1124,7 @@ describe("TransactionManager (mocked fees)", () => {
       );
 
       await expect(
-        manager.createDawnWithdrawalTransaction({
+        manager.createWithdrawalTransaction({
           escrowRedeemScript: redeemScript.toString("hex"),
           timelockInputs: [{ txid: "j".repeat(64), vout: 0, value: 200000 }],
           timelockRedeemScript: redeemScript.toString("hex"),

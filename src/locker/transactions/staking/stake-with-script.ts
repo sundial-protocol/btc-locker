@@ -1,15 +1,15 @@
-import type { LockerContext } from "../../core";
-import { createDawnStakingTransaction, DawnStakingParams } from "./stake";
-import { DawnStakingResult, ScriptInfo } from "../../..";
+﻿import type { LockerContext } from "../../core";
+import { createDepositTransaction, DepositParams } from "./stake";
+import { DepositResult, ScriptInfo } from "../../..";
 
 /**
  * Parameters for Dawn staking with script data
- * @interface DawnStakingWithScriptParams
+ * @interface DepositWithScriptParams
  * @description Configuration for creating Dawn staking transactions with provided timelock script information
- * @extends Omit<DawnStakingParams, 'timelockAddress'>
+ * @extends Omit<DepositParams, 'timelockAddress'>
  */
-export interface DawnStakingWithScriptParams extends Omit<
-  DawnStakingParams,
+export interface DepositWithScriptParams extends Omit<
+  DepositParams,
   "timelockAddress"
 > {
   /** Timelock script information object */
@@ -18,11 +18,11 @@ export interface DawnStakingWithScriptParams extends Omit<
 
 /**
  * Result of Dawn staking transaction with script information
- * @interface DawnStakingWithScriptResult
+ * @interface DepositWithScriptResult
  * @description Dawn staking transaction result with additional timelock script details
- * @extends DawnStakingResult
+ * @extends DepositResult
  */
-export interface DawnStakingWithScriptResult extends DawnStakingResult {
+export interface DepositWithScriptResult extends DepositResult {
   /** Timelock script details */
   timelockScript: {
     /** Timelock script address */
@@ -34,9 +34,9 @@ export interface DawnStakingWithScriptResult extends DawnStakingResult {
   };
 }
 
-export async function createDawnStakingTransactionWithScript(
+export async function createDepositTransactionWithScript(
   ctx: LockerContext,
-  params: DawnStakingWithScriptParams,
+  params: DepositWithScriptParams,
 ): Promise<string> {
   const { timelockScript, ...otherParams } = params;
 
@@ -48,10 +48,10 @@ export async function createDawnStakingTransactionWithScript(
     throw new Error("timelockScript must have an address property");
   }
 
-  const txParams: DawnStakingParams = {
+  const txParams: DepositParams = {
     ...otherParams,
     timelockAddress: timelockScript.address,
   };
 
-  return await createDawnStakingTransaction(ctx, txParams);
+  return await createDepositTransaction(ctx, txParams);
 }

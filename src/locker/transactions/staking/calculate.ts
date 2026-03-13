@@ -1,12 +1,12 @@
-import type { LockerContext } from "../../core";
+﻿import type { LockerContext } from "../../core";
 import { TransactionUtils } from "../../../utils";
 
 /**
  * Parameters for Dawn staking amount calculation
- * @interface DawnStakingCalculationParams
+ * @interface DepositCalculationParams
  * @description Configuration for calculating optimal Dawn staking amounts and fees
  */
-export interface DawnStakingCalculationParams {
+export interface DepositCalculationParams {
   /** Array of available inputs with their values (optional - will fetch from address if not provided) */
   inputs?: Array<{ value: number }>;
   /** Source address for automatic UTXO fetching (required if inputs not provided) */
@@ -27,10 +27,10 @@ export interface DawnStakingCalculationParams {
 
 /**
  * Result of Dawn staking amount calculation
- * @interface DawnStakingCalculationResult
+ * @interface DepositCalculationResult
  * @description Calculation results for optimal Dawn staking amounts and feasibility
  */
-export interface DawnStakingCalculationResult {
+export interface DepositCalculationResult {
   /** Total input value in satoshis */
   totalInputValue: number;
   /** Estimated transaction fee in satoshis */
@@ -45,10 +45,10 @@ export interface DawnStakingCalculationResult {
   recommendation?: string;
 }
 
-export async function calculateDawnStakingAmounts(
+export async function calculateDepositAmounts(
   ctx: LockerContext,
-  params: DawnStakingCalculationParams,
-): Promise<DawnStakingCalculationResult> {
+  params: DepositCalculationParams,
+): Promise<DepositCalculationResult> {
   const {
     inputs: providedInputs,
     sourceAddress,

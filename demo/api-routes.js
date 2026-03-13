@@ -1,4 +1,4 @@
-/**
+﻿/**
  * API Routes for BTC Locker with Swagger documentation
  */
 import express from "express";
@@ -666,7 +666,7 @@ router.post(
       const locker = new BTCLocker(networkObj);
       await locker.init();
 
-      const transaction = await locker.distributeYield({
+      const transaction = await locker.createDistributionTransaction({
         inputs,
         timelockAddress,
         amount,
@@ -876,7 +876,7 @@ router.post(
       const locker = new BTCLocker(networkObj);
       await locker.init();
 
-      const transaction = await locker.createEscrowSpendingTransaction({
+      const transaction = await locker.createClaimTransaction({
         scriptData,
         utxoTxId,
         utxoIndex,
@@ -965,7 +965,7 @@ router.post(
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/DawnStakingResult'
+ *               $ref: '#/components/schemas/DepositResult'
  *       400:
  *         description: Invalid parameters or insufficient funds
  *       500:
@@ -1013,7 +1013,7 @@ router.post(
       const locker = new BTCLocker(networkObj);
       await locker.init();
 
-      const transaction = await locker.createDawnStakingTransaction({
+      const transaction = await locker.createDepositTransaction({
         inputs,
         sourceAddress,
         escrowAddress,
@@ -1138,7 +1138,7 @@ router.post(
       const locker = new BTCLocker(networkObj);
       await locker.init();
 
-      const calculation = await locker.calculateDawnStakingAmounts({
+      const calculation = await locker.calculateDepositAmounts({
         inputs,
         sourceAddress,
         desiredEscrowAmount,
@@ -1278,7 +1278,7 @@ router.post(
       const locker = new BTCLocker(networkObj);
       await locker.init();
 
-      const transaction = await locker.createDawnWithdrawalTransaction({
+      const transaction = await locker.createWithdrawalTransaction({
         escrowInputs,
         escrowAddress,
         escrowRedeemScript,

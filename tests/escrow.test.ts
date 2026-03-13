@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview Vitest tests for EscrowManager
  */
 
@@ -155,7 +155,7 @@ describe("EscrowManager", () => {
       const currentTime = (deadline - 3600) * 1000; // 1 hour before deadline, in milliseconds
       const mockTx = createMockTransaction();
 
-      const result = await txManager.createEscrowSpendingTransaction({
+      const result = await txManager.createClaimTransaction({
         scriptData,
         utxoTxId,
         utxoIndex,
@@ -175,7 +175,7 @@ describe("EscrowManager", () => {
       const currentTime = (deadline + 3600) * 1000; // 1 hour after deadline, in milliseconds
       const mockTx = createMockTransaction();
 
-      const result = await txManager.createEscrowSpendingTransaction({
+      const result = await txManager.createClaimTransaction({
         scriptData,
         utxoTxId,
         utxoIndex,
@@ -195,9 +195,9 @@ describe("EscrowManager", () => {
       const currentTime = deadline - 1800;
       const mockTx = createMockTransaction();
 
-      // Note: The createEscrowSpendingTransaction method doesn't validate private keys
+      // Note: The createClaimTransaction method doesn't validate private keys
       // That validation happens during signing. This test should pass since we're only creating unsigned tx.
-      const result = await txManager.createEscrowSpendingTransaction({
+      const result = await txManager.createClaimTransaction({
         scriptData,
         utxoTxId,
         utxoIndex,
@@ -216,9 +216,9 @@ describe("EscrowManager", () => {
       const currentTime = (deadline + 1800) * 1000; // in milliseconds
       const mockTx = createMockTransaction();
 
-      // Note: The createEscrowSpendingTransaction method doesn't validate private keys
+      // Note: The createClaimTransaction method doesn't validate private keys
       // That validation happens during signing. This test should pass since we're only creating unsigned tx.
-      const result = await txManager.createEscrowSpendingTransaction({
+      const result = await txManager.createClaimTransaction({
         scriptData,
         utxoTxId,
         utxoIndex,
@@ -238,7 +238,7 @@ describe("EscrowManager", () => {
       const mockTx = createMockTransaction();
 
       await expect(
-        txManager.createEscrowSpendingTransaction({
+        txManager.createClaimTransaction({
           scriptData,
           utxoTxId,
           utxoIndex,
@@ -255,10 +255,10 @@ describe("EscrowManager", () => {
       const spendAfterDeadline = false;
       const currentTime = deadline - 1800;
       const mockTx = createMockTransaction();
-      // Note: Private keys are not used in createEscrowSpendingTransaction anymore
+      // Note: Private keys are not used in createClaimTransaction anymore
       // They are used in signing step. This test now just verifies unsigned tx creation.
 
-      const result = await txManager.createEscrowSpendingTransaction({
+      const result = await txManager.createClaimTransaction({
         scriptData,
         utxoTxId,
         utxoIndex,
@@ -279,7 +279,7 @@ describe("EscrowManager", () => {
       const mockTx = createMockTransaction();
 
       await expect(
-        txManager.createEscrowSpendingTransaction({
+        txManager.createClaimTransaction({
           scriptData,
           utxoTxId,
           utxoIndex,
@@ -299,7 +299,7 @@ describe("EscrowManager", () => {
       const mockTx = createMockTransaction();
 
       await expect(
-        txManager.createEscrowSpendingTransaction({
+        txManager.createClaimTransaction({
           scriptData,
           utxoTxId,
           utxoIndex,
@@ -319,7 +319,7 @@ describe("EscrowManager", () => {
       const mockTx = createMockTransaction();
 
       await expect(
-        txManager.createEscrowSpendingTransaction({
+        txManager.createClaimTransaction({
           scriptData,
           utxoTxId: invalidTxId,
           utxoIndex,
@@ -357,7 +357,7 @@ describe("EscrowManager", () => {
       );
 
       // Should be able to spend after deadline immediately
-      const result = await txManager.createEscrowSpendingTransaction({
+      const result = await txManager.createClaimTransaction({
         scriptData,
         utxoTxId: "a".repeat(64),
         utxoIndex: 0,

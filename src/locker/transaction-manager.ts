@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview Thin facade over per-file transaction functions
  * @description Each transaction type lives in its own file under ./transactions/.
  * This class delegates to those functions, passing itself as the shared context.
@@ -6,21 +6,21 @@
 
 import { BTCLockerCore } from "./core";
 import {
-  createDawnStakingTransaction,
-  createDawnStakingTransactionWithScript,
-  calculateDawnStakingAmounts,
-  createDawnWithdrawalTransaction,
-  createEscrowSpendingTransaction,
-  distributeYield,
+  createDepositTransaction,
+  createDepositTransactionWithScript,
+  calculateDepositAmounts,
+  createWithdrawalTransaction,
+  createClaimTransaction,
+  createDistributionTransaction,
   createSpendingTransaction,
   createFundingTransaction,
-  EscrowSpendingParams,
-  DawnStakingCalculationParams,
-  DawnStakingCalculationResult,
-  DawnWithdrawalParams,
-  DawnStakingParams,
-  DawnStakingWithScriptParams,
-  YieldDistributionParams,
+  ClaimParams,
+  DepositCalculationParams,
+  DepositCalculationResult,
+  WithdrawalParams,
+  DepositParams,
+  DepositWithScriptParams,
+  DistributionParams,
   SpendingTransactionParams,
   FundingTransactionParams,
 } from "./transactions";
@@ -31,36 +31,36 @@ import {
  * @extends BTCLockerCore
  */
 export class TransactionManager extends BTCLockerCore {
-  async createDawnStakingTransaction(p: DawnStakingParams) {
+  async createDepositTransaction(p: DepositParams) {
     await this.ensureInitialized();
-    return createDawnStakingTransaction(this, p);
+    return createDepositTransaction(this, p);
   }
 
-  async createDawnStakingTransactionWithScript(p: DawnStakingWithScriptParams) {
+  async createDepositTransactionWithScript(p: DepositWithScriptParams) {
     await this.ensureInitialized();
-    return createDawnStakingTransactionWithScript(this, p);
+    return createDepositTransactionWithScript(this, p);
   }
 
-  async calculateDawnStakingAmounts(
-    p: DawnStakingCalculationParams,
-  ): Promise<DawnStakingCalculationResult> {
+  async calculateDepositAmounts(
+    p: DepositCalculationParams,
+  ): Promise<DepositCalculationResult> {
     await this.ensureInitialized();
-    return calculateDawnStakingAmounts(this, p);
+    return calculateDepositAmounts(this, p);
   }
 
-  async createDawnWithdrawalTransaction(p: DawnWithdrawalParams) {
+  async createWithdrawalTransaction(p: WithdrawalParams) {
     await this.ensureInitialized();
-    return createDawnWithdrawalTransaction(this, p);
+    return createWithdrawalTransaction(this, p);
   }
 
-  async createEscrowSpendingTransaction(p: EscrowSpendingParams) {
+  async createClaimTransaction(p: ClaimParams) {
     await this.ensureInitialized();
-    return createEscrowSpendingTransaction(this, p);
+    return createClaimTransaction(this, p);
   }
 
-  async distributeYield(p: YieldDistributionParams) {
+  async createDistributionTransaction(p: DistributionParams) {
     await this.ensureInitialized();
-    return distributeYield(this, p);
+    return createDistributionTransaction(this, p);
   }
 
   async createSpendingTransaction(p: SpendingTransactionParams) {

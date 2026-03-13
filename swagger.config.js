@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Swagger configuration for BTC Locker API
  */
 import swaggerJsdoc from "swagger-jsdoc";
@@ -235,7 +235,7 @@ const options = {
             },
           },
         },
-        DawnStakingResult: {
+        DepositResult: {
           type: "object",
           properties: {
             hex: {

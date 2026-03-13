@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Main entry point for BTC Locker library
  */
 
@@ -51,33 +51,33 @@ export type { SundialMetadata } from "./utils/metadata";
 export type { ExtendedKeyPair } from "./locker/keypair";
 
 export type {
-  DawnStakingResult,
-  DawnStakingParams,
+  DepositResult,
+  DepositParams,
 } from "./locker/transactions/staking/stake";
 
 export type {
-  DawnStakingWithScriptResult,
-  DawnStakingWithScriptParams,
+  DepositWithScriptResult,
+  DepositWithScriptParams,
 } from "./locker/transactions/staking/stake-with-script";
 
 export type {
-  DawnStakingCalculationParams,
-  DawnStakingCalculationResult,
+  DepositCalculationParams,
+  DepositCalculationResult,
 } from "./locker/transactions/staking/calculate";
 
 export type {
-  DawnWithdrawalParams,
-  DawnWithdrawalResult,
+  WithdrawalParams,
+  WithdrawalResult,
 } from "./locker/transactions/user-withdrawal";
 
 export type {
-  EscrowSpendingParams,
-  EscrowSpendingResult,
+  ClaimParams,
+  ClaimResult,
 } from "./locker/transactions/escrow-spending";
 
 export type {
-  YieldDistributionParams,
-  YieldDistributionResult,
+  DistributionParams,
+  DistributionResult,
 } from "./locker/transactions/yield-distribution";
 
 export type {
