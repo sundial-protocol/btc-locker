@@ -1,14 +1,14 @@
 ﻿import * as bitcoin from "bitcoinjs-lib";
-import { FeeUtils } from "../../utils";
-import { FeePriorities } from "../../utils/fees";
-import MetadataUtils, { TxType } from "../../utils/metadata";
-import type { LockerContext } from "../core";
+import { FeeUtils } from "../../utils/index.js";
+import { FeePriorities } from "../../utils/fees.js";
+import MetadataUtils, { TxType } from "../../utils/metadata.js";
+import type { LockerContext } from "../core.js";
 import {
   BaseTransactionParams,
   TransactionResult,
   BitcoinAPI,
   UTXO,
-} from "../..";
+} from "../../index.js";
 
 /**
  * Parameters for yield distribution

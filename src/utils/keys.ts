@@ -4,7 +4,7 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import { ECPairInterface } from "ecpair";
-import { ECPairFactoryType } from "../types";
+import { ECPairFactoryType } from "../types.js";
 
 /**
  * Key validation and conversion utilities

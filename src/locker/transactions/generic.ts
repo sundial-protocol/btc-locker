@@ -3,13 +3,10 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { BTCLockerCore, LockerContext } from "../core";
-import type {
-  UTXO,
-  BaseTransactionParams,
-} from "../../types";
-import MetadataUtils from "../../utils/metadata";
-import BitcoinAPI from "../../bitcoin-api";
+import { BTCLockerCore, LockerContext } from "../core.js";
+import type { UTXO, BaseTransactionParams } from "../../types.js";
+import MetadataUtils from "../../utils/metadata.js";
+import BitcoinAPI from "../../bitcoin-api.js";
 
 /**
  * Transaction output specification

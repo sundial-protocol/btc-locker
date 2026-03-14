@@ -19,7 +19,7 @@
   },
   "scripts": {
     "build": "npm run build:esm && npm run build:cjs && webpack --mode production",
-    "build:esm": "tsc -p tsconfig.esm.json && node scripts/fix-imports.mjs",
+    "build:esm": "tsc -p tsconfig.esm.json",
     "build:cjs": "tsc -p tsconfig.build.json --module commonjs --outDir dist/cjs",
     "build:dev": "npm run build:esm && webpack --mode development",
     "build:watch": "tsc -p tsconfig.build.json --watch",

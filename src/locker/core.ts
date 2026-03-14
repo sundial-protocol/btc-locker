@@ -6,9 +6,9 @@ import * as bitcoin from "bitcoinjs-lib";
 import { BIP32Factory } from "bip32";
 import { ECPairFactory } from "ecpair";
 import tinysecp from "@bitcoinerlab/secp256k1";
-import type { ECCLib, InitializedECC } from "../types";
-import { NetworkType, NETWORKS } from "../utils/network";
-import BitcoinAPI from "../bitcoin-api";
+import type { ECCLib, InitializedECC } from "../types.js";
+import { NetworkType, NETWORKS } from "../utils/network.js";
+import BitcoinAPI from "../bitcoin-api.js";
 
 /** Shared context for transaction-building functions */
 export interface LockerContext {

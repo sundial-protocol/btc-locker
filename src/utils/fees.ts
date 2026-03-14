@@ -1,5 +1,5 @@
-import BitcoinAPI, { type ApiProvider } from "../bitcoin-api";
-import { type NetworkType, NETWORKS } from "./network";
+import BitcoinAPI, { type ApiProvider } from "../bitcoin-api.js";
+import { type NetworkType, NETWORKS } from "./network.js";
 
 /**
  * Fee priority levels for user-friendly fee selection

@@ -4,11 +4,11 @@ import type {
   ProtocolFeeParams,
   TransactionResult,
   UTXO,
-} from "../../../types";
-import { FeeUtils, TransactionUtils } from "../../../utils";
-import { FeePriorities } from "../../../utils/fees";
-import MetadataUtils, { TxType } from "../../../utils/metadata";
-import type { LockerContext } from "../../core";
+} from "../../../types.js";
+import { FeeUtils, TransactionUtils } from "../../../utils/index.js";
+import { FeePriorities } from "../../../utils/fees.js";
+import MetadataUtils, { TxType } from "../../../utils/metadata.js";
+import type { LockerContext } from "../../core.js";
 
 /**
  * Parameters for Dawn staking transactions

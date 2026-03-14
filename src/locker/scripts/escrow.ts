@@ -3,9 +3,9 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import type { LockerContext } from "../core";
-import { KeyUtils, ValidationUtils, ScriptUtils } from "../../utils";
-import type { ScriptInfo } from "../../types";
+import type { LockerContext } from "../core.js";
+import { KeyUtils, ValidationUtils, ScriptUtils } from "../../utils/index.js";
+import type { ScriptInfo } from "../../types.js";
 
 export async function createEscrowScript(
   ctx: LockerContext,

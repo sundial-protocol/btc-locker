@@ -3,8 +3,8 @@
  */
 import { BIP32Factory } from "bip32";
 import { ECPairFactory } from "ecpair";
-import { FeePriorities } from "./utils/fees";
-import type { SundialMetadata } from "./utils/metadata";
+import { FeePriorities } from "./utils/fees.js";
+import type { SundialMetadata } from "./utils/metadata.js";
 
 /**
  * Bitcoin key pair with private key, public key, and address

@@ -4,12 +4,12 @@ import type {
   ProtocolFeeParams,
   TransactionResult,
   UTXO,
-} from "../../types";
-import type { ApiUTXO } from "../../bitcoin-api";
-import { FeeUtils, ScriptUtils } from "../../utils";
-import { FeePriorities } from "../../utils/fees";
-import MetadataUtils, { TxType } from "../../utils/metadata";
-import type { LockerContext } from "../core";
+} from "../../types.js";
+import type { ApiUTXO } from "../../bitcoin-api.js";
+import { FeeUtils, ScriptUtils } from "../../utils/index.js";
+import { FeePriorities } from "../../utils/fees.js";
+import MetadataUtils, { TxType } from "../../utils/metadata.js";
+import type { LockerContext } from "../core.js";
 
 /**
  * Parameters for Dawn withdrawal

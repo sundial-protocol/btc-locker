@@ -2,10 +2,10 @@
  * @fileoverview BTCLocker modular components
  */
 
-import { BTCLockerCore } from "./core";
-import { KeyPairGenerator } from "./keypair";
-import { TransactionManager } from "./transaction-manager";
-import { ScriptManager } from "./script-manager";
+import { BTCLockerCore } from "./core.js";
+import { KeyPairGenerator } from "./keypair.js";
+import { TransactionManager } from "./transaction-manager.js";
+import { ScriptManager } from "./script-manager.js";
 import {
   DepositParams,
   DepositWithScriptParams,
@@ -15,11 +15,11 @@ import {
   ClaimParams,
   SpendingTransactionParams,
   FundingTransactionParams,
-} from "./transactions";
-import { KeyPair, ScriptInfo } from "../types";
-import { NETWORKS, type NetworkType } from "../utils/network";
-import BitcoinAPI from "../bitcoin-api";
-import { DistributionParams } from "..";
+} from "./transactions/index.js";
+import { KeyPair, ScriptInfo } from "../types.js";
+import { NETWORKS, type NetworkType } from "../utils/network.js";
+import BitcoinAPI from "../bitcoin-api.js";
+import { DistributionParams } from "../index.js";
 
 /**
  * Combined BTCLocker class that includes all functionality
@@ -262,9 +262,7 @@ export class BTCLocker extends BTCLockerCore {
    *   spendAfterDeadline: false
    * });
    */
-  async createClaimTransaction(
-    params: ClaimParams,
-  ): Promise<string> {
+  async createClaimTransaction(params: ClaimParams): Promise<string> {
     return this.transactionManager.createClaimTransaction(params);
   }
 
@@ -283,7 +281,9 @@ export class BTCLocker extends BTCLockerCore {
    *   memo: 'Quarterly yield distribution'
    * });
    */
-  async createDistributionTransaction(params: DistributionParams): Promise<string> {
+  async createDistributionTransaction(
+    params: DistributionParams,
+  ): Promise<string> {
     return this.transactionManager.createDistributionTransaction(params);
   }
 
@@ -302,9 +302,7 @@ export class BTCLocker extends BTCLockerCore {
    *   timelockAmount: 200000
    * });
    */
-  async createDepositTransaction(
-    params: DepositParams,
-  ): Promise<string> {
+  async createDepositTransaction(params: DepositParams): Promise<string> {
     return this.transactionManager.createDepositTransaction(params);
   }
 
@@ -327,9 +325,7 @@ export class BTCLocker extends BTCLockerCore {
   async createDepositTransactionWithScript(
     params: DepositWithScriptParams,
   ): Promise<string> {
-    return this.transactionManager.createDepositTransactionWithScript(
-      params,
-    );
+    return this.transactionManager.createDepositTransactionWithScript(params);
   }
 
   /**
@@ -366,9 +362,7 @@ export class BTCLocker extends BTCLockerCore {
    *   feeAmount: 2000
    * });
    */
-  async createWithdrawalTransaction(
-    params: WithdrawalParams,
-  ): Promise<string> {
+  async createWithdrawalTransaction(params: WithdrawalParams): Promise<string> {
     return this.transactionManager.createWithdrawalTransaction(params);
   }
 
@@ -434,16 +428,16 @@ export class BTCLocker extends BTCLockerCore {
 }
 
 // Export all individual components for modular usage
-export { BTCLockerCore } from "./core";
-export { KeyPairGenerator } from "./keypair";
-export { TransactionManager } from "./transaction-manager";
-export { ScriptManager } from "./script-manager";
+export { BTCLockerCore } from "./core.js";
+export { KeyPairGenerator } from "./keypair.js";
+export { TransactionManager } from "./transaction-manager.js";
+export { ScriptManager } from "./script-manager.js";
 
 // Export type interfaces for external use
 export type {
   SpendingTransactionParams,
   FundingTransactionParams,
-} from "./transactions";
+} from "./transactions/index.js";
 
 export type {
   DepositParams,
@@ -454,11 +448,11 @@ export type {
   DepositResult,
   DepositWithScriptResult,
   ClaimParams,
-} from "./transactions";
+} from "./transactions/index.js";
 
 export type {
   DistributionParams,
   DistributionResult,
-} from "./transactions";
+} from "./transactions/index.js";
 
 export default BTCLocker;

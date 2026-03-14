@@ -1,5 +1,5 @@
-﻿import type { LockerContext } from "../../core";
-import { TransactionUtils } from "../../../utils";
+﻿import type { LockerContext } from "../../core.js";
+import { TransactionUtils } from "../../../utils/index.js";
 
 /**
  * Parameters for Dawn staking amount calculation

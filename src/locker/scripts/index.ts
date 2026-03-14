@@ -1,2 +1,5 @@
-export { createTimelockScript, createRelativeTimelockScript } from "./timelock";
-export { createEscrowScript } from "./escrow";
+export {
+  createTimelockScript,
+  createRelativeTimelockScript,
+} from "./timelock.js";
+export { createEscrowScript } from "./escrow.js";

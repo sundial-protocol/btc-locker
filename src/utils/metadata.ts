@@ -13,7 +13,7 @@
  *  60 bytes
  */
 
-import { ValidationError } from "../errors";
+import { ValidationError } from "../errors.js";
 import { TxOutput } from "bitcoinjs-lib";
 import * as bitcoin from "bitcoinjs-lib";
 import { parse, stringify } from "uuid";

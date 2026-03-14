@@ -3,9 +3,9 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import type { LockerContext } from "../core";
-import { ScriptUtils, KeyUtils, ValidationUtils } from "../../utils";
-import type { ScriptInfo } from "../../types";
+import type { LockerContext } from "../core.js";
+import { ScriptUtils, KeyUtils, ValidationUtils } from "../../utils/index.js";
+import type { ScriptInfo } from "../../types.js";
 
 export async function createTimelockScript(
   ctx: LockerContext,

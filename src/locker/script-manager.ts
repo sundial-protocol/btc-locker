@@ -4,13 +4,13 @@
  * This class delegates to those functions, passing itself as the shared context.
  */
 
-import { BTCLockerCore } from "./core";
+import { BTCLockerCore } from "./core.js";
 import {
   createTimelockScript,
   createRelativeTimelockScript,
   createEscrowScript,
-} from "./scripts";
-import type { ScriptInfo } from "../types";
+} from "./scripts/index.js";
+import type { ScriptInfo } from "../types.js";
 
 /**
  * Unified script manager for all btc-locker script creation types

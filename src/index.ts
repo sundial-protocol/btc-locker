@@ -9,7 +9,7 @@ import BTCLocker, {
   KeyPairGenerator,
   TransactionManager,
   ScriptManager,
-} from "./locker/index";
+} from "./locker/index.js";
 import {
   TimeUtils,
   ScriptUtils,
@@ -19,9 +19,9 @@ import {
   ValidationUtils,
   MetadataUtils,
   Utils,
-} from "./utils";
-import { BTCLockerError, ValidationError, TimelockError } from "./errors";
-import BitcoinAPI from "./bitcoin-api";
+} from "./utils/index.js";
+import { BTCLockerError, ValidationError, TimelockError } from "./errors.js";
+import BitcoinAPI from "./bitcoin-api.js";
 
 // Export all types and interfaces
 export type {
@@ -37,45 +37,45 @@ export type {
   YieldConfig,
   ECCLib,
   InitializedECC,
-} from "./types";
+} from "./types.js";
 
 // Export NetworkType from utils/network
-export type { NetworkType } from "./utils/network";
-export { NETWORKS } from "./utils/network";
-export { FeePriorities } from "./utils/fees";
-export { TxType, packMetadata, unpackMetadata } from "./utils/metadata";
+export type { NetworkType } from "./utils/network.js";
+export { NETWORKS } from "./utils/network.js";
+export { FeePriorities } from "./utils/fees.js";
+export { TxType, packMetadata, unpackMetadata } from "./utils/metadata.js";
 
 // Export additional interfaces from individual modules
-export type { SundialMetadata } from "./utils/metadata";
+export type { SundialMetadata } from "./utils/metadata.js";
 
-export type { ExtendedKeyPair } from "./locker/keypair";
+export type { ExtendedKeyPair } from "./locker/keypair.js";
 
 export type {
   DepositResult,
   DepositParams,
-} from "./locker/transactions/deposit/deposit";
+} from "./locker/transactions/deposit/deposit.js";
 
 export type {
   DepositWithScriptResult,
   DepositWithScriptParams,
-} from "./locker/transactions/deposit/deposit-with-script";
+} from "./locker/transactions/deposit/deposit-with-script.js";
 
 export type {
   DepositCalculationParams,
   DepositCalculationResult,
-} from "./locker/transactions/deposit/calculate";
+} from "./locker/transactions/deposit/calculate.js";
 
 export type {
   WithdrawalParams,
   WithdrawalResult,
-} from "./locker/transactions/withdraw";
+} from "./locker/transactions/withdraw.js";
 
-export type { ClaimParams, ClaimResult } from "./locker/transactions/claim";
+export type { ClaimParams, ClaimResult } from "./locker/transactions/claim.js";
 
 export type {
   DistributionParams,
   DistributionResult,
-} from "./locker/transactions/distribute";
+} from "./locker/transactions/distribute.js";
 
 export type {
   SpendingTransactionParams,
@@ -84,7 +84,7 @@ export type {
   TransactionSigningParams,
   TransactionSubmissionParams,
   SpendingTransactionSigningParams,
-} from "./locker/transactions/generic";
+} from "./locker/transactions/generic.js";
 
 // Export BitcoinAPI types and interfaces
 export type {
@@ -94,9 +94,9 @@ export type {
   ApiUTXO,
   FeeEstimates,
   BroadcastResult,
-} from "./bitcoin-api";
+} from "./bitcoin-api.js";
 
-import { NETWORKS } from "./utils/network";
+import { NETWORKS } from "./utils/network.js";
 
 /**
  * Factory function to create an initialized BTCLocker instance

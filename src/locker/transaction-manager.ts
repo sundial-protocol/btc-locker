@@ -4,7 +4,7 @@
  * This class delegates to those functions, passing itself as the shared context.
  */
 
-import { BTCLockerCore } from "./core";
+import { BTCLockerCore } from "./core.js";
 import {
   createDepositTransaction,
   createDepositTransactionWithScript,
@@ -23,7 +23,7 @@ import {
   DistributionParams,
   SpendingTransactionParams,
   FundingTransactionParams,
-} from "./transactions";
+} from "./transactions/index.js";
 
 /**
  * Unified transaction manager for all btc-locker transaction types

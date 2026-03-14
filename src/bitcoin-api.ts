@@ -4,8 +4,8 @@
  */
 
 import https from "https";
-import type { UTXO } from "./types";
-import type { NetworkType } from "./utils/network";
+import type { UTXO } from "./types.js";
+import type { NetworkType } from "./utils/network.js";
 
 /**
  * Bitcoin UTXO with API status information

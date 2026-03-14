@@ -1,6 +1,6 @@
-﻿import type { LockerContext } from "../../core";
-import { createDepositTransaction, DepositParams } from "./deposit";
-import { DepositResult, ScriptInfo } from "../../..";
+﻿import type { LockerContext } from "../../core.js";
+import { createDepositTransaction, DepositParams } from "./deposit.js";
+import { DepositResult, ScriptInfo } from "../../../index.js";
 
 /**
  * Parameters for Dawn staking with script data
