@@ -107,12 +107,19 @@ export async function createDistributionTransaction(
     estimatedFee,
   );
 
+  const inputScript = bitcoin.address.toOutputScript(
+    sourceAddress || timelockAddress,
+    ctx.network,
+  );
+
   for (const input of inputs) {
     psbt.addInput({
       hash: input.txid,
       index: input.vout,
       witnessUtxo: {
-        script: Buffer.alloc(0),
+        script: input.scriptPubKey
+          ? Buffer.from(input.scriptPubKey, "hex")
+          : inputScript,
         value: BigInt(input.value),
       },
     });

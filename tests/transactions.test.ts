@@ -107,6 +107,7 @@ describe("TransactionManager", () => {
       const result = await txManager.createFundingTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 200000 }],
         outputs: [{ address: address!, value: 100000 }],
+        sourceAddress: address!,
       });
 
       expect(typeof result).toBe("string");

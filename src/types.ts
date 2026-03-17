@@ -57,6 +57,8 @@ export interface UTXO {
   txid: string;
   vout: number;
   value: number;
+  /** Optional scriptPubKey hex for the output being spent (required for correct BIP143 segwit sighash when sourceAddress is unavailable) */
+  scriptPubKey?: string;
 }
 
 /**
