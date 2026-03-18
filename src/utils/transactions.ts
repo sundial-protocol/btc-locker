@@ -1,4 +1,7 @@
+import * as bitcoin from "bitcoinjs-lib";
 import { UTXO } from "../types.js";
+import MetadataUtils, { TxType } from "./metadata.js";
+import type { SundialMetadata } from "./metadata.js";
 
 /**
  * Transaction utilities
@@ -48,5 +51,59 @@ export default class TransactionUtils {
     }
 
     return selectedUtxos;
+  }
+
+  /**
+   * Count transaction outputs: start from `base` and add 1 for each truthy extra.
+   * @example TransactionUtils.countOutputs(2, [protocolFeeAmount && feeAddress, changeAddress, metadata])
+   */
+  static countOutputs(base: number, extras: unknown[]): number {
+    return base + extras.filter(Boolean).length;
+  }
+
+  /**
+   * Add segwit (P2WPKH / P2WSH) inputs to a PSBT.
+   * `input.scriptPubKey` takes precedence over `fallbackScript`.
+   * Throws if neither is available.
+   */
+  static addWitnessInputs(
+    psbt: bitcoin.Psbt,
+    inputs: UTXO[],
+    fallbackScript: Buffer | Uint8Array | undefined,
+  ): void {
+    const fallback =
+      fallbackScript != null ? Buffer.from(fallbackScript) : undefined;
+    for (const input of inputs) {
+      const script = input.scriptPubKey
+        ? Buffer.from(input.scriptPubKey, "hex")
+        : fallback;
+      if (!script) {
+        throw new Error(
+          "witnessUtxo script is required: provide either sourceAddress in params or scriptPubKey on each UTXO",
+        );
+      }
+      psbt.addInput({
+        hash: input.txid,
+        index: input.vout,
+        witnessUtxo: { script, value: BigInt(input.value) },
+      });
+    }
+  }
+
+  /**
+   * Append an OP_RETURN metadata output to a PSBT. No-ops when `metadata` is falsy.
+   * When `txType` is supplied and `metadata` is an object, the txType field is stamped.
+   */
+  static appendMetadataOutput(
+    psbt: bitcoin.Psbt,
+    metadata: SundialMetadata | string | undefined,
+    txType?: TxType,
+  ): void {
+    if (!metadata) return;
+    const stamped =
+      typeof metadata === "string" || txType === undefined
+        ? metadata
+        : { ...metadata, txType };
+    psbt.addOutput(MetadataUtils.toOutput(stamped));
   }
 }

@@ -183,6 +183,14 @@ describe("YieldDistributor (mocked fees)", () => {
             status: { confirmed: false },
           },
         ]),
+        fetchConfirmedUtxos: vi.fn().mockResolvedValue([
+          {
+            txid: "c".repeat(64),
+            vout: 0,
+            value: 200000,
+            status: { confirmed: true, block_height: 100 },
+          },
+        ]),
       };
 
       const result = await txManager.createDistributionTransaction({
@@ -193,7 +201,7 @@ describe("YieldDistributor (mocked fees)", () => {
       });
 
       expect(typeof result).toBe("string");
-      expect(mockApi.getAddressUtxos).toHaveBeenCalledWith(testAddress);
+      expect(mockApi.fetchConfirmedUtxos).toHaveBeenCalledWith(testAddress);
       // Only confirmed UTXOs should be used
       const psbt = bitcoin.Psbt.fromBase64(result, {
         network: bitcoin.networks.testnet,

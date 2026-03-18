@@ -5,7 +5,7 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { LockerContext } from "../core.js";
 import type { UTXO, BaseTransactionParams } from "../../types.js";
-import MetadataUtils from "../../utils/metadata.js";
+import { TransactionUtils } from "../../utils/index.js";
 import BitcoinAPI from "../../bitcoin-api.js";
 
 /**
@@ -156,9 +156,7 @@ export async function createSpendingTransaction(
     psbt.addOutput({ address: output.address, value: BigInt(output.value) });
   });
 
-  if (params.metadata) {
-    psbt.addOutput(MetadataUtils.toOutput(params.metadata));
-  }
+  TransactionUtils.appendMetadataOutput(psbt, params.metadata);
 
   return psbt.toHex();
 }
@@ -170,28 +168,13 @@ export async function createFundingTransaction(
   const { inputs, outputs, sourceAddress } = params;
 
   const psbt = new bitcoin.Psbt({ network: ctx.network });
-  const inputScript = sourceAddress
-    ? bitcoin.address.toOutputScript(sourceAddress, ctx.network)
-    : undefined;
-
-  for (const input of inputs) {
-    const script = input.scriptPubKey
-      ? Buffer.from(input.scriptPubKey, "hex")
-      : inputScript;
-    if (!script) {
-      throw new Error(
-        "witnessUtxo script is required: provide either sourceAddress in params or scriptPubKey on each UTXO",
-      );
-    }
-    psbt.addInput({
-      hash: input.txid,
-      index: input.vout,
-      witnessUtxo: {
-        script,
-        value: BigInt(input.value),
-      },
-    });
-  }
+  TransactionUtils.addWitnessInputs(
+    psbt,
+    inputs,
+    sourceAddress
+      ? bitcoin.address.toOutputScript(sourceAddress, ctx.network)
+      : undefined,
+  );
 
   for (const output of outputs) {
     psbt.addOutput({

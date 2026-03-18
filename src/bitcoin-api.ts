@@ -371,6 +371,14 @@ export default class BitcoinAPI {
   }
 
   /**
+   * Get confirmed UTXOs for an address.
+   */
+  async fetchConfirmedUtxos(address: string): Promise<UTXO[]> {
+    const utxos = await this.getAddressUtxos(address);
+    return utxos.filter((u) => u.status?.confirmed);
+  }
+
+  /**
    * Get current fee estimates
    */
   async getFeeEstimates(): Promise<FeeEstimates> {

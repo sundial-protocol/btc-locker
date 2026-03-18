@@ -4,10 +4,9 @@ import type {
   ProtocolFeeParams,
   UTXO,
 } from "../../types.js";
-import type { ApiUTXO } from "../../bitcoin-api.js";
-import { FeeUtils, ScriptUtils } from "../../utils/index.js";
+import { FeeUtils, ScriptUtils, TransactionUtils } from "../../utils/index.js";
 import { FeePriorities } from "../../utils/fees.js";
-import MetadataUtils, { TxType } from "../../utils/metadata.js";
+import { TxType } from "../../utils/metadata.js";
 import type { LockerContext } from "../core.js";
 
 /**
@@ -83,10 +82,7 @@ export async function createWithdrawalTransaction(
 
   if (!providedEscrowInputs) {
     try {
-      const apiUtxos = await ctx.api.getAddressUtxos(escrowAddress);
-      escrowInputs = apiUtxos.filter(
-        (apiUtxo: ApiUTXO) => apiUtxo.status?.confirmed,
-      );
+      escrowInputs = await ctx.api.fetchConfirmedUtxos(escrowAddress);
     } catch (error) {
       throw new Error(
         `Failed to fetch escrow UTXOs from ${escrowAddress}: ${(error as Error).message}`,
@@ -96,10 +92,7 @@ export async function createWithdrawalTransaction(
 
   if (!providedTimelockInputs) {
     try {
-      const apiUtxos = await ctx.api.getAddressUtxos(timelockAddress);
-      timelockInputs = apiUtxos.filter(
-        (apiUtxo: ApiUTXO) => apiUtxo.status?.confirmed,
-      );
+      timelockInputs = await ctx.api.fetchConfirmedUtxos(timelockAddress);
     } catch (error) {
       throw new Error(
         `Failed to fetch timelock UTXOs from ${timelockAddress}: ${(error as Error).message}`,
@@ -254,13 +247,7 @@ export async function createWithdrawalTransaction(
     });
   }
 
-  if (metadata) {
-    const typedMetadata =
-      typeof metadata === "string"
-        ? metadata
-        : { ...metadata, txType: TxType.Withdrawal };
-    psbt.addOutput(MetadataUtils.toOutput(typedMetadata));
-  }
+  TransactionUtils.appendMetadataOutput(psbt, metadata, TxType.Withdrawal);
 
   return psbt.toBase64();
 }

@@ -1,13 +1,10 @@
 ﻿import * as bitcoin from "bitcoinjs-lib";
-import { FeeUtils } from "../../utils/index.js";
+import { FeeUtils, TransactionUtils } from "../../utils/index.js";
 import { FeePriorities } from "../../utils/fees.js";
-import MetadataUtils, { TxType } from "../../utils/metadata.js";
+import { TxType } from "../../utils/metadata.js";
 import type { LockerContext } from "../core.js";
-import {
-  BaseTransactionParams,
-  BitcoinAPI,
-  UTXO,
-} from "../../index.js";
+import type { BaseTransactionParams, UTXO } from "../../types.js";
+import type BitcoinAPI from "../../bitcoin-api.js";
 
 /**
  * Parameters for yield distribution
@@ -55,8 +52,7 @@ export async function createDistributionTransaction(
   if (providedInputs) {
     inputs = providedInputs;
   } else if (api && sourceAddress) {
-    const apiUtxos = await api.getAddressUtxos(sourceAddress);
-    inputs = apiUtxos.filter((utxo) => utxo.status.confirmed);
+    inputs = await api.fetchConfirmedUtxos(sourceAddress);
   }
 
   if (inputs.length === 0) {
@@ -66,18 +62,8 @@ export async function createDistributionTransaction(
   const psbt = new bitcoin.Psbt({ network: ctx.network });
 
   const feeRate = await FeeUtils.queryChainFeeRates(priority);
-  const outputCount = () => {
-    let count = 1;
-    if (metadata) count += 1;
-    if (params.changeAddress) count += 1;
-    return count;
-  };
-
-  const estimatedFee = FeeUtils.estimateFee(
-    inputs.length,
-    outputCount(),
-    feeRate,
-  );
+  const outputCount = TransactionUtils.countOutputs(1, [metadata, params.changeAddress]);
+  const estimatedFee = FeeUtils.estimateFee(inputs.length, outputCount, feeRate);
 
   const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
   const changeResult = FeeUtils.calculateChange(
@@ -86,23 +72,11 @@ export async function createDistributionTransaction(
     estimatedFee,
   );
 
-  const inputScript = bitcoin.address.toOutputScript(
-    sourceAddress || timelockAddress,
-    ctx.network,
+  TransactionUtils.addWitnessInputs(
+    psbt,
+    inputs,
+    bitcoin.address.toOutputScript(sourceAddress || timelockAddress, ctx.network),
   );
-
-  for (const input of inputs) {
-    psbt.addInput({
-      hash: input.txid,
-      index: input.vout,
-      witnessUtxo: {
-        script: input.scriptPubKey
-          ? Buffer.from(input.scriptPubKey, "hex")
-          : inputScript,
-        value: BigInt(input.value),
-      },
-    });
-  }
 
   psbt.addOutput({
     address: timelockAddress,
@@ -116,13 +90,7 @@ export async function createDistributionTransaction(
     });
   }
 
-  if (metadata) {
-    const typedMetadata =
-      typeof metadata === "string"
-        ? metadata
-        : { ...metadata, txType: TxType.Distribution };
-    psbt.addOutput(MetadataUtils.toOutput(typedMetadata));
-  }
+  TransactionUtils.appendMetadataOutput(psbt, metadata, TxType.Distribution);
 
   return psbt.toBase64();
 }

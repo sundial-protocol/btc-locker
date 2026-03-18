@@ -61,6 +61,7 @@ export async function calculateDepositAmounts(
   } = params;
 
   let inputs: Array<{ value: number }>;
+  const outputCount = TransactionUtils.countOutputs(2, [protocolFeeAmount > 0, includeChange, metadata]);
 
   if (providedInputs) {
     if (!Array.isArray(providedInputs)) {
@@ -68,19 +69,13 @@ export async function calculateDepositAmounts(
     }
     inputs = providedInputs;
   } else {
-    const apiUtxos = await ctx.api.getAddressUtxos(sourceAddress);
-    const availableInputs = apiUtxos.filter((utxo) => utxo.status.confirmed);
+    const availableInputs = await ctx.api.fetchConfirmedUtxos(sourceAddress);
 
     if (availableInputs.length === 0) {
       throw new Error(
         `No confirmed UTXOs available at address ${sourceAddress}`,
       );
     }
-
-    let outputCount = 2;
-    if (protocolFeeAmount > 0) outputCount++;
-    if (includeChange) outputCount++;
-    if (metadata) outputCount++;
 
     const estimatedInputCount = Math.min(availableInputs.length, 3);
     const estimatedFee = FeeUtils.estimateFee(estimatedInputCount, outputCount, feeRate);
@@ -110,11 +105,6 @@ export async function calculateDepositAmounts(
   }
 
   const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
-
-  let outputCount = 2;
-  if (protocolFeeAmount > 0) outputCount++;
-  if (includeChange) outputCount++;
-  if (metadata) outputCount++;
 
   const estimatedFee = FeeUtils.estimateFee(inputs.length, outputCount, feeRate);
 

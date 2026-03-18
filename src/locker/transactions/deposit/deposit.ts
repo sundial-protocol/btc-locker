@@ -6,7 +6,7 @@ import type {
 } from "../../../types.js";
 import { FeeUtils, TransactionUtils } from "../../../utils/index.js";
 import { FeePriorities } from "../../../utils/fees.js";
-import MetadataUtils, { TxType } from "../../../utils/metadata.js";
+import { TxType } from "../../../utils/metadata.js";
 import type { LockerContext } from "../../core.js";
 
 /**
@@ -75,8 +75,7 @@ export async function createDepositTransaction(
   if (providedInputs) {
     inputs = providedInputs;
   } else {
-    const apiUtxos = await ctx.api.getAddressUtxos(sourceAddress);
-    const availableInputs = apiUtxos.filter((utxo) => utxo.status.confirmed);
+    const availableInputs = await ctx.api.fetchConfirmedUtxos(sourceAddress);
 
     if (availableInputs.length === 0) {
       throw new Error(
@@ -84,10 +83,7 @@ export async function createDepositTransaction(
       );
     }
 
-    let outputCount = 2;
-    if (protocolFeeAmount && feeAddress) outputCount++;
-    if (changeAddress) outputCount++;
-    if (metadata) outputCount++;
+    const outputCount = TransactionUtils.countOutputs(2, [protocolFeeAmount && feeAddress, changeAddress, metadata]);
 
     const estimatedInputCount = Math.min(availableInputs.length, 3);
     const estimatedFee = FeeUtils.estimateFee(
@@ -124,11 +120,7 @@ export async function createDepositTransaction(
     return sum + input.value;
   }, 0);
 
-  let outputCount = 2;
-  if (protocolFeeAmount && feeAddress) outputCount++;
-  if (changeAddress) outputCount++;
-  if (metadata) outputCount++;
-
+  const outputCount = TransactionUtils.countOutputs(2, [protocolFeeAmount && feeAddress, changeAddress, metadata]);
   const estimatedFee = FeeUtils.estimateFee(inputs.length, outputCount, feeRate);
 
   const totalRequiredAmount =
@@ -169,20 +161,11 @@ export async function createDepositTransaction(
 
   try {
     const psbt = new bitcoin.Psbt({ network: ctx.network });
-    const inputScript = bitcoin.address.toOutputScript(sourceAddress, ctx.network);
-
-    for (const input of inputs) {
-      psbt.addInput({
-        hash: input.txid,
-        index: input.vout,
-        witnessUtxo: {
-          script: input.scriptPubKey
-            ? Buffer.from(input.scriptPubKey, "hex")
-            : inputScript,
-          value: BigInt(input.value),
-        },
-      });
-    }
+    TransactionUtils.addWitnessInputs(
+      psbt,
+      inputs,
+      bitcoin.address.toOutputScript(sourceAddress, ctx.network),
+    );
 
     psbt.addOutput({
       address: escrowAddress,
@@ -208,13 +191,7 @@ export async function createDepositTransaction(
       });
     }
 
-    if (metadata) {
-      const typedMetadata =
-        typeof metadata === "string"
-          ? metadata
-          : { ...metadata, txType: TxType.Deposit };
-      psbt.addOutput(MetadataUtils.toOutput(typedMetadata));
-    }
+    TransactionUtils.appendMetadataOutput(psbt, metadata, TxType.Deposit);
 
     return psbt.toBase64();
   } catch (error) {
