@@ -2,7 +2,6 @@
 import type {
   BaseTransactionParams,
   ProtocolFeeParams,
-  TransactionResult,
   UTXO,
 } from "../../types.js";
 import type { ApiUTXO } from "../../bitcoin-api.js";
@@ -34,33 +33,6 @@ export interface WithdrawalParams
   timelockRedeemScript: string;
   /** Destination address for withdrawn funds */
   destination: string;
-}
-
-/**
- * Result of Dawn withdrawal
- * @interface WithdrawalResult
- * @extends TransactionResult
- * @description Transaction result with detailed input and output information for Dawn withdrawal
- */
-export interface WithdrawalResult extends TransactionResult {
-  /** Input details */
-  inputs: {
-    /** Total value from escrow inputs in satoshis */
-    escrowValue: number;
-    /** Total value from timelock inputs in satoshis */
-    timelockValue: number;
-    /** Total input value in satoshis */
-    totalValue: number;
-  };
-  /** Output details */
-  outputs: {
-    /** Destination address for withdrawn funds */
-    destination: string;
-    /** Final output value after fees in satoshis */
-    destinationValue: number;
-    /** Optional protocol fee amount in satoshis */
-    protocolFeeAmount?: number;
-  };
 }
 
 export async function createWithdrawalTransaction(

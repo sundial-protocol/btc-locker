@@ -444,15 +444,11 @@ export type {
   DepositWithScriptParams,
   DepositCalculationParams,
   WithdrawalParams,
-  WithdrawalResult,
-  DepositResult,
-  DepositWithScriptResult,
   ClaimParams,
 } from "./transactions/index.js";
 
 export type {
   DistributionParams,
-  DistributionResult,
 } from "./transactions/index.js";
 
 export default BTCLocker;

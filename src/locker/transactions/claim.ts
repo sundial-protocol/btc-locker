@@ -6,7 +6,6 @@ import type { LockerContext } from "../core.js";
 import {
   BaseTransactionParams,
   ScriptInfo,
-  TransactionResult,
 } from "../../index.js";
 
 /**
@@ -33,11 +32,6 @@ export interface ClaimParams extends BaseTransactionParams {
   /** Previous transaction buffer (for testing/validation) */
   previousTransaction?: Buffer | null;
 }
-
-/**
- * Escrow spending transaction result
- */
-export type ClaimResult = TransactionResult;
 
 export async function createClaimTransaction(
   ctx: LockerContext,

@@ -5,7 +5,6 @@ import MetadataUtils, { TxType } from "../../utils/metadata.js";
 import type { LockerContext } from "../core.js";
 import {
   BaseTransactionParams,
-  TransactionResult,
   BitcoinAPI,
   UTXO,
 } from "../../index.js";
@@ -29,26 +28,6 @@ export interface DistributionParams extends BaseTransactionParams {
   amount: number;
   /** Optional change address for remaining funds */
   changeAddress?: string;
-}
-
-/**
- * Result of yield distribution
- * @interface DistributionResult
- * @extends TransactionResult
- * @description Transaction result with additional yield distribution metadata
- */
-export interface DistributionResult extends TransactionResult {
-  /** Bitcoin transaction object */
-  transaction: bitcoin.Transaction;
-  /** Distribution details */
-  distribution: {
-    /** Amount distributed in satoshis */
-    amount: number;
-    /** Destination address for the distribution */
-    destination: string;
-    /** Change amount in satoshis */
-    change: number;
-  };
 }
 
 export async function createDistributionTransaction(

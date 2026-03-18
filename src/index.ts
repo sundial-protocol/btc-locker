@@ -28,7 +28,6 @@ export type {
   KeyPair,
   ScriptInfo,
   UTXO,
-  TransactionResult,
   BaseTransactionParams,
   ProtocolFeeParams,
   TimelockConfig,
@@ -51,30 +50,25 @@ export type { SundialMetadata } from "./utils/metadata.js";
 export type { ExtendedKeyPair } from "./locker/keypair.js";
 
 export type {
-  DepositResult,
   DepositParams,
 } from "./locker/transactions/deposit/deposit.js";
 
 export type {
-  DepositWithScriptResult,
   DepositWithScriptParams,
 } from "./locker/transactions/deposit/deposit-with-script.js";
 
 export type {
   DepositCalculationParams,
-  DepositCalculationResult,
 } from "./locker/transactions/deposit/calculate.js";
 
 export type {
   WithdrawalParams,
-  WithdrawalResult,
 } from "./locker/transactions/withdraw.js";
 
-export type { ClaimParams, ClaimResult } from "./locker/transactions/claim.js";
+export type { ClaimParams } from "./locker/transactions/claim.js";
 
 export type {
   DistributionParams,
-  DistributionResult,
 } from "./locker/transactions/distribute.js";
 
 export type {

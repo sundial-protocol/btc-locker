@@ -2,7 +2,6 @@
 import type {
   BaseTransactionParams,
   ProtocolFeeParams,
-  TransactionResult,
   UTXO,
 } from "../../../types.js";
 import { FeeUtils, TransactionUtils } from "../../../utils/index.js";
@@ -31,26 +30,6 @@ export interface DepositParams
   timelockAddress: string;
   /** Amount to send to timelock in satoshis */
   timelockAmount: number;
-}
-
-/**
- * Result of Dawn staking transaction
- * @interface DepositResult
- * @extends TransactionResult
- * @description Transaction result with detailed output breakdown for Dawn staking
- */
-export interface DepositResult extends TransactionResult {
-  /** Output breakdown */
-  outputs: {
-    /** Amount sent to escrow in satoshis */
-    escrowAmount: number;
-    /** Amount sent to timelock in satoshis */
-    timelockAmount: number;
-    /** Optional protocol fee amount in satoshis */
-    protocolFeeAmount?: number;
-    /** Optional change amount in satoshis */
-    changeAmount?: number;
-  };
 }
 
 export async function createDepositTransaction(

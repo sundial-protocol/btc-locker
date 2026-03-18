@@ -62,24 +62,6 @@ export interface UTXO {
 }
 
 /**
- * Bitcoin transaction result information
- * @interface TransactionResult
- * @description Contains the essential information about a created Bitcoin transaction
- */
-export interface TransactionResult {
-  /** Transaction in hexadecimal format */
-  hex: string;
-  /** Transaction ID (hash) */
-  txid: string;
-  /** Transaction size in bytes */
-  size: number;
-  /** Transaction fee in satoshis */
-  fee: number;
-  /** Optional metadata associated with the transaction */
-  metadata?: string;
-}
-
-/**
  * Base parameters shared by all transaction creation functions
  * @interface BaseTransactionParams
  * @description Provides common fields (fee priority, metadata) used across all transaction builders

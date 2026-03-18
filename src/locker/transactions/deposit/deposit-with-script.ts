@@ -1,6 +1,6 @@
 ﻿import type { LockerContext } from "../../core.js";
 import { createDepositTransaction, DepositParams } from "./deposit.js";
-import { DepositResult, ScriptInfo } from "../../../index.js";
+import { ScriptInfo } from "../../../index.js";
 
 /**
  * Parameters for Dawn staking with script data
@@ -14,24 +14,6 @@ export interface DepositWithScriptParams extends Omit<
 > {
   /** Timelock script information object */
   timelockScript: ScriptInfo;
-}
-
-/**
- * Result of Dawn staking transaction with script information
- * @interface DepositWithScriptResult
- * @description Dawn staking transaction result with additional timelock script details
- * @extends DepositResult
- */
-export interface DepositWithScriptResult extends DepositResult {
-  /** Timelock script details */
-  timelockScript: {
-    /** Timelock script address */
-    address: string;
-    /** Script type */
-    type: string;
-    /** Optional locktime value */
-    locktime?: number;
-  };
 }
 
 export async function createDepositTransactionWithScript(

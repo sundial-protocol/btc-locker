@@ -1,28 +1,24 @@
 ﻿export {
   createDepositTransaction,
   DepositParams,
-  DepositResult,
 } from "./deposit/deposit.js";
 export {
   createDepositTransactionWithScript,
   DepositWithScriptParams,
-  DepositWithScriptResult,
 } from "./deposit/deposit-with-script.js";
 export {
   calculateDepositAmounts,
   DepositCalculationParams,
-  DepositCalculationResult,
+  DepositCalculationResult
 } from "./deposit/calculate.js";
 export {
   createWithdrawalTransaction,
   WithdrawalParams,
-  WithdrawalResult,
 } from "./withdraw.js";
-export { createClaimTransaction, ClaimParams, ClaimResult } from "./claim.js";
+export { createClaimTransaction, ClaimParams } from "./claim.js";
 export {
   createDistributionTransaction,
   DistributionParams,
-  DistributionResult,
 } from "./distribute.js";
 export {
   createSpendingTransaction,
