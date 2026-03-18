@@ -129,8 +129,7 @@ export async function createDepositTransaction(
   if (changeAddress) outputCount++;
   if (metadata) outputCount++;
 
-  const estimatedSize = 10 + inputs.length * 148 + outputCount * 34 + 20;
-  const estimatedFee = estimatedSize * feeRate;
+  const estimatedFee = FeeUtils.estimateFee(inputs.length, outputCount, feeRate);
 
   const totalRequiredAmount =
     escrowAmount + timelockAmount + (protocolFeeAmount || 0) + estimatedFee;

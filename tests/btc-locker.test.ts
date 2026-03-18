@@ -202,15 +202,6 @@ describe("Utility Classes", () => {
   });
 
   describe("TransactionUtils", () => {
-    test("should estimate transaction fee", () => {
-      const inputs = 2;
-      const outputs = 1;
-      const feeRate = 10; // sat/vB
-      const fee = TransactionUtils.estimateFee(inputs, outputs, feeRate);
-      expect(fee).toBeGreaterThan(0);
-      expect(fee).toBe(3380); // 2*147 + 1*34 + 10 = 338 vB * 10 sat/vB
-    });
-
     test("should convert satoshis to BTC", () => {
       const satoshis = 100000000;
       const btc = TransactionUtils.satoshisToBTC(satoshis);

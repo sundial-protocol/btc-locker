@@ -1,5 +1,5 @@
 ﻿import type { LockerContext } from "../../core.js";
-import { TransactionUtils } from "../../../utils/index.js";
+import { FeeUtils, TransactionUtils } from "../../../utils/index.js";
 
 /**
  * Parameters for Dawn staking amount calculation
@@ -83,9 +83,7 @@ export async function calculateDepositAmounts(
     if (metadata) outputCount++;
 
     const estimatedInputCount = Math.min(availableInputs.length, 3);
-    const estimatedSize =
-      10 + estimatedInputCount * 148 + outputCount * 34 + 20;
-    const estimatedFee = estimatedSize * feeRate;
+    const estimatedFee = FeeUtils.estimateFee(estimatedInputCount, outputCount, feeRate);
     const targetAmount =
       desiredEscrowAmount +
       desiredTimelockAmount +
@@ -118,8 +116,7 @@ export async function calculateDepositAmounts(
   if (includeChange) outputCount++;
   if (metadata) outputCount++;
 
-  const estimatedSize = 10 + inputs.length * 148 + outputCount * 34 + 20;
-  const estimatedFee = estimatedSize * feeRate;
+  const estimatedFee = FeeUtils.estimateFee(inputs.length, outputCount, feeRate);
 
   const dustThreshold = 546;
   const totalRequired =
