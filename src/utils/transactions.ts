@@ -1,7 +1,6 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { UTXO } from "../types.js";
-import MetadataUtils, { TxType } from "./metadata.js";
-import type { SundialMetadata } from "./metadata.js";
+import MetadataUtils, { TxType, SundialMetadata } from "./metadata.js";
 
 /**
  * Transaction utilities
