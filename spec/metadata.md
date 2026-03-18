@@ -116,7 +116,7 @@ The returned object has the shape `{ script: Buffer, value: BigInt(0) }` and is 
 
 ## Usage in Protocol Transactions
 
-### Deposit (Dawn Stake)
+### Deposit
 
 When a user deposits BTC, the CLI auto-generates a `subjectId` if not provided and derives the provider pubkey from the `--provider-pubkey` flag. The metadata is attached to the staking transaction as an `OP_RETURN` output alongside the escrow, timelock, and change outputs.
 
@@ -161,7 +161,7 @@ const psbt = await locker.createDistributionTransaction({
 });
 ```
 
-### Yield Withdrawal / User Withdrawal
+### Withdrawal
 
 Same structure as above with `txType` set to `TxType.Claim` (`0x02`) or `TxType.Withdrawal` (`0x04`) respectively.
 
@@ -170,9 +170,9 @@ Same structure as above with `txType` set to `TxType.Claim` (`0x02`) or `TxType.
 Example transactions can be found here:
 
 - [0x01: Deposit](https://mempool.space/testnet/tx/3a673e2b13aedae92bbe2589dcb161856aa26d86abc9e33541c8bf95ecf277c9)
-- [0x02: Yield Withdrawal](https://mempool.space/testnet/tx/53fc2d443872e5818a5e0b10011620a3baa1d51a727bf103271bf24b36d9af0c)
+- [0x02: Claim](https://mempool.space/testnet/tx/53fc2d443872e5818a5e0b10011620a3baa1d51a727bf103271bf24b36d9af0c)
 - [0x03: Distribution](https://mempool.space/testnet/tx/435742c80b0ea67fbaea1fa28ce59079ebf47447dc3e61f76bbda6c74f029676)
-- [0x04: User Withdrawal](https://mempool.space/testnet/tx/87cc2463cc68030830b3c07141973f63d46a7df637a17b60b8d8d39c6490485b)
+- [0x04: Withdrawal](https://mempool.space/testnet/tx/87cc2463cc68030830b3c07141973f63d46a7df637a17b60b8d8d39c6490485b)
 
 ## Decoding from a Raw Transaction
 

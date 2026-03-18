@@ -5,7 +5,6 @@
 ### What You Need:
 
 1. **No API Keys Required** - Uses free public APIs:
-
    - Mempool.space API (default)
    - Blockstream Esplora API
    - BlockCypher API (backup)
@@ -25,7 +24,6 @@ btc-locker keygen
 ```
 
 2. **Fund your address:**
-
    - Go to https://coinfaucet.eu/en/btc-testnet/
    - Enter your address from step 1
    - Request testnet coins
@@ -33,7 +31,7 @@ btc-locker keygen
 3. **Check your balance:**
 
 ```bash
-btc-locker inspect --address YOUR_ADDRESS
+btc-locker inspect address -a YOUR_ADDRESS
 ```
 
 4. **Create a timelock script:**
@@ -46,15 +44,14 @@ btc-locker timelock --time $FUTURE_TIME --pubkey YOUR_PUBLIC_KEY
 ```
 
 5. **Send coins to timelock script:**
-
    - Use any Bitcoin wallet to send testnet coins to the script address
    - Or use a testnet faucet with the script address
 
 6. **Monitor the timelock:**
 
 ```bash
-btc-locker check --time $FUTURE_TIME
-btc-locker inspect --address SCRIPT_ADDRESS
+btc-locker inspect time -t $FUTURE_TIME
+btc-locker inspect address -a SCRIPT_ADDRESS
 ```
 
 ## Installation
@@ -106,10 +103,10 @@ btc-locker --json keygen
 
 ```bash
 # Using Unix timestamp
-btc-locker timelock --time 1765064511 --pubkey 02eb121c6fc425e894a936c87367c3f1871170af9e131cc2aa598d6ae4ee4a1cbe
+btc-locker scripts timelock --time 1765064511 --pubkey 02eb121c6fc425e894a936c87367c3f1871170af9e131cc2aa598d6ae4ee4a1cbe
 
 # Using relative time (requires interactive input due to PowerShell parsing)
-btc-locker timelock
+btc-locker scripts timelock
 # Then enter: "1 week" when prompted
 ```
 
@@ -117,7 +114,7 @@ btc-locker timelock
 
 ```bash
 # Check if timelock expired
-btc-locker check --time 1765064511
+btc-locker inspect time -t 1765064511
 
 # Validate keys
 btc-locker utils validate-key 02eb121c6fc425e894a936c87367c3f1871170af9e131cc2aa598d6ae4ee4a1cbe

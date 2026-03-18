@@ -1,10 +1,10 @@
 ﻿# User Stories of Staking Flow
 
-The full v0 user stories for the staking flow. This is pre-server, so we assume discoverability and tracking via tx metadata (To be implemented)
+The full v0 user stories for the staking flow.
 
 ## User Deposits Stake
 
-Uses DawnStakingManager's createDepositTransaction to create a new staking transaction, which sends outputs to the Escrow and Timelock addresses.
+Uses createDepositTransaction to create a new Deposit transaction, which sends outputs to the Escrow and Timelock addresses.
 
 Parameters:
 
@@ -24,8 +24,6 @@ export interface DepositParams {
   timelockAmount: number;
   /** Optional change address for remaining funds */
   changeAddress?: string;
-  /** Optional fee rate in satoshis per byte */
-  feeRate?: number;
   /** Optional fee address for protocol fees */
   feeAddress?: string;
   /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
@@ -87,7 +85,7 @@ flowchart LR
 
 ## Yield Provider Withdraws Stake
 
-Uses EscrowManager's createClaimTransaction to create a transaction that spends from the escrow output
+Uses createClaimTransaction to create a transaction that spends from the escrow output
 
 ```ts
 export interface ClaimParams {
@@ -150,12 +148,12 @@ flowchart LR
 
 ## Yield Provider Distributes Rewards
 
-Uses the YieldDistributor's createDistributionTransaction to create a transaction that sends rewards from the yield provider to the user's timelock address.
+Uses createDistributionTransaction to create a transaction that sends rewards from the yield provider to the user's timelock address.
 
 ```ts
 export interface DistributionParams {
   /** Array of unspent transaction outputs from timelock (optional - will fetch from address if not provided) */
-  inputs?: YieldInput[];
+  inputs?: UTXO[];
   /** Source address for automatic UTXO selection (required if inputs not provided) */
   sourceAddress?: string;
   /** Bitcoin API instance for fetching UTXOs (required if inputs not provided) */
@@ -164,12 +162,8 @@ export interface DistributionParams {
   timelockAddress: string;
   /** Amount to distribute in satoshis */
   amount: number;
-  /** Optional memo for the distribution */
-  memo?: string;
   /** Optional change address for remaining funds */
   changeAddress?: string;
-  /** Optional fee rate in satoshis per byte */
-  feeRate?: number;
 }
 ```
 
@@ -214,7 +208,7 @@ flowchart LR
 
 ## User Withdraws Stake and Rewards
 
-Uses the DawnStakingManager's createWithdrawalTransaction to create a transaction that spends from the timelock output, which includes both the original deposit and any accumulated rewards, as well as anything left over at the escrow address.
+Uses createWithdrawalTransaction to create a transaction that spends from the timelock output, which includes both the original deposit and any accumulated rewards, as well as anything left over at the escrow address.
 
 ```ts
 export interface WithdrawalParams {
@@ -232,12 +226,12 @@ export interface WithdrawalParams {
   timelockRedeemScript: string;
   /** Destination address for withdrawn funds */
   destination: string;
-  /** Optional fixed fee amount in satoshis */
-  feeAmount?: number;
   /** Optional fee address for protocol fees */
   feeAddress?: string;
   /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
   protocolFeeAmount?: number;
+  /** Optional change address for remaining funds */
+  changeAddress?: string;
 }
 ```
 

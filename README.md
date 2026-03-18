@@ -6,8 +6,19 @@ A comprehensive Bitcoin staking library for Sundial Protocol, enabling the creat
 
 This library has two main interfaces:
 
-1. **JavaScript/TypeScript Library**: For integration into web applications, Node.js backends, or any JavaScript/TypeScript environment.
-2. **Command Line Interface (CLI)**: A user-friendly CLI tool for generating and managing Bitcoin timelock scripts directly from the terminal. This is expected to be most used by yield providers who want to create yield distributions locally.
+1. **JavaScript/TypeScript Library (`/src`)**: For integration into web applications, Node.js backends, or any JavaScript/TypeScript environment.
+
+2. **Command Line Interface (`/bin`)**: A user-friendly CLI tool built in Javascript for interacting with the Javascript library directly from the terminal.
+
+And several auxiliary tools to help test & demonstrate usage:
+
+1. **Javascript unit tests (`/tests`)**: Vitest unit tests used to verify the correctness & stability of the Javascript Library.
+
+2. **Demo server (`/demo`)**: A multipurpose demo server that is used for validating bundle testing,  running interactive documentation locally, and demonstrating how to use the Javascript library in a browser environment.
+
+3. **JSDocs (`/docs`)**: A .gitignored folder that includes all generated JSDocs. Run `npm run docs` to generate the latest documentation for your local demo.
+
+4. **Test Coverage (`/coverage`)**: Another .gitignored folder. If you're looking for a full report on test coverage here is where to go. Run `npm run test:coverage`. 
 
 ## Features
 
@@ -83,19 +94,6 @@ npm start
 The package includes a CLI tool for interacting with the same endpoints exposed in the JS library.
 
 More details can be found in the [CLI Documentation](CLI.md), including a full E2E walkthrough of a staking flow.
-
-## Examples
-
-Check the `examples/` directory for comprehensive usage examples:
-
-- `basic-usage.js`: Basic timelock examples
-- `advanced-usage.js`: Advanced scenarios and spending flows
-
-Run examples:
-
-```bash
-npm run example
-```
 
 ## 🧪 Testing
 
