@@ -1,4 +1,4 @@
-import { assert } from "../errors";
+import { assert } from "../errors.js";
 
 /**
  * Common validation utilities
