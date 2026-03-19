@@ -273,3 +273,29 @@ flowchart LR
     class PKH,Provider,RedeemScript,Addresses input
 
 ```
+
+---
+
+# Transaction Preconditions
+
+What must be true before each transaction step is valid, and what enforces each precondition.
+
+| Step                         | Precondition                                                                                                                 | Enforced by                                                                     |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Deposit**                  | User has confirmed UTXOs covering escrow amount + timelock amount + fees                                                     | Bitcoin mempool (unconfirmed inputs rejected by nodes)                          |
+| **Deposit**                  | Both script addresses are correctly derived from the agreed redeem scripts                                                   | Convention — address derivation is deterministic but inputs are caller-supplied |
+| **Claim**                    | Escrow UTXO is confirmed on-chain                                                                                            | Bitcoin (unconfirmed outputs cannot be spent)                                   |
+| **Claim**                    | Transaction is signed by `beforePublicKey` (provider)                                                                        | Bitcoin `OP_CHECKSIG`                                                           |
+| **Claim**                    | Deadline has **not** passed _(convention only — see [trust model](./trust-model.md#known-bug-provider-race-after-deadline))_ | Off-chain agreement only                                                        |
+| **Distribute**               | Provider has sufficient confirmed funds in their own wallet                                                                  | Bitcoin mempool                                                                 |
+| **Distribute**               | Output is sent to the user's timelock address                                                                                | Off-chain agreement only; library accepts any address                           |
+| **Withdraw (escrow path)**   | `nLockTime` of the spending transaction is ≥ `deadline`                                                                      | Bitcoin `OP_CHECKLOCKTIMEVERIFY`                                                |
+| **Withdraw (escrow path)**   | Transaction is signed by `afterPublicKey` (user)                                                                             | Bitcoin `OP_CHECKSIG`                                                           |
+| **Withdraw (timelock path)** | `nLockTime` of the spending transaction is ≥ `locktime`                                                                      | Bitcoin `OP_CHECKLOCKTIMEVERIFY`                                                |
+| **Withdraw (timelock path)** | Transaction is signed by `publicKey` (user)                                                                                  | Bitcoin `OP_CHECKSIG`                                                           |
+
+## Normal vs. Emergency Paths
+
+`createWithdrawalTransaction` is the **normal user withdrawal** — it spends both scripts simultaneously after the shared deadline.
+
+`createClaimTransaction` with `spendAfterDeadline: true` is the **emergency user reclaim path** — it spends only the escrow `OP_IF` branch. This is used when the user needs to reclaim from the escrow independently (e.g. if the timelock has already been swept, or the user prefers to spend them separately). It is not a provider operation.

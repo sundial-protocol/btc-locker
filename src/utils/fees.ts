@@ -87,7 +87,11 @@ export default class FeeUtils {
     outputCount: number,
     feeRate: number = 10,
   ): number {
-    // Rough estimate: 150 bytes per input + 34 bytes per output + 10 bytes overhead
+    // P2SH input: ~148 bytes (41 outpoint + 1 script length + 23 scriptSig push +
+    //   ~83 redeem script push + 4 sequence). Rounded up to 150 as a conservative
+    //   overestimate — actual size varies with redeem script length.
+    // P2PKH/P2SH output: 34 bytes (8 value + 1 script length + 25 scriptPubKey).
+    // Transaction overhead: 10 bytes (4 version + 1 input count + 1 output count + 4 locktime).
     const estimatedSize = inputCount * 150 + outputCount * 34 + 10;
     return Math.ceil(estimatedSize * feeRate);
   }
