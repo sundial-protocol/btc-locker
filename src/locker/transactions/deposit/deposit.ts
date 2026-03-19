@@ -4,7 +4,7 @@ import type {
   ProtocolFeeParams,
   UTXO,
 } from "../../../types.js";
-import { assert } from "../../../errors.js";
+import { assert, assertAll } from "../../../errors.js";
 import {
   FeeUtils,
   TransactionUtils,
@@ -94,19 +94,18 @@ export async function createDepositTransaction(
     inputs = TransactionUtils.selectUtxos(availableInputs, targetAmount);
   }
 
-  assert(typeof escrowAddress === "string", "escrowAddress must be a string");
-  assert(
-    Number.isInteger(escrowAmount) && escrowAmount > 0,
-    "escrowAmount must be a positive integer",
-  );
-  assert(
-    typeof timelockAddress === "string",
-    "timelockAddress must be a string",
-  );
-  assert(
-    Number.isInteger(timelockAmount) && timelockAmount > 0,
-    "timelockAmount must be a positive integer",
-  );
+  assertAll([
+    [typeof escrowAddress === "string", "escrowAddress must be a string"],
+    [
+      Number.isInteger(escrowAmount) && escrowAmount > 0,
+      "escrowAmount must be a positive integer",
+    ],
+    [typeof timelockAddress === "string", "timelockAddress must be a string"],
+    [
+      Number.isInteger(timelockAmount) && timelockAmount > 0,
+      "timelockAmount must be a positive integer",
+    ],
+  ]);
 
   const totalInputValue = inputs.reduce((sum, input) => {
     if (!Number.isInteger(input.value) || input.value <= 0) {

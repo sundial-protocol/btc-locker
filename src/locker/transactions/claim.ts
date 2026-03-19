@@ -1,5 +1,5 @@
 ﻿import * as bitcoin from "bitcoinjs-lib";
-import { assert } from "../../errors.js";
+import { assertAll } from "../../errors.js";
 import { FeeUtils } from "../../utils/index.js";
 import { FeePriorities } from "../../utils/fees.js";
 import MetadataUtils, { TxType } from "../../utils/metadata.js";
@@ -47,23 +47,25 @@ export async function createClaimTransaction(
     previousTransaction = null,
   } = params;
 
-  assert(
-    !!scriptData && scriptData.type === "time-escrow",
-    "Invalid script data - must be a time-escrow script",
-  );
-  assert(
-    typeof utxoTxId === "string" && utxoTxId.length === 64,
-    "utxoTxId must be a 64-character hex string",
-  );
-  assert(
-    Number.isInteger(utxoIndex) && utxoIndex >= 0,
-    "utxoIndex must be a non-negative integer",
-  );
-  assert(
-    Number.isInteger(amount) && amount > 0,
-    "amount must be a positive integer",
-  );
-  assert(typeof outputAddress === "string", "outputAddress must be a string");
+  assertAll([
+    [
+      !!scriptData && scriptData.type === "time-escrow",
+      "Invalid script data - must be a time-escrow script",
+    ],
+    [
+      typeof utxoTxId === "string" && utxoTxId.length === 64,
+      "utxoTxId must be a 64-character hex string",
+    ],
+    [
+      Number.isInteger(utxoIndex) && utxoIndex >= 0,
+      "utxoIndex must be a non-negative integer",
+    ],
+    [
+      Number.isInteger(amount) && amount > 0,
+      "amount must be a positive integer",
+    ],
+    [typeof outputAddress === "string", "outputAddress must be a string"],
+  ]);
 
   const currentTimeSeconds = Math.floor(currentTime / 1000);
   if (

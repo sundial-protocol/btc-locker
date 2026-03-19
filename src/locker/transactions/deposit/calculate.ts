@@ -1,6 +1,10 @@
 ﻿import type { LockerContext } from "../../core.js";
-import { assert } from "../../../errors.js";
-import { FeeUtils, TransactionUtils } from "../../../utils/index.js";
+import { assertAll } from "../../../errors.js";
+import {
+  FeeUtils,
+  TransactionUtils,
+  ValidationUtils,
+} from "../../../utils/index.js";
 
 /**
  * Parameters for Dawn staking amount calculation
@@ -67,12 +71,13 @@ export async function calculateDepositAmounts(
     includeChange,
     metadata,
   ]);
+  const minimumCost =
+    desiredEscrowAmount + desiredTimelockAmount + protocolFeeAmount;
 
   if (providedInputs) {
-    assert(
-      Array.isArray(providedInputs),
-      "inputs must be an array when provided",
-    );
+    assertAll([
+      [Array.isArray(providedInputs), "inputs must be an array when provided"],
+    ]);
     inputs = providedInputs;
   } else {
     const availableInputs = await ctx.api.fetchConfirmedUtxos(sourceAddress);
@@ -83,37 +88,31 @@ export async function calculateDepositAmounts(
       );
     }
 
-    const estimatedInputCount = Math.min(availableInputs.length, 3);
-    const estimatedFee = FeeUtils.estimateFee(
-      estimatedInputCount,
+    const approxFee = FeeUtils.estimateFee(
+      Math.min(availableInputs.length, 3),
       outputCount,
       feeRate,
     );
-    const targetAmount =
-      desiredEscrowAmount +
-      desiredTimelockAmount +
-      protocolFeeAmount +
-      estimatedFee;
-
     try {
-      const selectedUtxos = TransactionUtils.selectUtxos(
+      inputs = TransactionUtils.selectUtxos(
         availableInputs,
-        targetAmount,
-      );
-      inputs = selectedUtxos.map((utxo) => ({ value: utxo.value }));
+        minimumCost + approxFee,
+      ).map((utxo) => ({ value: utxo.value }));
     } catch {
       inputs = availableInputs.map((utxo) => ({ value: utxo.value }));
     }
   }
 
-  assert(
-    Number.isInteger(desiredEscrowAmount) && desiredEscrowAmount > 0,
-    "desiredEscrowAmount must be a positive integer",
-  );
-  assert(
-    Number.isInteger(desiredTimelockAmount) && desiredTimelockAmount > 0,
-    "desiredTimelockAmount must be a positive integer",
-  );
+  assertAll([
+    [
+      Number.isInteger(desiredEscrowAmount) && desiredEscrowAmount > 0,
+      "desiredEscrowAmount must be a positive integer",
+    ],
+    [
+      Number.isInteger(desiredTimelockAmount) && desiredTimelockAmount > 0,
+      "desiredTimelockAmount must be a positive integer",
+    ],
+  ]);
 
   const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
 
@@ -123,44 +122,40 @@ export async function calculateDepositAmounts(
     feeRate,
   );
 
-  const totalRequired =
-    desiredEscrowAmount +
-    desiredTimelockAmount +
-    protocolFeeAmount +
-    estimatedFee;
+  const totalRequired = minimumCost + estimatedFee;
   const changeAmount = totalInputValue - totalRequired;
 
-  let feasible = true;
-  let recommendation = "";
+  const checks: [boolean, string][] = [
+    [
+      desiredEscrowAmount < FeeUtils.DUST_THRESHOLD,
+      `Escrow amount ${desiredEscrowAmount} below dust threshold ${FeeUtils.DUST_THRESHOLD}. `,
+    ],
+    [
+      desiredTimelockAmount < FeeUtils.DUST_THRESHOLD,
+      `Timelock amount ${desiredTimelockAmount} below dust threshold ${FeeUtils.DUST_THRESHOLD}. `,
+    ],
+    [
+      protocolFeeAmount > 0 && protocolFeeAmount < FeeUtils.DUST_THRESHOLD,
+      `Protocol fee amount ${protocolFeeAmount} below dust threshold ${FeeUtils.DUST_THRESHOLD}. `,
+    ],
+    [
+      changeAmount < 0,
+      `Insufficient funds: need ${totalRequired}, have ${totalInputValue}, shortage ${Math.abs(changeAmount)}. `,
+    ],
+    [
+      includeChange &&
+        changeAmount > 0 &&
+        changeAmount < FeeUtils.DUST_THRESHOLD,
+      `Change amount ${changeAmount} below dust threshold. `,
+    ],
+  ];
 
-  if (desiredEscrowAmount < FeeUtils.DUST_THRESHOLD) {
-    feasible = false;
-    recommendation += `Escrow amount ${desiredEscrowAmount} below dust threshold ${FeeUtils.DUST_THRESHOLD}. `;
-  }
-
-  if (desiredTimelockAmount < FeeUtils.DUST_THRESHOLD) {
-    feasible = false;
-    recommendation += `Timelock amount ${desiredTimelockAmount} below dust threshold ${FeeUtils.DUST_THRESHOLD}. `;
-  }
-
-  if (protocolFeeAmount > 0 && protocolFeeAmount < FeeUtils.DUST_THRESHOLD) {
-    feasible = false;
-    recommendation += `Protocol fee amount ${protocolFeeAmount} below dust threshold ${FeeUtils.DUST_THRESHOLD}. `;
-  }
-
-  if (changeAmount < 0) {
-    feasible = false;
-    recommendation += `Insufficient funds: need ${totalRequired}, have ${totalInputValue}, shortage ${Math.abs(changeAmount)}. `;
-  }
-
-  if (
-    includeChange &&
-    changeAmount > 0 &&
-    changeAmount < FeeUtils.DUST_THRESHOLD
-  ) {
-    feasible = false;
-    recommendation += `Change amount ${changeAmount} below dust threshold. `;
-  }
+  const recommendation = checks
+    .filter(([cond]) => cond)
+    .map(([, msg]) => msg)
+    .join("")
+    .trim();
+  const feasible = recommendation === "";
 
   return {
     totalInputValue,
@@ -168,6 +163,6 @@ export async function calculateDepositAmounts(
     totalRequired,
     changeAmount: Math.max(0, changeAmount),
     feasible,
-    recommendation: recommendation.trim() || undefined,
+    recommendation: recommendation || undefined,
   };
 }

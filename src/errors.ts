@@ -30,3 +30,9 @@ export function assert(condition: boolean, message: string): void {
     throw new Error(message);
   }
 }
+
+export function assertAll(checks: [boolean, string][]): void {
+  for (const [condition, message] of checks) {
+    assert(condition, message);
+  }
+}

@@ -1,4 +1,4 @@
-import { assert } from "../errors.js";
+import { assert, assertAll } from "../errors.js";
 
 /**
  * Common validation utilities
@@ -15,17 +15,14 @@ export default class ValidationUtils {
     locktime: string | number,
     paramName: string = "locktime",
   ): number {
-    assert(
-      !(locktime === undefined || locktime === null),
-      `${paramName} cannot be undefined or null`,
-    );
-
     const locktimeNumber = Number(locktime);
-    assert(
-      Number.isInteger(locktimeNumber) && locktimeNumber >= 0,
-      `${paramName} must be a non-negative integer`,
-    );
-
+    assertAll([
+      [locktime != null, `${paramName} cannot be undefined or null`],
+      [
+        Number.isInteger(locktimeNumber) && locktimeNumber >= 0,
+        `${paramName} must be a non-negative integer`,
+      ],
+    ]);
     return locktimeNumber;
   }
 
@@ -42,19 +39,15 @@ export default class ValidationUtils {
     paramName: string = "amount",
     allowZero: boolean = false,
   ): number {
-    assert(
-      !(amount === undefined || amount === null),
-      `${paramName} cannot be undefined or null`,
-    );
-
     const amountNumber = Number(amount);
-    assert(Number.isInteger(amountNumber), `${paramName} must be an integer`);
-
-    assert(
-      allowZero ? amountNumber >= 0 : amountNumber > 0,
-      `${paramName} must be ${allowZero ? "non-negative" : "positive"}`,
-    );
-
+    assertAll([
+      [amount != null, `${paramName} cannot be undefined or null`],
+      [Number.isInteger(amountNumber), `${paramName} must be an integer`],
+      [
+        allowZero ? amountNumber >= 0 : amountNumber > 0,
+        `${paramName} must be ${allowZero ? "non-negative" : "positive"}`,
+      ],
+    ]);
     return amountNumber;
   }
 
@@ -81,13 +74,15 @@ export default class ValidationUtils {
     feeAddress: string | undefined,
     protocolFeeAmount: number | undefined,
   ): void {
-    assert(
-      !feeAddress || !!protocolFeeAmount,
-      "protocolFeeAmount is required when feeAddress is provided",
-    );
-    assert(
-      !protocolFeeAmount || !!feeAddress,
-      "feeAddress is required when protocolFeeAmount is provided",
-    );
+    assertAll([
+      [
+        !feeAddress || !!protocolFeeAmount,
+        "protocolFeeAmount is required when feeAddress is provided",
+      ],
+      [
+        !protocolFeeAmount || !!feeAddress,
+        "feeAddress is required when protocolFeeAmount is provided",
+      ],
+    ]);
   }
 }
