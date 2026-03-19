@@ -121,15 +121,15 @@ export async function createWithdrawalTransaction(
   const totalFees = feeAmount + (protocolFeeAmount || 0);
   const destinationValue = totalInputValue - totalFees;
 
-  if (destinationValue <= 546) {
+  if (destinationValue <= FeeUtils.DUST_THRESHOLD) {
     throw new Error(
       "Destination output amount would be below dust threshold after fees",
     );
   }
 
-  if (protocolFeeAmount && protocolFeeAmount < 546) {
+  if (protocolFeeAmount && protocolFeeAmount < FeeUtils.DUST_THRESHOLD) {
     throw new Error(
-      `Protocol fee amount ${protocolFeeAmount} is below dust threshold 546`,
+      `Protocol fee amount ${protocolFeeAmount} is below dust threshold ${FeeUtils.DUST_THRESHOLD}`,
     );
   }
 
@@ -240,7 +240,11 @@ export async function createWithdrawalTransaction(
     value: BigInt(destinationValue),
   });
 
-  if (feeAddress && protocolFeeAmount && protocolFeeAmount >= 546) {
+  if (
+    feeAddress &&
+    protocolFeeAmount &&
+    protocolFeeAmount >= FeeUtils.DUST_THRESHOLD
+  ) {
     psbt.addOutput({
       address: feeAddress,
       value: BigInt(protocolFeeAmount),

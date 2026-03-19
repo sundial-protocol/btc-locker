@@ -83,7 +83,11 @@ export async function createDepositTransaction(
       );
     }
 
-    const outputCount = TransactionUtils.countOutputs(2, [protocolFeeAmount && feeAddress, changeAddress, metadata]);
+    const outputCount = TransactionUtils.countOutputs(2, [
+      protocolFeeAmount && feeAddress,
+      changeAddress,
+      metadata,
+    ]);
 
     const estimatedInputCount = Math.min(availableInputs.length, 3);
     const estimatedFee = FeeUtils.estimateFee(
@@ -120,8 +124,16 @@ export async function createDepositTransaction(
     return sum + input.value;
   }, 0);
 
-  const outputCount = TransactionUtils.countOutputs(2, [protocolFeeAmount && feeAddress, changeAddress, metadata]);
-  const estimatedFee = FeeUtils.estimateFee(inputs.length, outputCount, feeRate);
+  const outputCount = TransactionUtils.countOutputs(2, [
+    protocolFeeAmount && feeAddress,
+    changeAddress,
+    metadata,
+  ]);
+  const estimatedFee = FeeUtils.estimateFee(
+    inputs.length,
+    outputCount,
+    feeRate,
+  );
 
   const totalRequiredAmount =
     escrowAmount + timelockAmount + (protocolFeeAmount || 0) + estimatedFee;
@@ -133,29 +145,31 @@ export async function createDepositTransaction(
     );
   }
 
-  const dustThreshold = 546;
-
-  if (escrowAmount < dustThreshold) {
+  if (escrowAmount < FeeUtils.DUST_THRESHOLD) {
     throw new Error(
-      `Escrow amount ${escrowAmount} is below dust threshold ${dustThreshold}`,
+      `Escrow amount ${escrowAmount} is below dust threshold ${FeeUtils.DUST_THRESHOLD}`,
     );
   }
 
-  if (timelockAmount < dustThreshold) {
+  if (timelockAmount < FeeUtils.DUST_THRESHOLD) {
     throw new Error(
-      `Timelock amount ${timelockAmount} is below dust threshold ${dustThreshold}`,
+      `Timelock amount ${timelockAmount} is below dust threshold ${FeeUtils.DUST_THRESHOLD}`,
     );
   }
 
-  if (protocolFeeAmount && protocolFeeAmount < dustThreshold) {
+  if (protocolFeeAmount && protocolFeeAmount < FeeUtils.DUST_THRESHOLD) {
     throw new Error(
-      `Protocol fee amount ${protocolFeeAmount} is below dust threshold ${dustThreshold}`,
+      `Protocol fee amount ${protocolFeeAmount} is below dust threshold ${FeeUtils.DUST_THRESHOLD}`,
     );
   }
 
-  if (changeAddress && changeAmount > 0 && changeAmount < dustThreshold) {
+  if (
+    changeAddress &&
+    changeAmount > 0 &&
+    changeAmount < FeeUtils.DUST_THRESHOLD
+  ) {
     throw new Error(
-      `Change amount ${changeAmount} is below dust threshold ${dustThreshold}. Either increase inputs or remove change address.`,
+      `Change amount ${changeAmount} is below dust threshold ${FeeUtils.DUST_THRESHOLD}. Either increase inputs or remove change address.`,
     );
   }
 
@@ -177,14 +191,18 @@ export async function createDepositTransaction(
       value: BigInt(timelockAmount),
     });
 
-    if (feeAddress && protocolFeeAmount && protocolFeeAmount >= dustThreshold) {
+    if (
+      feeAddress &&
+      protocolFeeAmount &&
+      protocolFeeAmount >= FeeUtils.DUST_THRESHOLD
+    ) {
       psbt.addOutput({
         address: feeAddress,
         value: BigInt(protocolFeeAmount),
       });
     }
 
-    if (changeAddress && changeAmount >= dustThreshold) {
+    if (changeAddress && changeAmount >= FeeUtils.DUST_THRESHOLD) {
       psbt.addOutput({
         address: changeAddress,
         value: BigInt(changeAmount),

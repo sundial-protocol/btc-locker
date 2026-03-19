@@ -61,7 +61,11 @@ export async function calculateDepositAmounts(
   } = params;
 
   let inputs: Array<{ value: number }>;
-  const outputCount = TransactionUtils.countOutputs(2, [protocolFeeAmount > 0, includeChange, metadata]);
+  const outputCount = TransactionUtils.countOutputs(2, [
+    protocolFeeAmount > 0,
+    includeChange,
+    metadata,
+  ]);
 
   if (providedInputs) {
     if (!Array.isArray(providedInputs)) {
@@ -78,7 +82,11 @@ export async function calculateDepositAmounts(
     }
 
     const estimatedInputCount = Math.min(availableInputs.length, 3);
-    const estimatedFee = FeeUtils.estimateFee(estimatedInputCount, outputCount, feeRate);
+    const estimatedFee = FeeUtils.estimateFee(
+      estimatedInputCount,
+      outputCount,
+      feeRate,
+    );
     const targetAmount =
       desiredEscrowAmount +
       desiredTimelockAmount +
@@ -106,9 +114,12 @@ export async function calculateDepositAmounts(
 
   const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
 
-  const estimatedFee = FeeUtils.estimateFee(inputs.length, outputCount, feeRate);
+  const estimatedFee = FeeUtils.estimateFee(
+    inputs.length,
+    outputCount,
+    feeRate,
+  );
 
-  const dustThreshold = 546;
   const totalRequired =
     desiredEscrowAmount +
     desiredTimelockAmount +
@@ -119,19 +130,19 @@ export async function calculateDepositAmounts(
   let feasible = true;
   let recommendation = "";
 
-  if (desiredEscrowAmount < dustThreshold) {
+  if (desiredEscrowAmount < FeeUtils.DUST_THRESHOLD) {
     feasible = false;
-    recommendation += `Escrow amount ${desiredEscrowAmount} below dust threshold ${dustThreshold}. `;
+    recommendation += `Escrow amount ${desiredEscrowAmount} below dust threshold ${FeeUtils.DUST_THRESHOLD}. `;
   }
 
-  if (desiredTimelockAmount < dustThreshold) {
+  if (desiredTimelockAmount < FeeUtils.DUST_THRESHOLD) {
     feasible = false;
-    recommendation += `Timelock amount ${desiredTimelockAmount} below dust threshold ${dustThreshold}. `;
+    recommendation += `Timelock amount ${desiredTimelockAmount} below dust threshold ${FeeUtils.DUST_THRESHOLD}. `;
   }
 
-  if (protocolFeeAmount > 0 && protocolFeeAmount < dustThreshold) {
+  if (protocolFeeAmount > 0 && protocolFeeAmount < FeeUtils.DUST_THRESHOLD) {
     feasible = false;
-    recommendation += `Protocol fee amount ${protocolFeeAmount} below dust threshold ${dustThreshold}. `;
+    recommendation += `Protocol fee amount ${protocolFeeAmount} below dust threshold ${FeeUtils.DUST_THRESHOLD}. `;
   }
 
   if (changeAmount < 0) {
@@ -139,7 +150,11 @@ export async function calculateDepositAmounts(
     recommendation += `Insufficient funds: need ${totalRequired}, have ${totalInputValue}, shortage ${Math.abs(changeAmount)}. `;
   }
 
-  if (includeChange && changeAmount > 0 && changeAmount < dustThreshold) {
+  if (
+    includeChange &&
+    changeAmount > 0 &&
+    changeAmount < FeeUtils.DUST_THRESHOLD
+  ) {
     feasible = false;
     recommendation += `Change amount ${changeAmount} below dust threshold. `;
   }
