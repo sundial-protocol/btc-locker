@@ -5,7 +5,7 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { LockerContext } from "../core.js";
 import type { UTXO, BaseTransactionParams } from "../../types.js";
-import { TransactionUtils } from "../../utils/index.js";
+import { TransactionUtils, ScriptUtils } from "../../utils/index.js";
 import BitcoinAPI from "../../bitcoin-api.js";
 
 /**
@@ -97,49 +97,24 @@ export async function createSpendingTransaction(
 ): Promise<string> {
   const { inputs, outputs, redeemScript } = params;
 
-  const redeemScriptBuffer = Buffer.from(redeemScript, "hex");
-  let locktime: number | null = null;
-
-  try {
-    const ops = bitcoin.script.decompile(redeemScriptBuffer);
-    if (
-      ops &&
-      ops.length > 1 &&
-      ops[1] === bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY
-    ) {
-      if (typeof ops[0] === "number") {
-        locktime = ops[0];
-      } else if (Buffer.isBuffer(ops[0])) {
-        let locktimeValue = 0;
-        for (let i = 0; i < ops[0].length; i++) {
-          locktimeValue += ops[0][i] << (8 * i);
-        }
-        locktime = locktimeValue;
-      }
-
-      if (locktime) {
-        const currentTime = Math.floor(Date.now() / 1000);
-        if (currentTime < locktime) {
-          const timeRemaining = locktime - currentTime;
-          const expiryDate = new Date(locktime * 1000).toISOString();
-          throw new Error(
-            `Timelock has not expired yet. ` +
-              `Current time: ${currentTime}, Locktime: ${locktime}. ` +
-              `Time remaining: ${timeRemaining} seconds. ` +
-              `Expires at: ${expiryDate}`,
-          );
-        }
-      }
-    }
-  } catch (error) {
-    if ((error as Error).message.includes("Timelock has not expired")) {
-      throw error;
+  const locktime = ScriptUtils.extractLocktimeFromScript(redeemScript);
+  if (locktime !== null) {
+    const currentTime = Math.floor(Date.now() / 1000);
+    if (currentTime < locktime) {
+      const timeRemaining = locktime - currentTime;
+      const expiryDate = new Date(locktime * 1000).toISOString();
+      throw new Error(
+        `Timelock has not expired yet. ` +
+          `Current time: ${currentTime}, Locktime: ${locktime}. ` +
+          `Time remaining: ${timeRemaining} seconds. ` +
+          `Expires at: ${expiryDate}`,
+      );
     }
   }
 
   const psbt = new bitcoin.Psbt({ network: ctx.network });
 
-  if (locktime) {
+  if (locktime !== null) {
     psbt.setLocktime(locktime);
   }
 

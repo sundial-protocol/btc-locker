@@ -42,7 +42,10 @@ export default class ScriptUtils {
    * @param network - Bitcoin network (optional)
    * @returns True if valid
    */
-  static isValidAddress(address: string, network: bitcoin.Network = bitcoin.networks.bitcoin): boolean {
+  static isValidAddress(
+    address: string,
+    network: bitcoin.Network = bitcoin.networks.bitcoin,
+  ): boolean {
     try {
       bitcoin.address.toOutputScript(address, network);
       return true;
@@ -75,19 +78,22 @@ export default class ScriptUtils {
       .join(" ");
   }
 
-    /**
+  /**
    * Create P2SH address from redeem script
    * @param redeemScript - The redeem script buffer
    * @param network - Bitcoin network
    * @returns P2SH address string
    * @throws If script is invalid or address creation fails
    */
-  static createScriptAddress(redeemScript: Buffer, network: bitcoin.Network): string {
+  static createScriptAddress(
+    redeemScript: Buffer,
+    network: bitcoin.Network,
+  ): string {
     try {
       if (!redeemScript || redeemScript.length === 0) {
         throw new Error("Invalid redeem script: empty or undefined");
       }
-      
+
       if (!network) {
         throw new Error("Invalid network: network parameter is undefined");
       }
@@ -99,12 +105,16 @@ export default class ScriptUtils {
       });
 
       if (!payment || !payment.address) {
-        throw new Error("Failed to generate address from script - payment object or address is undefined");
+        throw new Error(
+          "Failed to generate address from script - payment object or address is undefined",
+        );
       }
 
       return payment.address;
     } catch (error) {
-      throw new Error(`Failed to create script address: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to create script address: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -116,5 +126,32 @@ export default class ScriptUtils {
   static calculateScriptHash(redeemScript: Buffer): string {
     const hash = bitcoin.crypto.hash160(redeemScript);
     return Buffer.from(hash).toString("hex");
+  }
+
+  /**
+   * Extract locktime from a CLTV redeem script (timelock or escrow)
+   * @param redeemScriptHex - Redeem script in hex format
+   * @returns Locktime as number, or null if not a CLTV script
+   */
+  static extractLocktimeFromScript(redeemScriptHex: string): number | null {
+    try {
+      const ops = bitcoin.script.decompile(Buffer.from(redeemScriptHex, "hex"));
+      if (!ops) return null;
+      const cltvIndex = ops.findIndex(
+        (op) => op === bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
+      );
+      if (cltvIndex < 1) return null;
+      const locktimeOp = ops[cltvIndex - 1];
+      if (typeof locktimeOp === "number") return locktimeOp;
+      if (Buffer.isBuffer(locktimeOp) || locktimeOp instanceof Uint8Array) {
+        let value = 0;
+        for (let i = 0; i < locktimeOp.length; i++)
+          value += locktimeOp[i] << (8 * i);
+        return value;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 }

@@ -1,6 +1,5 @@
 ﻿import type { LockerContext } from "../../core.js";
 import { assertAll } from "../../../errors.js";
-import { ValidationUtils } from "../../../utils/index.js";
 import { createDepositTransaction, DepositParams } from "./deposit.js";
 import { ScriptInfo } from "../../../index.js";
 
@@ -30,7 +29,7 @@ export async function createDepositTransactionWithScript(
       "timelockScript must be a valid script object",
     ],
     [
-      typeof (timelockScript as any)?.address === "string",
+      typeof timelockScript?.address === "string",
       "timelockScript must have an address property",
     ],
   ]);

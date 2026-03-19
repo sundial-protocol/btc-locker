@@ -1,10 +1,6 @@
 ﻿import type { LockerContext } from "../../core.js";
 import { assertAll } from "../../../errors.js";
-import {
-  FeeUtils,
-  TransactionUtils,
-  ValidationUtils,
-} from "../../../utils/index.js";
+import { FeeUtils, TransactionUtils } from "../../../utils/index.js";
 
 /**
  * Parameters for Dawn staking amount calculation

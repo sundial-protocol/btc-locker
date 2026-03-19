@@ -59,6 +59,24 @@ export async function createWithdrawalTransaction(
 
   ValidationUtils.assertProtocolFeeParams(feeAddress, protocolFeeAmount);
 
+  let maxLocktime = 0;
+  const currentTime = Math.floor(Date.now() / 1000);
+
+  for (const [scriptHex, label] of [
+    [escrowRedeemScript, "escrow"],
+    [timelockRedeemScript, "timelock"],
+  ] as const) {
+    const timestamp = ScriptUtils.extractLocktimeFromScript(scriptHex);
+    if (timestamp !== null) {
+      if (currentTime < timestamp) {
+        throw new Error(
+          `Cannot withdraw from ${label} script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(timestamp * 1000).toISOString()}`,
+        );
+      }
+      maxLocktime = Math.max(maxLocktime, timestamp);
+    }
+  }
+
   const escrowAddress =
     providedEscrowAddress ??
     ScriptUtils.createScriptAddress(
@@ -126,55 +144,6 @@ export async function createWithdrawalTransaction(
     FeeUtils.assertAboveDust(protocolFeeAmount, "Protocol fee amount");
 
   const psbt = new bitcoin.Psbt({ network: ctx.network });
-
-  let maxLocktime = 0;
-  const currentTime = Math.floor(Date.now() / 1000);
-
-  try {
-    const script = Buffer.from(escrowRedeemScript, "hex");
-    if (script.length > 5 && script[0] === 0x63) {
-      const timestampBytes = script.slice(2, 6);
-      const timestamp = timestampBytes.readUInt32LE(0);
-
-      if (currentTime < timestamp) {
-        throw new Error(
-          `Cannot withdraw from escrow script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(timestamp * 1000).toISOString()}`,
-        );
-      }
-
-      maxLocktime = Math.max(maxLocktime, timestamp);
-    }
-  } catch (parseError) {
-    if (
-      parseError instanceof Error &&
-      parseError.message.includes("Cannot withdraw")
-    ) {
-      throw parseError;
-    }
-  }
-
-  try {
-    const script = Buffer.from(timelockRedeemScript, "hex");
-    if (script.length > 4 && script[0] === 0x04) {
-      const timestampBytes = script.slice(1, 5);
-      const timestamp = timestampBytes.readUInt32LE(0);
-
-      if (currentTime < timestamp) {
-        throw new Error(
-          `Cannot withdraw from timelock script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(timestamp * 1000).toISOString()}`,
-        );
-      }
-
-      maxLocktime = Math.max(maxLocktime, timestamp);
-    }
-  } catch (parseError) {
-    if (
-      parseError instanceof Error &&
-      parseError.message.includes("Cannot withdraw")
-    ) {
-      throw parseError;
-    }
-  }
 
   if (maxLocktime > 0) {
     psbt.setLocktime(maxLocktime);

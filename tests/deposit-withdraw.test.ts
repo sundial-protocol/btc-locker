@@ -853,12 +853,10 @@ describe("TransactionManager (mocked fees)", () => {
 
     test("should reject escrow script with future deadline", async () => {
       const futureTimestamp = Math.floor(Date.now() / 1000) + 86400;
-      // Build a script that starts with OP_IF followed by a 4-byte push of a future timestamp
-      const timestampBuf = Buffer.alloc(4);
-      timestampBuf.writeUInt32LE(futureTimestamp, 0);
-      const escrowRedeemScript = Buffer.concat([
-        Buffer.from([0x63, 0x04]), // OP_IF, push 4 bytes
-        timestampBuf,
+      const escrowRedeemScript = bitcoin.script.compile([
+        bitcoin.opcodes.OP_IF,
+        bitcoin.script.number.encode(futureTimestamp),
+        bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
       ]);
 
       const timelockRedeemScript = Buffer.from("00", "hex");
@@ -866,7 +864,7 @@ describe("TransactionManager (mocked fees)", () => {
       await expect(
         manager.createWithdrawalTransaction({
           escrowInputs: [{ txid: "a".repeat(64), vout: 0, value: 100000 }],
-          escrowRedeemScript: escrowRedeemScript.toString("hex"),
+          escrowRedeemScript: Buffer.from(escrowRedeemScript).toString("hex"),
           timelockInputs: [],
           timelockRedeemScript: timelockRedeemScript.toString("hex"),
           destination: testAddress,
@@ -877,12 +875,9 @@ describe("TransactionManager (mocked fees)", () => {
 
     test("should reject timelock script with future deadline", async () => {
       const futureTimestamp = Math.floor(Date.now() / 1000) + 86400;
-      // Timelock script starts with push 4 bytes then timestamp
-      const timestampBuf = Buffer.alloc(4);
-      timestampBuf.writeUInt32LE(futureTimestamp, 0);
-      const timelockRedeemScript = Buffer.concat([
-        Buffer.from([0x04]), // push 4 bytes
-        timestampBuf,
+      const timelockRedeemScript = bitcoin.script.compile([
+        bitcoin.script.number.encode(futureTimestamp),
+        bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
       ]);
 
       const escrowRedeemScript = Buffer.from("00", "hex");
@@ -892,7 +887,8 @@ describe("TransactionManager (mocked fees)", () => {
           escrowInputs: [{ txid: "a".repeat(64), vout: 0, value: 100000 }],
           escrowRedeemScript: escrowRedeemScript.toString("hex"),
           timelockInputs: [],
-          timelockRedeemScript: timelockRedeemScript.toString("hex"),
+          timelockRedeemScript:
+            Buffer.from(timelockRedeemScript).toString("hex"),
           destination: testAddress,
           priority: "medium" as any,
         }),
