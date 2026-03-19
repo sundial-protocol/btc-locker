@@ -1,12 +1,10 @@
 ﻿import * as bitcoin from "bitcoinjs-lib";
+import { assert } from "../../errors.js";
 import { FeeUtils } from "../../utils/index.js";
 import { FeePriorities } from "../../utils/fees.js";
 import MetadataUtils, { TxType } from "../../utils/metadata.js";
 import type { LockerContext } from "../core.js";
-import {
-  BaseTransactionParams,
-  ScriptInfo,
-} from "../../index.js";
+import { BaseTransactionParams, ScriptInfo } from "../../index.js";
 
 /**
  * Escrow transaction creation parameters
@@ -49,25 +47,23 @@ export async function createClaimTransaction(
     previousTransaction = null,
   } = params;
 
-  if (!scriptData || scriptData.type !== "time-escrow") {
-    throw new Error("Invalid script data - must be a time-escrow script");
-  }
-
-  if (typeof utxoTxId !== "string" || utxoTxId.length !== 64) {
-    throw new Error("utxoTxId must be a 64-character hex string");
-  }
-
-  if (!Number.isInteger(utxoIndex) || utxoIndex < 0) {
-    throw new Error("utxoIndex must be a non-negative integer");
-  }
-
-  if (!Number.isInteger(amount) || amount <= 0) {
-    throw new Error("amount must be a positive integer");
-  }
-
-  if (typeof outputAddress !== "string") {
-    throw new Error("outputAddress must be a string");
-  }
+  assert(
+    !!scriptData && scriptData.type === "time-escrow",
+    "Invalid script data - must be a time-escrow script",
+  );
+  assert(
+    typeof utxoTxId === "string" && utxoTxId.length === 64,
+    "utxoTxId must be a 64-character hex string",
+  );
+  assert(
+    Number.isInteger(utxoIndex) && utxoIndex >= 0,
+    "utxoIndex must be a non-negative integer",
+  );
+  assert(
+    Number.isInteger(amount) && amount > 0,
+    "amount must be a positive integer",
+  );
+  assert(typeof outputAddress === "string", "outputAddress must be a string");
 
   const currentTimeSeconds = Math.floor(currentTime / 1000);
   if (

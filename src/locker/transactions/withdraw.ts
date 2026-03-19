@@ -4,7 +4,12 @@ import type {
   ProtocolFeeParams,
   UTXO,
 } from "../../types.js";
-import { FeeUtils, ScriptUtils, TransactionUtils } from "../../utils/index.js";
+import {
+  FeeUtils,
+  ScriptUtils,
+  TransactionUtils,
+  ValidationUtils,
+} from "../../utils/index.js";
 import { FeePriorities } from "../../utils/fees.js";
 import { TxType } from "../../utils/metadata.js";
 import type { LockerContext } from "../core.js";
@@ -52,17 +57,7 @@ export async function createWithdrawalTransaction(
     metadata,
   } = params;
 
-  if (feeAddress && !protocolFeeAmount) {
-    throw new Error(
-      "protocolFeeAmount is required when feeAddress is provided",
-    );
-  }
-
-  if (protocolFeeAmount && !feeAddress) {
-    throw new Error(
-      "feeAddress is required when protocolFeeAmount is provided",
-    );
-  }
+  ValidationUtils.assertProtocolFeeParams(feeAddress, protocolFeeAmount);
 
   const escrowAddress =
     providedEscrowAddress ??
@@ -127,11 +122,8 @@ export async function createWithdrawalTransaction(
     );
   }
 
-  if (protocolFeeAmount && protocolFeeAmount < FeeUtils.DUST_THRESHOLD) {
-    throw new Error(
-      `Protocol fee amount ${protocolFeeAmount} is below dust threshold ${FeeUtils.DUST_THRESHOLD}`,
-    );
-  }
+  if (protocolFeeAmount)
+    FeeUtils.assertAboveDust(protocolFeeAmount, "Protocol fee amount");
 
   const psbt = new bitcoin.Psbt({ network: ctx.network });
 

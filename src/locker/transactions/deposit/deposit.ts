@@ -4,7 +4,12 @@ import type {
   ProtocolFeeParams,
   UTXO,
 } from "../../../types.js";
-import { FeeUtils, TransactionUtils } from "../../../utils/index.js";
+import { assert } from "../../../errors.js";
+import {
+  FeeUtils,
+  TransactionUtils,
+  ValidationUtils,
+} from "../../../utils/index.js";
 import { FeePriorities } from "../../../utils/fees.js";
 import { TxType } from "../../../utils/metadata.js";
 import type { LockerContext } from "../../core.js";
@@ -50,24 +55,12 @@ export async function createDepositTransaction(
     metadata,
   } = params;
 
-  if (
-    providedInputs &&
-    (!Array.isArray(providedInputs) || providedInputs.length === 0)
-  ) {
-    throw new Error("inputs must be a non-empty array when provided");
-  }
-
-  if (feeAddress && !protocolFeeAmount) {
-    throw new Error(
-      "protocolFeeAmount is required when feeAddress is provided",
-    );
-  }
-
-  if (protocolFeeAmount && !feeAddress) {
-    throw new Error(
-      "feeAddress is required when protocolFeeAmount is provided",
-    );
-  }
+  assert(
+    !providedInputs ||
+      (Array.isArray(providedInputs) && providedInputs.length > 0),
+    "inputs must be a non-empty array when provided",
+  );
+  ValidationUtils.assertProtocolFeeParams(feeAddress, protocolFeeAmount);
 
   let inputs: UTXO[];
   const feeRate = await FeeUtils.queryChainFeeRates(priority);
@@ -101,21 +94,19 @@ export async function createDepositTransaction(
     inputs = TransactionUtils.selectUtxos(availableInputs, targetAmount);
   }
 
-  if (typeof escrowAddress !== "string") {
-    throw new Error("escrowAddress must be a string");
-  }
-
-  if (!Number.isInteger(escrowAmount) || escrowAmount <= 0) {
-    throw new Error("escrowAmount must be a positive integer");
-  }
-
-  if (typeof timelockAddress !== "string") {
-    throw new Error("timelockAddress must be a string");
-  }
-
-  if (!Number.isInteger(timelockAmount) || timelockAmount <= 0) {
-    throw new Error("timelockAmount must be a positive integer");
-  }
+  assert(typeof escrowAddress === "string", "escrowAddress must be a string");
+  assert(
+    Number.isInteger(escrowAmount) && escrowAmount > 0,
+    "escrowAmount must be a positive integer",
+  );
+  assert(
+    typeof timelockAddress === "string",
+    "timelockAddress must be a string",
+  );
+  assert(
+    Number.isInteger(timelockAmount) && timelockAmount > 0,
+    "timelockAmount must be a positive integer",
+  );
 
   const totalInputValue = inputs.reduce((sum, input) => {
     if (!Number.isInteger(input.value) || input.value <= 0) {
@@ -145,33 +136,16 @@ export async function createDepositTransaction(
     );
   }
 
-  if (escrowAmount < FeeUtils.DUST_THRESHOLD) {
-    throw new Error(
-      `Escrow amount ${escrowAmount} is below dust threshold ${FeeUtils.DUST_THRESHOLD}`,
+  FeeUtils.assertAboveDust(escrowAmount, "Escrow amount");
+  FeeUtils.assertAboveDust(timelockAmount, "Timelock amount");
+  if (protocolFeeAmount)
+    FeeUtils.assertAboveDust(protocolFeeAmount, "Protocol fee amount");
+  if (changeAddress && changeAmount > 0)
+    FeeUtils.assertAboveDust(
+      changeAmount,
+      "Change amount",
+      "Either increase inputs or remove change address.",
     );
-  }
-
-  if (timelockAmount < FeeUtils.DUST_THRESHOLD) {
-    throw new Error(
-      `Timelock amount ${timelockAmount} is below dust threshold ${FeeUtils.DUST_THRESHOLD}`,
-    );
-  }
-
-  if (protocolFeeAmount && protocolFeeAmount < FeeUtils.DUST_THRESHOLD) {
-    throw new Error(
-      `Protocol fee amount ${protocolFeeAmount} is below dust threshold ${FeeUtils.DUST_THRESHOLD}`,
-    );
-  }
-
-  if (
-    changeAddress &&
-    changeAmount > 0 &&
-    changeAmount < FeeUtils.DUST_THRESHOLD
-  ) {
-    throw new Error(
-      `Change amount ${changeAmount} is below dust threshold ${FeeUtils.DUST_THRESHOLD}. Either increase inputs or remove change address.`,
-    );
-  }
 
   try {
     const psbt = new bitcoin.Psbt({ network: ctx.network });

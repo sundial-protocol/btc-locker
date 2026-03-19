@@ -1,4 +1,5 @@
 ﻿import type { LockerContext } from "../../core.js";
+import { assert } from "../../../errors.js";
 import { FeeUtils, TransactionUtils } from "../../../utils/index.js";
 
 /**
@@ -68,9 +69,10 @@ export async function calculateDepositAmounts(
   ]);
 
   if (providedInputs) {
-    if (!Array.isArray(providedInputs)) {
-      throw new Error("inputs must be an array when provided");
-    }
+    assert(
+      Array.isArray(providedInputs),
+      "inputs must be an array when provided",
+    );
     inputs = providedInputs;
   } else {
     const availableInputs = await ctx.api.fetchConfirmedUtxos(sourceAddress);
@@ -104,13 +106,14 @@ export async function calculateDepositAmounts(
     }
   }
 
-  if (!Number.isInteger(desiredEscrowAmount) || desiredEscrowAmount <= 0) {
-    throw new Error("desiredEscrowAmount must be a positive integer");
-  }
-
-  if (!Number.isInteger(desiredTimelockAmount) || desiredTimelockAmount <= 0) {
-    throw new Error("desiredTimelockAmount must be a positive integer");
-  }
+  assert(
+    Number.isInteger(desiredEscrowAmount) && desiredEscrowAmount > 0,
+    "desiredEscrowAmount must be a positive integer",
+  );
+  assert(
+    Number.isInteger(desiredTimelockAmount) && desiredTimelockAmount > 0,
+    "desiredTimelockAmount must be a positive integer",
+  );
 
   const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
 

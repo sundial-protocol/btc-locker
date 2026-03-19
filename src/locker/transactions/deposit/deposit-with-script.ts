@@ -1,4 +1,5 @@
 ﻿import type { LockerContext } from "../../core.js";
+import { assert } from "../../../errors.js";
 import { createDepositTransaction, DepositParams } from "./deposit.js";
 import { ScriptInfo } from "../../../index.js";
 
@@ -22,13 +23,14 @@ export async function createDepositTransactionWithScript(
 ): Promise<string> {
   const { timelockScript, ...otherParams } = params;
 
-  if (!timelockScript || typeof timelockScript !== "object") {
-    throw new Error("timelockScript must be a valid script object");
-  }
-
-  if (!timelockScript.address) {
-    throw new Error("timelockScript must have an address property");
-  }
+  assert(
+    !!timelockScript && typeof timelockScript === "object",
+    "timelockScript must be a valid script object",
+  );
+  assert(
+    typeof timelockScript.address === "string",
+    "timelockScript must have an address property",
+  );
 
   const txParams: DepositParams = {
     ...otherParams,

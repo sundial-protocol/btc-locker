@@ -24,3 +24,9 @@ export class TimelockError extends BTCLockerError {
     this.name = "TimelockError";
   }
 }
+
+export function assert(condition: boolean, message: string): void {
+  if (!condition) {
+    throw new Error(message);
+  }
+}

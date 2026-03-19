@@ -1,4 +1,5 @@
 ﻿import * as bitcoin from "bitcoinjs-lib";
+import { assert } from "../../errors.js";
 import { FeeUtils, TransactionUtils } from "../../utils/index.js";
 import { FeePriorities } from "../../utils/fees.js";
 import { TxType } from "../../utils/metadata.js";
@@ -41,11 +42,10 @@ export async function createDistributionTransaction(
     priority = FeePriorities.MEDIUM,
   } = params;
 
-  if (!providedInputs && (!sourceAddress || !api)) {
-    throw new Error(
-      "Either inputs or both sourceAddress and api must be provided",
-    );
-  }
+  assert(
+    !!providedInputs || (!!sourceAddress && !!api),
+    "Either inputs or both sourceAddress and api must be provided",
+  );
 
   let inputs: UTXO[] = [];
 
@@ -62,8 +62,15 @@ export async function createDistributionTransaction(
   const psbt = new bitcoin.Psbt({ network: ctx.network });
 
   const feeRate = await FeeUtils.queryChainFeeRates(priority);
-  const outputCount = TransactionUtils.countOutputs(1, [metadata, params.changeAddress]);
-  const estimatedFee = FeeUtils.estimateFee(inputs.length, outputCount, feeRate);
+  const outputCount = TransactionUtils.countOutputs(1, [
+    metadata,
+    params.changeAddress,
+  ]);
+  const estimatedFee = FeeUtils.estimateFee(
+    inputs.length,
+    outputCount,
+    feeRate,
+  );
 
   const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
   const changeResult = FeeUtils.calculateChange(
@@ -75,7 +82,10 @@ export async function createDistributionTransaction(
   TransactionUtils.addWitnessInputs(
     psbt,
     inputs,
-    bitcoin.address.toOutputScript(sourceAddress || timelockAddress, ctx.network),
+    bitcoin.address.toOutputScript(
+      sourceAddress || timelockAddress,
+      ctx.network,
+    ),
   );
 
   psbt.addOutput({

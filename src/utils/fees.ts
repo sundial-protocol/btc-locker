@@ -28,6 +28,22 @@ export default class FeeUtils {
   static readonly DEFAULT_FEE = 1000;
 
   /**
+   * Assert that an amount is above the dust threshold
+   * @param amount - Amount in satoshis
+   * @param label - Human-readable label for the amount (e.g. "Escrow amount")
+   * @param hint - Optional hint appended to the error message
+   * @throws If amount is below dust threshold
+   */
+  static assertAboveDust(amount: number, label: string, hint?: string): void {
+    if (amount < this.DUST_THRESHOLD) {
+      const suffix = hint ? `. ${hint}` : "";
+      throw new Error(
+        `${label} ${amount} is below dust threshold ${this.DUST_THRESHOLD}${suffix}`,
+      );
+    }
+  }
+
+  /**
    * Calculate change amount and determine if it's above dust threshold
    * @param totalInputValue - Total value of inputs
    * @param outputValue - Value to send

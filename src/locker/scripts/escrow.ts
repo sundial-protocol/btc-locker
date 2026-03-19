@@ -4,6 +4,7 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import type { LockerContext } from "../core.js";
+import { assert } from "../../errors.js";
 import { KeyUtils, ValidationUtils, ScriptUtils } from "../../utils/index.js";
 import type { ScriptInfo } from "../../types.js";
 
@@ -23,9 +24,10 @@ export async function createEscrowScript(
     "afterPublicKey",
   );
 
-  if (beforePubKeyBuffer.equals(afterPubKeyBuffer)) {
-    throw new Error("beforePublicKey and afterPublicKey must be different");
-  }
+  assert(
+    !beforePubKeyBuffer.equals(afterPubKeyBuffer),
+    "beforePublicKey and afterPublicKey must be different",
+  );
 
   try {
     const redeemScript = bitcoin.script.compile([
