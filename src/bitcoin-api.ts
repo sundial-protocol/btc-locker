@@ -4,8 +4,8 @@
  */
 
 import https from "https";
-import type { UTXO } from "./types";
-import type { NetworkType } from "./utils/network";
+import type { UTXO } from "./types.js";
+import type { NetworkType } from "./utils/network.js";
 
 /**
  * Bitcoin UTXO with API status information
@@ -368,6 +368,14 @@ export default class BitcoinAPI {
       req.write(txHex);
       req.end();
     });
+  }
+
+  /**
+   * Get confirmed UTXOs for an address.
+   */
+  async fetchConfirmedUtxos(address: string): Promise<UTXO[]> {
+    const utxos = await this.getAddressUtxos(address);
+    return utxos.filter((u) => u.status?.confirmed);
   }
 
   /**

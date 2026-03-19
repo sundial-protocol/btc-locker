@@ -6,9 +6,15 @@ import * as bitcoin from "bitcoinjs-lib";
 import { BIP32Factory } from "bip32";
 import { ECPairFactory } from "ecpair";
 import tinysecp from "@bitcoinerlab/secp256k1";
-import type { ECCLib, InitializedECC } from "../types";
-import { NetworkType, NETWORKS } from "../utils/network";
-import BitcoinAPI from "../bitcoin-api";
+import type { ECCLib, InitializedECC } from "../types.js";
+import { NetworkType, NETWORKS } from "../utils/network.js";
+import BitcoinAPI from "../bitcoin-api.js";
+
+/** Shared context for transaction-building functions */
+export interface LockerContext {
+  network: bitcoin.Network;
+  api: BitcoinAPI;
+}
 
 // ECC will be initialized asynchronously
 let ecc: ECCLib | null = null;
@@ -208,69 +214,77 @@ export class BTCLockerCore {
         }
       }
 
-      // Auto-finalize based on script structure
-      for (let i = 0; i < psbt.inputCount; i++) {
-        const input = psbt.data.inputs[i];
+      const finalizedPsbt = this.finalizeTransaction(
+        psbt,
+        options?.spendAfterDeadline,
+      );
 
-        if (input.redeemScript) {
-          // Custom finalization for scripts
-          const redeemScript = Buffer.from(input.redeemScript);
-
-          // Auto-detect script type and apply appropriate finalization
-          if (this.hasConditionalLogic(redeemScript)) {
-            // Escrow-style script with conditional logic
-            psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
-              const signature = inputData.partialSig?.[0]?.signature;
-              if (!signature) {
-                throw new Error(`Missing signature for input ${inputIndex}`);
-              }
-              // check whether to use after-deadline spending path for escrow scripts
-              const useAfterDeadline = options?.spendAfterDeadline !== false; // Default true
-              const scriptSig = bitcoin.script.compile([
-                signature,
-                useAfterDeadline
-                  ? bitcoin.opcodes.OP_TRUE
-                  : bitcoin.opcodes.OP_FALSE,
-                redeemScript,
-              ]);
-
-              return {
-                finalScriptSig: scriptSig,
-                finalScriptWitness: undefined,
-              };
-            });
-          } else {
-            // Simple script or timelock script
-            psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
-              const signature = inputData.partialSig?.[0]?.signature;
-              if (!signature) {
-                throw new Error(`Missing signature for input ${inputIndex}`);
-              }
-
-              const scriptSig = bitcoin.script.compile([
-                signature,
-                redeemScript,
-              ]);
-
-              return {
-                finalScriptSig: scriptSig,
-                finalScriptWitness: undefined,
-              };
-            });
-          }
-        } else {
-          // Standard finalization
-          psbt.finalizeInput(i);
-        }
-      }
-
-      const transaction = psbt.extractTransaction();
+      const transaction = finalizedPsbt.extractTransaction();
       return transaction.toHex();
     } catch (error) {
       throw new Error(
         `Failed to sign transaction: ${(error as Error).message}`,
       );
     }
+  }
+
+  finalizeTransaction(
+    psbt: bitcoin.Psbt,
+    spendAfterDeadline = true,
+  ): bitcoin.Psbt {
+    // Auto-finalize based on script structure
+    for (let i = 0; i < psbt.inputCount; i++) {
+      const input = psbt.data.inputs[i];
+
+      if (input.redeemScript) {
+        // Custom finalization for scripts
+        const redeemScript = Buffer.from(input.redeemScript);
+
+        // Auto-detect script type and apply appropriate finalization
+        if (this.hasConditionalLogic(redeemScript)) {
+          // Escrow-style script with conditional logic
+          psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
+            const signature = inputData.partialSig?.[0]?.signature;
+            if (!signature) {
+              throw new Error(`Missing signature for input ${inputIndex}`);
+            }
+            // check whether to use after-deadline spending path for escrow scripts
+            const scriptSig = bitcoin.script.compile([
+              signature,
+              spendAfterDeadline
+                ? bitcoin.opcodes.OP_TRUE
+                : bitcoin.opcodes.OP_FALSE,
+              redeemScript,
+            ]);
+
+            return {
+              finalScriptSig: scriptSig,
+              finalScriptWitness: undefined,
+            };
+          });
+        } else {
+          // Simple script or timelock script
+          psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
+            const signature = inputData.partialSig?.[0]?.signature;
+            if (!signature) {
+              throw new Error(`Missing signature for input ${inputIndex}`);
+            }
+
+            const scriptSig = bitcoin.script.compile([signature, redeemScript]);
+
+            return {
+              finalScriptSig: scriptSig,
+              finalScriptWitness: undefined,
+            };
+          });
+        }
+      } else {
+        // Standard finalization
+        psbt.finalizeInput(i);
+      }
+    }
+
+    return psbt;
   }
 
   /**

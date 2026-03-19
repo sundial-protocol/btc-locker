@@ -40,11 +40,8 @@ describe("BTCLocker (index)", () => {
 
     test("should have all component managers", () => {
       expect(locker.keyPairGenerator).toBeDefined();
-      expect(locker.timelockCreator).toBeDefined();
       expect(locker.transactionManager).toBeDefined();
-      expect(locker.yieldDistributor).toBeDefined();
-      expect(locker.escrowManager).toBeDefined();
-      expect(locker.dawnStakingManager).toBeDefined();
+      expect(locker.scriptManager).toBeDefined();
     });
   });
 

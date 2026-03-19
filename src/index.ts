@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Main entry point for BTC Locker library
  */
 
@@ -7,11 +7,9 @@ export * as bitcoin from "bitcoinjs-lib";
 import BTCLocker, {
   BTCLockerCore,
   KeyPairGenerator,
-  TimelockManager,
   TransactionManager,
-  YieldDistributor,
-  DawnStakingManager,
-} from "./locker/index";
+  ScriptManager,
+} from "./locker/index.js";
 import {
   TimeUtils,
   ScriptUtils,
@@ -21,16 +19,15 @@ import {
   ValidationUtils,
   MetadataUtils,
   Utils,
-} from "./utils";
-import { BTCLockerError, ValidationError, TimelockError } from "./errors";
-import BitcoinAPI from "./bitcoin-api";
+} from "./utils/index.js";
+import { BTCLockerError, ValidationError, TimelockError } from "./errors.js";
+import BitcoinAPI from "./bitcoin-api.js";
 
 // Export all types and interfaces
 export type {
   KeyPair,
   ScriptInfo,
   UTXO,
-  TransactionResult,
   BaseTransactionParams,
   ProtocolFeeParams,
   TimelockConfig,
@@ -39,35 +36,40 @@ export type {
   YieldConfig,
   ECCLib,
   InitializedECC,
-} from "./types";
+} from "./types.js";
 
 // Export NetworkType from utils/network
-export type { NetworkType } from "./utils/network";
-export { NETWORKS } from "./utils/network";
-export { FeePriorities } from "./utils/fees";
-export { TxType, packMetadata, unpackMetadata } from "./utils/metadata";
+export type { NetworkType } from "./utils/network.js";
+export { NETWORKS } from "./utils/network.js";
+export { FeePriorities } from "./utils/fees.js";
+export { TxType, packMetadata, unpackMetadata } from "./utils/metadata.js";
 
 // Export additional interfaces from individual modules
-export type {
-  EscrowSpendingTransaction,
-  EscrowSpendingParams,
-  EscrowSpendingSigningParams,
-} from "./locker/escrow";
+export type { SundialMetadata } from "./utils/metadata.js";
 
-export type { SundialMetadata } from "./utils/metadata";
-
-export type { ExtendedKeyPair } from "./locker/keypair";
+export type { ExtendedKeyPair } from "./locker/keypair.js";
 
 export type {
-  DawnStakingResult,
-  DawnStakingWithScriptResult,
-  DawnStakingCalculationResult,
-  DawnStakingParams,
-  DawnStakingWithScriptParams,
-  DawnStakingCalculationParams,
-  DawnWithdrawalParams,
-  DawnWithdrawalResult,
-} from "./locker/dawn-stake";
+  DepositParams,
+} from "./locker/transactions/deposit/deposit.js";
+
+export type {
+  DepositWithScriptParams,
+} from "./locker/transactions/deposit/deposit-with-script.js";
+
+export type {
+  DepositCalculationParams,
+} from "./locker/transactions/deposit/calculate.js";
+
+export type {
+  WithdrawalParams,
+} from "./locker/transactions/withdraw.js";
+
+export type { ClaimParams } from "./locker/transactions/claim.js";
+
+export type {
+  DistributionParams,
+} from "./locker/transactions/distribute.js";
 
 export type {
   SpendingTransactionParams,
@@ -76,14 +78,7 @@ export type {
   TransactionSigningParams,
   TransactionSubmissionParams,
   SpendingTransactionSigningParams,
-} from "./locker/transactions";
-
-export type {
-  YieldDistributionParams,
-  YieldDistributionResult,
-  YieldInput,
-  YieldDistributionSigningParams,
-} from "./locker/yield";
+} from "./locker/transactions/generic.js";
 
 // Export BitcoinAPI types and interfaces
 export type {
@@ -93,12 +88,9 @@ export type {
   ApiUTXO,
   FeeEstimates,
   BroadcastResult,
-} from "./bitcoin-api";
+} from "./bitcoin-api.js";
 
-import { NETWORKS } from "./utils/network";
-
-// Export the EscrowManager class
-export { EscrowManager } from "./locker/escrow";
+import { NETWORKS } from "./utils/network.js";
 
 /**
  * Factory function to create an initialized BTCLocker instance
@@ -121,10 +113,8 @@ export {
   BTCLocker,
   BTCLockerCore,
   KeyPairGenerator,
-  TimelockManager,
   TransactionManager,
-  YieldDistributor,
-  DawnStakingManager,
+  ScriptManager,
   BitcoinAPI,
   TimeUtils,
   ScriptUtils,
@@ -144,10 +134,8 @@ export default {
   BTCLocker,
   BTCLockerCore,
   KeyPairGenerator,
-  TimelockManager,
   TransactionManager,
-  YieldDistributor,
-  DawnStakingManager,
+  ScriptManager,
   BitcoinAPI,
   createBTCLocker,
   TimeUtils,

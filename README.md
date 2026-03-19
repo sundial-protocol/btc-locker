@@ -6,17 +6,27 @@ A comprehensive Bitcoin staking library for Sundial Protocol, enabling the creat
 
 This library has two main interfaces:
 
-1. **JavaScript/TypeScript Library**: For integration into web applications, Node.js backends, or any JavaScript/TypeScript environment.
-2. **Command Line Interface (CLI)**: A user-friendly CLI tool for generating and managing Bitcoin timelock scripts directly from the terminal. This is expected to be most used by yield providers who want to create yield distributions locally.
+1. **JavaScript/TypeScript Library (`/src`)**: For integration into web applications, Node.js backends, or any JavaScript/TypeScript environment.
+
+2. **Command Line Interface (`/bin`)**: A user-friendly CLI tool built in Javascript for interacting with the Javascript library directly from the terminal.
+
+And several auxiliary tools to help test & demonstrate usage:
+
+1. **Javascript unit tests (`/tests`)**: Vitest unit tests used to verify the correctness & stability of the Javascript Library.
+
+2. **Demo server (`/demo`)**: A multipurpose demo server that is used for validating bundle testing,  running interactive documentation locally, and demonstrating how to use the Javascript library in a browser environment.
+
+3. **JSDocs (`/docs`)**: A .gitignored folder that includes all generated JSDocs. Run `npm run docs` to generate the latest documentation for your local demo.
+
+4. **Test Coverage (`/coverage`)**: Another .gitignored folder. If you're looking for a full report on test coverage here is where to go. Run `npm run test:coverage`. 
 
 ## Features
 
-- **Simple Timelock Scripts**: Lock funds until a specific date/time
-- **Relative Timelock Scripts**: Lock funds for a specific duration from transaction confirmation
-- **Dawn Staking Scripts**: Lock and Unlock funds with Sundial Protocol's Dawn staking mechanism
+- **Construct Scripts**: Create various timelock scripts (absolute, relative, escrow) for locking Bitcoin funds.
+- **Build Transactions**: Construct transactions to fund timelock scripts, spend from them, and distribute yield.
 - **Browser & Node.js Compatible**: Works in both environments
 - **TypeScript Support**: Full type definitions included
-- **Comprehensive Examples**: Ready-to-use examples for all script types
+- **Modular Architecture**: Import only what you need — standalone functions, individual managers, or the combined `BTCLocker` class
 
 ## Installation
 
@@ -43,21 +53,27 @@ For browser usage, you can also include the bundled version:
 ### Basic Timelock Example
 
 ```javascript
-const { BTCLocker, TimeUtils } = require("btc-locker");
+import { createBTCLocker, TimeUtils } from "@sundial-protocol/btc-locker";
 
 // Initialize the locker
-const locker = new BTCLocker();
+const locker = await createBTCLocker("testnet");
 
 // Generate a key pair
-const keyPair = locker.generateKeyPair();
+const keyPair = await locker.generateKeyPair();
 
 // Create a timelock script (lock for 1 week)
 const locktime = TimeUtils.addDuration(TimeUtils.DURATIONS.WEEK);
-const script = locker.createTimelockScript(locktime, keyPair.publicKey);
+const script = await locker.createTimelockScript(locktime, keyPair.publicKey);
 
 console.log("Send Bitcoin to:", script.address);
 console.log("Funds locked until:", new Date(locktime * 1000));
 ```
+
+## Architecture
+
+The library is organized into standalone per-file functions grouped under `src/locker/scripts/` and `src/locker/transactions/`, with thin facade classes (`ScriptManager`, `SundialTransactionManager`) that can be used independently or through the combined `BTCLocker` class.
+
+See [src/locker/README.md](src/locker/README.md) for a full breakdown of the internal structure, the `LockerContext` pattern, and examples of using individual managers or standalone functions directly.
 
 ## API Documentation
 
@@ -78,19 +94,6 @@ npm start
 The package includes a CLI tool for interacting with the same endpoints exposed in the JS library.
 
 More details can be found in the [CLI Documentation](CLI.md), including a full E2E walkthrough of a staking flow.
-
-## Examples
-
-Check the `examples/` directory for comprehensive usage examples:
-
-- `basic-usage.js`: Basic timelock examples
-- `advanced-usage.js`: Advanced scenarios and spending flows
-
-Run examples:
-
-```bash
-npm run example
-```
 
 ## 🧪 Testing
 

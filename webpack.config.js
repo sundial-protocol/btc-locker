@@ -34,6 +34,9 @@ export default {
   },
   resolve: {
     extensions: [".ts", ".js"],
+    extensionAlias: {
+      ".js": [".ts", ".js"],
+    },
     fallback: {
       crypto: require.resolve("crypto-browserify"),
       buffer: require.resolve("buffer"),

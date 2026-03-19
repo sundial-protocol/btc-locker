@@ -1,62 +1,89 @@
-# BTCLocker Modular Architecture
+﻿# BTCLocker Modular Architecture
 
 ## File Structure
 
 ```
 src/locker/
-├── core.ts           # Core initialization and shared utilities
-├── keypair.ts        # Key pair generation functionality
-├── timelock.ts       # Simple and relative timelock script creation
-├── escrow.ts         # Time-based escrow scripts (dual-party withdrawals)
-├── dawn-stake.ts     # Dawn staking script functionality
-├── transactions.ts   # Transaction creation and spending
-├── yield.ts          # Yield distribution functionality
-└── index.ts          # Combined BTCLocker class and exports
+├── core.ts                        # Base class, ECC init, LockerContext interface
+├── keypair.ts                     # Thin facade → scripts/keypair (not yet split)
+├── script-manager.ts              # Facade: all script creation (timelock + escrow)
+├── transaction-manager.ts         # Facade: all transaction construction
+├── index.ts                       # Combined BTCLocker class and barrel exports
+├── scripts/                       # Standalone script creation functions
+│   ├── timelock.ts                # createTimelockScript, createRelativeTimelockScript
+│   ├── escrow.ts                  # createEscrowScript, EscrowSpendingSigningParams
+│   └── index.ts                   # Barrel
+└── transactions/                  # Standalone transaction construction functions
+    ├── generic.ts                 # createSpendingTransaction, createFundingTransaction
+    ├── claim.ts         # createClaimTransaction
+    ├── withdrawal.ts         # createWithdrawalTransaction
+    ├── distribute.ts      # createDistributionTransaction
+    ├── index.ts                   # Barrel
+    └── deposit/
+        ├── deposit.ts               # createDepositTransaction
+        ├── deposit-with-script.ts   # createDepositTransactionWithScript
+        └── calculate.ts          # calculateDepositAmounts
+```
+
+## Architecture Pattern
+
+All logic lives in small per-file standalone functions that accept a `LockerContext` as their first argument:
+
+```typescript
+export interface LockerContext {
+  network: bitcoin.Network;
+  api: BitcoinAPI;
+}
+```
+
+`BTCLockerCore` satisfies `LockerContext` (it exposes `network` and `api` publicly), so facade classes pass `this` directly.
+
+Facade classes (`ScriptManager`, `SundialTransactionManager`, `TransactionManager`) extend `BTCLockerCore`, call `ensureInitialized()`, then delegate to the standalone function:
+
+```typescript
+async createTimelockScript(locktime: number, publicKey: Buffer | string) {
+  await this.ensureInitialized();
+  return createTimelockScript(this, locktime, publicKey);
+}
 ```
 
 ## Components
 
-### 1. BTCLockerCore (`core.ts`)
+### `core.ts` — BTCLockerCore + LockerContext
 
-- ECC library initialization
-- Base class with common functionality
-- Timelock validation utilities
-- Shared network configuration
+- ECC library initialization (`initEccLib`)
+- `ensureInitialized()` guard used by all facades
+- `signTransaction()` / `submitTransaction()` shared helpers
+- `LockerContext` interface
 
-### 2. KeyPairGenerator (`keypair.ts`)
+### `keypair.ts` — KeyPairGenerator
 
 - Generate new Bitcoin key pairs
 - Create key pairs from existing private keys
-- Address derivation
 
-### 3. TimelockScriptCreator (`timelock.ts`)
+### `script-manager.ts` — ScriptManager
 
-- Simple timelock scripts (absolute time)
-- Relative timelock scripts (CSV)
-- Input validation and script compilation
+Thin facade combining both script creation functions:
 
-### 4. EscrowManager (`escrow.ts`)
+- `createTimelockScript(locktime, publicKey)` → `scripts/timelock.ts`
+- `createRelativeTimelockScript(sequence, publicKey)` → `scripts/timelock.ts`
+- `createEscrowScript(deadline, beforeKey, afterKey)` → `scripts/escrow.ts`
 
-- Time-based escrow scripts with dual-party access
-- Before-deadline withdrawals by first party
-- After-deadline withdrawals by second party
-- Conditional script execution
+### `transaction-manager.ts` — SundialTransactionManager
 
-### 5. DawnStakingManager (`dawn-stake.ts`)
-- Dawn staking script creation
-- Stake deposit and withdrawal handling
+Thin facade over all transaction construction functions:
 
-### 6. TransactionManager (`transactions.ts`)
-- Spending transaction creation
-- Funding transaction creation
-- PSBT and raw transaction handling
-- Timelock expiry validation
+- `createSpendingTransaction` / `createFundingTransaction` → `transactions/generic.ts`
+- `createClaimTransaction` → `transactions/claim.ts`
+- `createWithdrawalTransaction` → `transactions/withdrawal.ts`
+- `createDistributionTransaction` → `transactions/distribute.ts`
+- `createDepositTransaction` → `transactions/staking/deposit.ts`
+- `createDepositTransactionWithScript` → `transactions/staking/deposit-with-script.ts`
+- `calculateDepositAmounts` → `transactions/staking/calculate.ts`
 
-### 7. YieldDistributor (`yield.ts`)
+### `index.ts` — BTCLocker (combined facade)
 
-- Yield distribution to timelock addresses
-- Change calculation and dust handling
-- Transaction metadata and memos
+Composes all managers into a single backward-compatible class. Each public method delegates to the appropriate manager. Also re-exports all component classes and types.
 
 ## Usage
 
@@ -66,46 +93,48 @@ src/locker/
 import { createBTCLocker } from "./src/index.js";
 
 const locker = await createBTCLocker("testnet");
-await locker.generateKeyPair();
-await locker.createTimelockScript(locktime, publicKey);
-await locker.createEscrowScript(deadline, beforePubKey, afterPubKey);
-await locker.distributeYield(params);
+const keyPair = await locker.generateKeyPair();
+const script = await locker.createTimelockScript(locktime, publicKey);
+const escrow = await locker.createEscrowScript(deadline, beforeKey, afterKey);
+const tx = await locker.createDepositTransaction(params);
 ```
 
-### Individual Components (Granular Control)
+### Individual Managers (Granular Control)
 
 ```javascript
 import {
-  KeyPairGenerator,
-  TimelockScriptCreator,
-  EscrowManager,
-  YieldDistributor,
+  ScriptManager,
+  SundialTransactionManager,
 } from "./src/locker/index.js";
 
-const keyGen = new KeyPairGenerator(network);
-await keyGen.init();
-const keyPair = await keyGen.generateKeyPair();
+const scripts = new ScriptManager(network);
+await scripts.init();
+const timelockScript = await scripts.createTimelockScript(locktime, publicKey);
+const escrowScript = await scripts.createEscrowScript(
+  deadline,
+  beforeKey,
+  afterKey,
+);
 
-const timelockCreator = new TimelockScriptCreator(network);
-await timelockCreator.init();
-const script = await timelockCreator.createTimelockScript(locktime, publicKey);
+const txManager = new SundialTransactionManager(network);
+await txManager.init();
+const unsignedPsbt = await txManager.createDepositTransaction(params);
+```
 
-const escrowManager = new EscrowManager(network);
-await escrowManager.init();
-const escrowScript = await escrowManager.createEscrowScript(deadline, beforePubKey, afterPubKey);
+### Standalone Functions (Minimal / Tree-shakeable)
+
+```javascript
+import { createTimelockScript } from "./src/locker/scripts/timelock.js";
+import { createDepositTransaction } from "./src/locker/transactions/staking/deposit.js";
+
+const script = await createTimelockScript(ctx, locktime, publicKey);
+const tx = await createDepositTransaction(ctx, params);
 ```
 
 ## Benefits
 
-1. **Separation of Concerns**: Each file handles a specific functionality
-2. **Better Testing**: Individual components can be tested in isolation
-3. **Reduced Bundle Size**: Import only needed components
-4. **Easier Maintenance**: Changes to one feature don't affect others
-5. **Extensibility**: New features can be added as separate modules
-6. **Backward Compatibility**: Existing code continues to work with the combined interface
-
-## Migration
-
-Existing code using the BTCLocker class will continue to work without changes. The combined BTCLocker class now delegates to the appropriate modular components internally.
-
-For new development, consider using individual components for better performance and smaller bundle sizes when only specific functionality is needed.
+1. **Single Responsibility**: Each file owns exactly one concern
+2. **Context Pattern**: No class inheritance needed for business logic — functions receive `LockerContext`
+3. **Tree-shakeable**: Import only the functions you need
+4. **Testable in Isolation**: Standalone functions can be tested by passing a mock context
+5. **Backward Compatible**: `BTCLocker` combined class continues to work unchanged

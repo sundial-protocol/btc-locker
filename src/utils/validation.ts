@@ -1,3 +1,5 @@
+import { assert, assertAll } from "../errors.js";
+
 /**
  * Common validation utilities
  */
@@ -13,15 +15,14 @@ export default class ValidationUtils {
     locktime: string | number,
     paramName: string = "locktime",
   ): number {
-    if (locktime === undefined || locktime === null) {
-      throw new Error(`${paramName} cannot be undefined or null`);
-    }
-
     const locktimeNumber = Number(locktime);
-    if (!Number.isInteger(locktimeNumber) || locktimeNumber < 0) {
-      throw new Error(`${paramName} must be a non-negative integer`);
-    }
-
+    assertAll([
+      [locktime != null, `${paramName} cannot be undefined or null`],
+      [
+        Number.isInteger(locktimeNumber) && locktimeNumber >= 0,
+        `${paramName} must be a non-negative integer`,
+      ],
+    ]);
     return locktimeNumber;
   }
 
@@ -38,21 +39,15 @@ export default class ValidationUtils {
     paramName: string = "amount",
     allowZero: boolean = false,
   ): number {
-    if (amount === undefined || amount === null) {
-      throw new Error(`${paramName} cannot be undefined or null`);
-    }
-
     const amountNumber = Number(amount);
-    if (!Number.isInteger(amountNumber)) {
-      throw new Error(`${paramName} must be an integer`);
-    }
-
-    if (allowZero ? amountNumber < 0 : amountNumber <= 0) {
-      throw new Error(
+    assertAll([
+      [amount != null, `${paramName} cannot be undefined or null`],
+      [Number.isInteger(amountNumber), `${paramName} must be an integer`],
+      [
+        allowZero ? amountNumber >= 0 : amountNumber > 0,
         `${paramName} must be ${allowZero ? "non-negative" : "positive"}`,
-      );
-    }
-
+      ],
+    ]);
     return amountNumber;
   }
 
@@ -69,10 +64,25 @@ export default class ValidationUtils {
     feeAmount: number,
   ): void {
     const totalRequired = outputValue + feeAmount;
-    if (totalInputValue < totalRequired) {
-      throw new Error(
-        `Insufficient funds. Required: ${totalRequired} sat, Available: ${totalInputValue} sat`,
-      );
-    }
+    assert(
+      totalInputValue >= totalRequired,
+      `Insufficient funds. Required: ${totalRequired} sat, Available: ${totalInputValue} sat`,
+    );
+  }
+
+  static assertProtocolFeeParams(
+    feeAddress: string | undefined,
+    protocolFeeAmount: number | undefined,
+  ): void {
+    assertAll([
+      [
+        !feeAddress || !!protocolFeeAmount,
+        "protocolFeeAmount is required when feeAddress is provided",
+      ],
+      [
+        !protocolFeeAmount || !!feeAddress,
+        "feeAddress is required when protocolFeeAmount is provided",
+      ],
+    ]);
   }
 }

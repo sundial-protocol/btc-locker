@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll } from "vitest";
-import { TransactionManager } from "../src/locker/transactions";
+import { TransactionManager } from "../src/locker/transaction-manager";
 import { NETWORKS } from "../src/utils/network";
 import * as bitcoin from "bitcoinjs-lib";
 import tinysecp from "@bitcoinerlab/secp256k1";
@@ -107,58 +107,11 @@ describe("TransactionManager", () => {
       const result = await txManager.createFundingTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 200000 }],
         outputs: [{ address: address!, value: 100000 }],
+        sourceAddress: address!,
       });
 
       expect(typeof result).toBe("string");
       expect(result.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe("signTransactionLegacy", () => {
-    test("should throw for spending transaction without redeem script", async () => {
-      // Create a minimal valid transaction hex
-      const tx = new bitcoin.Transaction();
-      tx.addInput(Buffer.alloc(32), 0);
-      tx.addOutput(Buffer.alloc(25), BigInt(1000));
-      const validTxHex = tx.toHex();
-
-      await expect(
-        txManager.signTransactionLegacy({
-          unsignedTransaction: validTxHex,
-          privateKeys: [testKeyPair.privateKey!.toString("hex")],
-          transactionType: "spending",
-        }),
-      ).rejects.toThrow("Redeem script is required for spending transactions");
-    });
-
-    test("should throw for unsupported transaction type", async () => {
-      await expect(
-        txManager.signTransactionLegacy({
-          unsignedTransaction: "01000000",
-          privateKeys: [testKeyPair.privateKey!.toString("hex")],
-          transactionType: "unknown" as any,
-        }),
-      ).rejects.toThrow("Unsupported transaction type");
-    });
-  });
-
-  describe("submitTransactionLegacy", () => {
-    test("should parse signed transaction and return result", async () => {
-      // Create a minimal valid transaction hex
-      const tx = new bitcoin.Transaction();
-      tx.addInput(Buffer.alloc(32), 0);
-      tx.addOutput(Buffer.alloc(25), BigInt(1000));
-      const txHex = tx.toHex();
-
-      const result = await txManager.submitTransactionLegacy({
-        signedTransaction: txHex,
-      });
-
-      expect(result).toHaveProperty("hex");
-      expect(result).toHaveProperty("txid");
-      expect(result).toHaveProperty("size");
-      expect(result).toHaveProperty("fee");
-      expect(result.hex).toBe(txHex);
     });
   });
 });

@@ -3,8 +3,8 @@
  */
 import { BIP32Factory } from "bip32";
 import { ECPairFactory } from "ecpair";
-import { FeePriorities } from "./utils/fees";
-import type { SundialMetadata } from "./utils/metadata";
+import { FeePriorities } from "./utils/fees.js";
+import type { SundialMetadata } from "./utils/metadata.js";
 
 /**
  * Bitcoin key pair with private key, public key, and address
@@ -57,24 +57,8 @@ export interface UTXO {
   txid: string;
   vout: number;
   value: number;
-}
-
-/**
- * Bitcoin transaction result information
- * @interface TransactionResult
- * @description Contains the essential information about a created Bitcoin transaction
- */
-export interface TransactionResult {
-  /** Transaction in hexadecimal format */
-  hex: string;
-  /** Transaction ID (hash) */
-  txid: string;
-  /** Transaction size in bytes */
-  size: number;
-  /** Transaction fee in satoshis */
-  fee: number;
-  /** Optional metadata associated with the transaction */
-  metadata?: string;
+  /** Optional scriptPubKey hex for the output being spent (required for correct BIP143 segwit sighash when sourceAddress is unavailable) */
+  scriptPubKey?: string;
 }
 
 /**

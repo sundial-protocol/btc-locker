@@ -1,9 +1,10 @@
-/**
+﻿/**
  * @fileoverview Vitest tests for EscrowManager
  */
 
 import { describe, test, expect, beforeAll, beforeEach } from "vitest";
-import { EscrowManager } from "../src/locker/escrow";
+import { TransactionManager } from "../src/locker/transaction-manager";
+import { ScriptManager } from "../src/locker/script-manager";
 import { ECPairFactory, ECPairInterface } from "ecpair";
 import tinysecp from "@bitcoinerlab/secp256k1";
 import * as bitcoin from "bitcoinjs-lib";
@@ -11,7 +12,8 @@ import type { ScriptInfo } from "../src/types";
 import { NETWORKS } from "../src/utils/network";
 
 describe("EscrowManager", () => {
-  let escrow: EscrowManager;
+  let escrow: ScriptManager;
+  let txManager: TransactionManager;
   let ECPair: ReturnType<typeof ECPairFactory>;
   let keyPair1: ECPairInterface, keyPair2: ECPairInterface;
   let pubKey1: Buffer, pubKey2: Buffer;
@@ -22,14 +24,18 @@ describe("EscrowManager", () => {
     bitcoin.initEccLib(ecc);
     ECPair = ECPairFactory(ecc);
 
-    // Initialize EscrowManager
-    escrow = new EscrowManager(NETWORKS.testnet);
+    // Initialize ScriptManager
+    escrow = new ScriptManager(NETWORKS.testnet);
     await escrow.init();
+
+    // Initialize TransactionManager
+    txManager = new TransactionManager(NETWORKS.testnet);
+    await txManager.init();
 
     // Generate test key pairs
     keyPair1 = ECPair.makeRandom({ compressed: true });
     keyPair2 = ECPair.makeRandom({ compressed: true });
-    
+
     pubKey1 = keyPair1.publicKey;
     pubKey2 = keyPair2.publicKey;
   });
@@ -38,24 +44,27 @@ describe("EscrowManager", () => {
   const createMockTransaction = (): Buffer => {
     // Create a minimal valid Bitcoin transaction for testing
     const psbt = new bitcoin.Psbt({ network: bitcoin.networks.testnet });
-    
+
     // Add a dummy input (won't be validated in tests)
     psbt.addInput({
       hash: "b".repeat(64),
       index: 0,
       sequence: 0xffffffff,
       witnessUtxo: {
-        script: Buffer.from("00141234567890123456789012345678901234567890", "hex"),
-        value: BigInt(100000)
-      }
+        script: Buffer.from(
+          "00141234567890123456789012345678901234567890",
+          "hex",
+        ),
+        value: BigInt(100000),
+      },
     });
-    
+
     // Add a dummy output
     psbt.addOutput({
       address: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
-      value: BigInt(99000)
+      value: BigInt(99000),
     });
-    
+
     // For testing purposes, we don't need to sign it
     // Just return the transaction buffer (convert Uint8Array to Buffer)
     const txBuffer = psbt.data.globalMap.unsignedTx!.toBuffer();
@@ -69,7 +78,7 @@ describe("EscrowManager", () => {
       const scriptData: ScriptInfo = await escrow.createEscrowScript(
         deadline,
         pubKey1,
-        pubKey2
+        pubKey2,
       );
 
       expect(scriptData).toHaveProperty("redeemScript");
@@ -91,7 +100,7 @@ describe("EscrowManager", () => {
       const invalidDeadline = -1;
 
       await expect(
-        escrow.createEscrowScript(invalidDeadline, pubKey1, pubKey2)
+        escrow.createEscrowScript(invalidDeadline, pubKey1, pubKey2),
       ).rejects.toThrow("deadline must be a non-negative integer");
     });
 
@@ -100,7 +109,7 @@ describe("EscrowManager", () => {
       const invalidPubKey = Buffer.from("invalid", "hex");
 
       await expect(
-        escrow.createEscrowScript(deadline, invalidPubKey, pubKey2)
+        escrow.createEscrowScript(deadline, invalidPubKey, pubKey2),
       ).rejects.toThrow();
     });
 
@@ -109,7 +118,7 @@ describe("EscrowManager", () => {
       const invalidPubKey = Buffer.from("invalid", "hex");
 
       await expect(
-        escrow.createEscrowScript(deadline, pubKey1, invalidPubKey)
+        escrow.createEscrowScript(deadline, pubKey1, invalidPubKey),
       ).rejects.toThrow();
     });
 
@@ -121,7 +130,7 @@ describe("EscrowManager", () => {
       const scriptData: ScriptInfo = await escrow.createEscrowScript(
         deadline,
         pubKeyHex1,
-        pubKeyHex2
+        pubKeyHex2,
       );
 
       expect(scriptData.beforePublicKey).toBe(pubKeyHex1);
@@ -146,7 +155,7 @@ describe("EscrowManager", () => {
       const currentTime = (deadline - 3600) * 1000; // 1 hour before deadline, in milliseconds
       const mockTx = createMockTransaction();
 
-      const result = await escrow.createEscrowSpendingTransaction({
+      const result = await txManager.createClaimTransaction({
         scriptData,
         utxoTxId,
         utxoIndex,
@@ -154,7 +163,7 @@ describe("EscrowManager", () => {
         outputAddress,
         spendAfterDeadline,
         currentTime,
-        previousTransaction: mockTx
+        previousTransaction: mockTx,
       });
 
       expect(typeof result).toBe("string");
@@ -166,7 +175,7 @@ describe("EscrowManager", () => {
       const currentTime = (deadline + 3600) * 1000; // 1 hour after deadline, in milliseconds
       const mockTx = createMockTransaction();
 
-      const result = await escrow.createEscrowSpendingTransaction({
+      const result = await txManager.createClaimTransaction({
         scriptData,
         utxoTxId,
         utxoIndex,
@@ -174,7 +183,7 @@ describe("EscrowManager", () => {
         outputAddress,
         spendAfterDeadline,
         currentTime,
-        previousTransaction: mockTx
+        previousTransaction: mockTx,
       });
 
       expect(typeof result).toBe("string");
@@ -186,10 +195,9 @@ describe("EscrowManager", () => {
       const currentTime = deadline - 1800;
       const mockTx = createMockTransaction();
 
-      // Note: The createEscrowSpendingTransaction method doesn't validate private keys
+      // Note: The createClaimTransaction method doesn't validate private keys
       // That validation happens during signing. This test should pass since we're only creating unsigned tx.
-      // If we want to test key validation, we should use signAndSubmitEscrowSpendingTransaction instead.
-      const result = await escrow.createEscrowSpendingTransaction({
+      const result = await txManager.createClaimTransaction({
         scriptData,
         utxoTxId,
         utxoIndex,
@@ -197,7 +205,7 @@ describe("EscrowManager", () => {
         outputAddress,
         spendAfterDeadline,
         currentTime,
-        previousTransaction: mockTx
+        previousTransaction: mockTx,
       });
 
       expect(typeof result).toBe("string");
@@ -208,9 +216,9 @@ describe("EscrowManager", () => {
       const currentTime = (deadline + 1800) * 1000; // in milliseconds
       const mockTx = createMockTransaction();
 
-      // Note: The createEscrowSpendingTransaction method doesn't validate private keys
+      // Note: The createClaimTransaction method doesn't validate private keys
       // That validation happens during signing. This test should pass since we're only creating unsigned tx.
-      const result = await escrow.createEscrowSpendingTransaction({
+      const result = await txManager.createClaimTransaction({
         scriptData,
         utxoTxId,
         utxoIndex,
@@ -218,7 +226,7 @@ describe("EscrowManager", () => {
         outputAddress,
         spendAfterDeadline,
         currentTime,
-        previousTransaction: mockTx
+        previousTransaction: mockTx,
       });
 
       expect(typeof result).toBe("string");
@@ -230,7 +238,7 @@ describe("EscrowManager", () => {
       const mockTx = createMockTransaction();
 
       await expect(
-        escrow.createEscrowSpendingTransaction({
+        txManager.createClaimTransaction({
           scriptData,
           utxoTxId,
           utxoIndex,
@@ -238,8 +246,8 @@ describe("EscrowManager", () => {
           outputAddress,
           spendAfterDeadline,
           currentTime,
-          previousTransaction: mockTx
-        })
+          previousTransaction: mockTx,
+        }),
       ).rejects.toThrow("Cannot spend after deadline yet.");
     });
 
@@ -247,10 +255,10 @@ describe("EscrowManager", () => {
       const spendAfterDeadline = false;
       const currentTime = deadline - 1800;
       const mockTx = createMockTransaction();
-      // Note: Private keys are not used in createEscrowSpendingTransaction anymore
+      // Note: Private keys are not used in createClaimTransaction anymore
       // They are used in signing step. This test now just verifies unsigned tx creation.
 
-      const result = await escrow.createEscrowSpendingTransaction({
+      const result = await txManager.createClaimTransaction({
         scriptData,
         utxoTxId,
         utxoIndex,
@@ -258,7 +266,7 @@ describe("EscrowManager", () => {
         outputAddress,
         spendAfterDeadline,
         currentTime,
-        previousTransaction: mockTx
+        previousTransaction: mockTx,
       });
 
       expect(typeof result).toBe("string");
@@ -271,7 +279,7 @@ describe("EscrowManager", () => {
       const mockTx = createMockTransaction();
 
       await expect(
-        escrow.createEscrowSpendingTransaction({
+        txManager.createClaimTransaction({
           scriptData,
           utxoTxId,
           utxoIndex,
@@ -279,8 +287,8 @@ describe("EscrowManager", () => {
           outputAddress: invalidAddress,
           spendAfterDeadline,
           currentTime,
-          previousTransaction: mockTx
-        })
+          previousTransaction: mockTx,
+        }),
       ).rejects.toThrow();
     });
 
@@ -291,7 +299,7 @@ describe("EscrowManager", () => {
       const mockTx = createMockTransaction();
 
       await expect(
-        escrow.createEscrowSpendingTransaction({
+        txManager.createClaimTransaction({
           scriptData,
           utxoTxId,
           utxoIndex,
@@ -299,8 +307,8 @@ describe("EscrowManager", () => {
           outputAddress,
           spendAfterDeadline,
           currentTime,
-          previousTransaction: mockTx
-        })
+          previousTransaction: mockTx,
+        }),
       ).rejects.toThrow("amount must be a positive integer");
     });
 
@@ -311,7 +319,7 @@ describe("EscrowManager", () => {
       const mockTx = createMockTransaction();
 
       await expect(
-        escrow.createEscrowSpendingTransaction({
+        txManager.createClaimTransaction({
           scriptData,
           utxoTxId: invalidTxId,
           utxoIndex,
@@ -319,8 +327,8 @@ describe("EscrowManager", () => {
           outputAddress,
           spendAfterDeadline,
           currentTime,
-          previousTransaction: mockTx
-        })
+          previousTransaction: mockTx,
+        }),
       ).rejects.toThrow();
     });
   });
@@ -328,11 +336,11 @@ describe("EscrowManager", () => {
   describe("Edge Cases", () => {
     test("should handle very large deadline values", async () => {
       const largeDeadline = 2147483647; // Max 32-bit signed integer
-      
+
       const scriptData: ScriptInfo = await escrow.createEscrowScript(
         largeDeadline,
         pubKey1,
-        pubKey2
+        pubKey2,
       );
 
       expect(scriptData.locktime).toBe(largeDeadline);
@@ -341,15 +349,15 @@ describe("EscrowManager", () => {
     test("should handle current time as deadline", async () => {
       const currentTime = Math.floor(Date.now() / 1000);
       const mockTx = createMockTransaction();
-      
+
       const scriptData: ScriptInfo = await escrow.createEscrowScript(
         currentTime,
         pubKey1,
-        pubKey2
+        pubKey2,
       );
 
       // Should be able to spend after deadline immediately
-      const result = await escrow.createEscrowSpendingTransaction({
+      const result = await txManager.createClaimTransaction({
         scriptData,
         utxoTxId: "a".repeat(64),
         utxoIndex: 0,
@@ -357,7 +365,7 @@ describe("EscrowManager", () => {
         outputAddress: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
         spendAfterDeadline: true,
         currentTime: (currentTime + 60) * 1000, // Add 1 minute buffer, in milliseconds
-        previousTransaction: mockTx
+        previousTransaction: mockTx,
       });
 
       expect(typeof result).toBe("string");

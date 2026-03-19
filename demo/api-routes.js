@@ -1,4 +1,4 @@
-/**
+﻿/**
  * API Routes for BTC Locker with Swagger documentation
  */
 import express from "express";
@@ -14,14 +14,16 @@ async function loadBTCLocker() {
   try {
     // Try to load from ES module export first
     const srcModule = await import("../dist/esm/index.js");
-    BTCLocker = srcModule.BTCLocker || srcModule.default?.BTCLocker || srcModule.default;
+    BTCLocker =
+      srcModule.BTCLocker || srcModule.default?.BTCLocker || srcModule.default;
   } catch (error) {
     try {
       // Fallback to CommonJS version
       const { createRequire } = await import("module");
       const require = createRequire(import.meta.url);
       const bundle = require("../dist/cjs/index.js");
-      BTCLocker = bundle.BTCLocker || bundle.default?.BTCLocker || bundle.default;
+      BTCLocker =
+        bundle.BTCLocker || bundle.default?.BTCLocker || bundle.default;
     } catch (srcError) {
       console.error("Failed to load BTCLocker:", srcError);
       throw new Error("Could not load BTCLocker module");
@@ -96,7 +98,7 @@ router.post(
   ensureBTCLockerReady,
   asyncHandler(async (req, res) => {
     const { network = "testnet" } = req.body;
-    
+
     // Convert 'mainnet' to 'bitcoin' for consistency with NetworkType names
     const networkName = network === "mainnet" ? "bitcoin" : network;
 
@@ -105,7 +107,7 @@ router.post(
 
     const keyPair = await locker.generateKeyPair();
     res.json(keyPair);
-  })
+  }),
 );
 
 /**
@@ -166,7 +168,7 @@ router.post(
 
     const keyPair = await locker.generateKeyPairFromPrivateKey(privateKey);
     res.json(keyPair);
-  })
+  }),
 );
 
 /**
@@ -234,7 +236,7 @@ router.post(
 
     const script = await locker.createTimelockScript(locktime, publicKey);
     res.json(script);
-  })
+  }),
 );
 
 /**
@@ -302,10 +304,10 @@ router.post(
 
     const script = await locker.createRelativeTimelockScript(
       sequence,
-      publicKey
+      publicKey,
     );
     res.json(script);
-  })
+  }),
 );
 
 // Error handling middleware
@@ -441,7 +443,7 @@ router.post(
         code: "FUNDING_TRANSACTION_FAILED",
       });
     }
-  })
+  }),
 );
 
 /**
@@ -558,15 +560,15 @@ router.post(
         code: "SPENDING_TRANSACTION_FAILED",
       });
     }
-  })
+  }),
 );
 
 /**
  * @swagger
  * /api/yield/distribute:
  *   post:
- *     summary: Distribute yield back to a timelock script
- *     tags: [Yield]
+ *     summary: Create a distribution transaction
+ *     tags: [Distribution]
  *     requestBody:
  *       required: true
  *       content:
@@ -595,7 +597,7 @@ router.post(
  *                       description: Value in satoshis
  *               timelockAddress:
  *                 type: string
- *                 description: Timelock script address to send yield to
+ *                 description: Timelock script address to receive distribution
  *               amount:
  *                 type: integer
  *                 description: Amount to distribute in satoshis
@@ -618,7 +620,7 @@ router.post(
  *                 default: testnet
  *     responses:
  *       200:
- *         description: Successfully distributed yield
+ *         description: Distribution transaction created successfully
  *         content:
  *           application/json:
  *             schema:
@@ -666,7 +668,7 @@ router.post(
       const locker = new BTCLocker(networkObj);
       await locker.init();
 
-      const transaction = await locker.distributeYield({
+      const transaction = await locker.createDistributionTransaction({
         inputs,
         timelockAddress,
         amount,
@@ -679,15 +681,15 @@ router.post(
       res.json({
         success: true,
         data: transaction,
-        message: "Yield distributed successfully",
+        message: "Distribution transaction created successfully",
       });
     } catch (error) {
       res.status(500).json({
         error: error.message,
-        code: "YIELD_DISTRIBUTION_FAILED",
+        code: "DISTRIBUTION_FAILED",
       });
     }
-  })
+  }),
 );
 
 /**
@@ -741,11 +743,17 @@ router.post(
   "/escrow/create",
   ensureBTCLockerReady,
   asyncHandler(async (req, res) => {
-    const { deadline, beforePublicKey, afterPublicKey, network = "testnet" } = req.body;
+    const {
+      deadline,
+      beforePublicKey,
+      afterPublicKey,
+      network = "testnet",
+    } = req.body;
 
     if (!deadline || !beforePublicKey || !afterPublicKey) {
       return res.status(400).json({
-        error: "Missing required parameters: deadline, beforePublicKey, afterPublicKey",
+        error:
+          "Missing required parameters: deadline, beforePublicKey, afterPublicKey",
       });
     }
 
@@ -759,7 +767,11 @@ router.post(
       const locker = new BTCLocker(networkObj);
       await locker.init();
 
-      const script = await locker.createEscrowScript(deadline, beforePublicKey, afterPublicKey);
+      const script = await locker.createEscrowScript(
+        deadline,
+        beforePublicKey,
+        afterPublicKey,
+      );
       res.json({
         success: true,
         data: script,
@@ -771,14 +783,14 @@ router.post(
         code: "ESCROW_SCRIPT_FAILED",
       });
     }
-  })
+  }),
 );
 
 /**
  * @swagger
  * /api/escrow/spend:
  *   post:
- *     summary: Create spending transaction for escrow script
+ *     summary: Create claim transaction (spend from escrow script)
  *     tags: [Escrow]
  *     requestBody:
  *       required: true
@@ -825,7 +837,7 @@ router.post(
  *                 default: testnet
  *     responses:
  *       200:
- *         description: Successfully created escrow spending transaction
+ *         description: Claim transaction created successfully
  *         content:
  *           application/json:
  *             schema:
@@ -876,7 +888,7 @@ router.post(
       const locker = new BTCLocker(networkObj);
       await locker.init();
 
-      const transaction = await locker.createEscrowSpendingTransaction({
+      const transaction = await locker.createClaimTransaction({
         scriptData,
         utxoTxId,
         utxoIndex,
@@ -889,22 +901,22 @@ router.post(
       res.json({
         success: true,
         data: transaction,
-        message: "Escrow spending transaction created successfully",
+        message: "Claim transaction created successfully",
       });
     } catch (error) {
       res.status(500).json({
         error: error.message,
-        code: "ESCROW_SPENDING_FAILED",
+        code: "CLAIM_FAILED",
       });
     }
-  })
+  }),
 );
 
 /**
  * @swagger
- * /api/dawn/stake:
+ * /api/deposit:
  *   post:
- *     summary: Create Dawn Protocol staking transaction
+ *     summary: Create deposit transaction
  *     tags: [Dawn]
  *     requestBody:
  *       required: true
@@ -961,18 +973,18 @@ router.post(
  *                 default: testnet
  *     responses:
  *       200:
- *         description: Successfully created Dawn staking transaction
+ *         description: Deposit transaction created successfully
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/DawnStakingResult'
+ *               $ref: '#/components/schemas/DepositResult'
  *       400:
  *         description: Invalid parameters or insufficient funds
  *       500:
  *         description: Server error
  */
 router.post(
-  "/dawn/stake",
+  "/deposit",
   ensureBTCLockerReady,
   asyncHandler(async (req, res) => {
     const {
@@ -1013,7 +1025,7 @@ router.post(
       const locker = new BTCLocker(networkObj);
       await locker.init();
 
-      const transaction = await locker.createDawnStakingTransaction({
+      const transaction = await locker.createDepositTransaction({
         inputs,
         sourceAddress,
         escrowAddress,
@@ -1030,22 +1042,22 @@ router.post(
       res.json({
         success: true,
         data: transaction,
-        message: "Dawn staking transaction created successfully",
+        message: "Deposit transaction created successfully",
       });
     } catch (error) {
       res.status(500).json({
         error: error.message,
-        code: "DAWN_STAKING_FAILED",
+        code: "DEPOSIT_FAILED",
       });
     }
-  })
+  }),
 );
 
 /**
  * @swagger
- * /api/dawn/calculate:
+ * /api/deposit/calculate:
  *   post:
- *     summary: Calculate optimal amounts for Dawn staking
+ *     summary: Calculate optimal amounts for deposit
  *     tags: [Dawn]
  *     requestBody:
  *       required: true
@@ -1095,18 +1107,18 @@ router.post(
  *                 default: testnet
  *     responses:
  *       200:
- *         description: Successfully calculated Dawn staking amounts
+ *         description: Deposit calculation completed successfully
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/DawnCalculationResult'
+ *               $ref: '#/components/schemas/DepositCalculationResult'
  *       400:
  *         description: Invalid parameters
  *       500:
  *         description: Server error
  */
 router.post(
-  "/dawn/calculate",
+  "/deposit/calculate",
   ensureBTCLockerReady,
   asyncHandler(async (req, res) => {
     const {
@@ -1138,7 +1150,7 @@ router.post(
       const locker = new BTCLocker(networkObj);
       await locker.init();
 
-      const calculation = await locker.calculateDawnStakingAmounts({
+      const calculation = await locker.calculateDepositAmounts({
         inputs,
         sourceAddress,
         desiredEscrowAmount,
@@ -1152,22 +1164,22 @@ router.post(
       res.json({
         success: true,
         data: calculation,
-        message: "Dawn staking calculation completed successfully",
+        message: "Deposit calculation completed successfully",
       });
     } catch (error) {
       res.status(500).json({
         error: error.message,
-        code: "DAWN_CALCULATION_FAILED",
+        code: "DEPOSIT_CALCULATION_FAILED",
       });
     }
-  })
+  }),
 );
 
 /**
  * @swagger
- * /api/dawn/withdraw:
+ * /api/withdraw:
  *   post:
- *     summary: Create Dawn withdrawal transaction combining escrow and timelock inputs
+ *     summary: Create withdrawal transaction combining escrow and timelock inputs
  *     tags: [Dawn]
  *     requestBody:
  *       required: true
@@ -1224,7 +1236,7 @@ router.post(
  *                 default: testnet
  *     responses:
  *       200:
- *         description: Successfully created Dawn withdrawal transaction
+ *         description: Withdrawal transaction created successfully
  *         content:
  *           application/json:
  *             schema:
@@ -1243,7 +1255,7 @@ router.post(
  *         description: Server error
  */
 router.post(
-  "/dawn/withdraw",
+  "/withdraw",
   ensureBTCLockerReady,
   asyncHandler(async (req, res) => {
     const {
@@ -1278,7 +1290,7 @@ router.post(
       const locker = new BTCLocker(networkObj);
       await locker.init();
 
-      const transaction = await locker.createDawnWithdrawalTransaction({
+      const transaction = await locker.createWithdrawalTransaction({
         escrowInputs,
         escrowAddress,
         escrowRedeemScript,
@@ -1295,15 +1307,15 @@ router.post(
       res.json({
         success: true,
         data: transaction,
-        message: "Dawn withdrawal transaction created successfully",
+        message: "Withdrawal transaction created successfully",
       });
     } catch (error) {
       res.status(500).json({
         error: error.message,
-        code: "DAWN_WITHDRAWAL_FAILED",
+        code: "WITHDRAWAL_FAILED",
       });
     }
-  })
+  }),
 );
 
 /**
@@ -1407,7 +1419,7 @@ router.post(
         code: "TIMELOCK_VALIDATION_FAILED",
       });
     }
-  })
+  }),
 );
 
 /**
@@ -1497,7 +1509,11 @@ router.post(
           bitcoin.address.fromBech32(address);
           valid = true;
           addressType = address.length === 42 ? "P2WPKH" : "P2WSH";
-        } else if (address.startsWith("1") || address.startsWith("m") || address.startsWith("n")) {
+        } else if (
+          address.startsWith("1") ||
+          address.startsWith("m") ||
+          address.startsWith("n")
+        ) {
           // Base58 P2PKH
           bitcoin.address.fromBase58Check(address);
           valid = true;
@@ -1528,7 +1544,7 @@ router.post(
         code: "ADDRESS_VALIDATION_FAILED",
       });
     }
-  })
+  }),
 );
 
 /**
@@ -1620,7 +1636,7 @@ router.get(
         code: "FEE_ESTIMATION_FAILED",
       });
     }
-  })
+  }),
 );
 
 export default router;

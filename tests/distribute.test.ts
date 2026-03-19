@@ -1,5 +1,5 @@
-import { describe, test, expect, beforeAll, vi } from "vitest";
-import { YieldDistributor } from "../src/locker/yield";
+﻿import { describe, test, expect, beforeAll, vi } from "vitest";
+import { TransactionManager } from "../src/locker/transaction-manager";
 import { NETWORKS } from "../src/utils/network";
 import * as bitcoin from "bitcoinjs-lib";
 import tinysecp from "@bitcoinerlab/secp256k1";
@@ -7,7 +7,7 @@ import { ECPairFactory } from "ecpair";
 import FeeUtils from "../src/utils/fees";
 
 describe("YieldDistributor", () => {
-  let distributor: YieldDistributor;
+  let txManager: TransactionManager;
   let testAddress: string;
 
   beforeAll(async () => {
@@ -24,14 +24,14 @@ describe("YieldDistributor", () => {
     });
     testAddress = address!;
 
-    distributor = new YieldDistributor(NETWORKS.testnet);
-    await distributor.init();
+    txManager = new TransactionManager(NETWORKS.testnet);
+    await txManager.init();
   });
 
-  describe("distributeYield", () => {
+  describe("createDistributionTransaction", () => {
     test("should throw error when no inputs and no sourceAddress+api", async () => {
       await expect(
-        distributor.distributeYield({
+        txManager.createDistributionTransaction({
           timelockAddress: testAddress,
           amount: 10000,
         }),
@@ -42,7 +42,7 @@ describe("YieldDistributor", () => {
 
     test("should throw error when sourceAddress given but no api", async () => {
       await expect(
-        distributor.distributeYield({
+        txManager.createDistributionTransaction({
           sourceAddress: testAddress,
           timelockAddress: testAddress,
           amount: 10000,
@@ -54,7 +54,7 @@ describe("YieldDistributor", () => {
 
     test("should throw error when empty inputs array", async () => {
       await expect(
-        distributor.distributeYield({
+        txManager.createDistributionTransaction({
           inputs: [],
           timelockAddress: testAddress,
           amount: 10000,
@@ -65,7 +65,7 @@ describe("YieldDistributor", () => {
 });
 
 describe("YieldDistributor (mocked fees)", () => {
-  let distributor: YieldDistributor;
+  let txManager: TransactionManager;
   let testAddress: string;
   let testAddress2: string;
   let ECPair: ReturnType<typeof ECPairFactory>;
@@ -96,13 +96,13 @@ describe("YieldDistributor (mocked fees)", () => {
 
     vi.spyOn(FeeUtils, "queryChainFeeRates").mockResolvedValue(10);
 
-    distributor = new YieldDistributor(NETWORKS.testnet);
-    await distributor.init();
+    txManager = new TransactionManager(NETWORKS.testnet);
+    await txManager.init();
   });
 
-  describe("distributeYield (happy path)", () => {
+  describe("createDistributionTransaction (happy path)", () => {
     test("should create unsigned PSBT with provided inputs", async () => {
-      const result = await distributor.distributeYield({
+      const result = await txManager.createDistributionTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 100000 }],
         timelockAddress: testAddress,
         amount: 50000,
@@ -118,7 +118,7 @@ describe("YieldDistributor (mocked fees)", () => {
     });
 
     test("should include change output when above dust", async () => {
-      const result = await distributor.distributeYield({
+      const result = await txManager.createDistributionTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
         timelockAddress: testAddress,
         amount: 50000,
@@ -133,13 +133,13 @@ describe("YieldDistributor (mocked fees)", () => {
     });
 
     test("should include metadata output", async () => {
-      const result = await distributor.distributeYield({
+      const result = await txManager.createDistributionTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
         timelockAddress: testAddress,
         amount: 50000,
         metadata: JSON.stringify({
           txType: 1,
-          depositId: "550e8400-e29b-41d4-a716-446655440000",
+          subjectId: "550e8400-e29b-41d4-a716-446655440000",
           providerXonlyPubkey: "a".repeat(64),
         }),
       });
@@ -152,7 +152,7 @@ describe("YieldDistributor (mocked fees)", () => {
     });
 
     test("should handle multiple inputs", async () => {
-      const result = await distributor.distributeYield({
+      const result = await txManager.createDistributionTransaction({
         inputs: [
           { txid: "a".repeat(64), vout: 0, value: 30000 },
           { txid: "b".repeat(64), vout: 1, value: 40000 },
@@ -183,9 +183,17 @@ describe("YieldDistributor (mocked fees)", () => {
             status: { confirmed: false },
           },
         ]),
+        fetchConfirmedUtxos: vi.fn().mockResolvedValue([
+          {
+            txid: "c".repeat(64),
+            vout: 0,
+            value: 200000,
+            status: { confirmed: true, block_height: 100 },
+          },
+        ]),
       };
 
-      const result = await distributor.distributeYield({
+      const result = await txManager.createDistributionTransaction({
         sourceAddress: testAddress,
         api: mockApi as any,
         timelockAddress: testAddress,
@@ -193,72 +201,12 @@ describe("YieldDistributor (mocked fees)", () => {
       });
 
       expect(typeof result).toBe("string");
-      expect(mockApi.getAddressUtxos).toHaveBeenCalledWith(testAddress);
+      expect(mockApi.fetchConfirmedUtxos).toHaveBeenCalledWith(testAddress);
       // Only confirmed UTXOs should be used
       const psbt = bitcoin.Psbt.fromBase64(result, {
         network: bitcoin.networks.testnet,
       });
       expect(psbt.inputCount).toBe(1); // Only the confirmed one
-    });
-  });
-
-  describe("signAndSubmitYieldDistribution", () => {
-    test("should sign and submit yield distribution", async () => {
-      // First create an unsigned PSBT
-      const p2wpkh = bitcoin.payments.p2wpkh({
-        pubkey: testKeyPair.publicKey,
-        network: bitcoin.networks.testnet,
-      });
-      const psbt = new bitcoin.Psbt({ network: bitcoin.networks.testnet });
-      psbt.addInput({
-        hash: "a".repeat(64),
-        index: 0,
-        witnessUtxo: { script: p2wpkh.output!, value: BigInt(100000) },
-      });
-      psbt.addOutput({ address: testAddress, value: BigInt(50000) });
-      psbt.addOutput({ address: testAddress2, value: BigInt(45000) });
-
-      // Mock submitTransaction to avoid broadcast
-      vi.spyOn(distributor, "submitTransaction").mockResolvedValue(
-        "mock-txid-123",
-      );
-
-      const result = await distributor.signAndSubmitYieldDistribution({
-        unsignedTransaction: psbt.toBase64(),
-        privateKey: testKeyPair.privateKey!.toString("hex"),
-      });
-
-      expect(result.txid).toBe("mock-txid-123");
-      expect(result.hex).toBeDefined();
-      expect(result.distribution.amount).toBeGreaterThan(0);
-      expect(result.fee).toBeGreaterThan(0);
-      expect(result.size).toBeGreaterThan(0);
-    });
-
-    test("should include metadata in result", async () => {
-      const p2wpkh = bitcoin.payments.p2wpkh({
-        pubkey: testKeyPair.publicKey,
-        network: bitcoin.networks.testnet,
-      });
-      const psbt = new bitcoin.Psbt({ network: bitcoin.networks.testnet });
-      psbt.addInput({
-        hash: "a".repeat(64),
-        index: 0,
-        witnessUtxo: { script: p2wpkh.output!, value: BigInt(100000) },
-      });
-      psbt.addOutput({ address: testAddress, value: BigInt(90000) });
-
-      vi.spyOn(distributor, "submitTransaction").mockResolvedValue("txid-456");
-
-      const result = await distributor.signAndSubmitYieldDistribution(
-        {
-          unsignedTransaction: psbt.toBase64(),
-          privateKey: testKeyPair.privateKey!.toString("hex"),
-        },
-        "Custom metadata",
-      );
-
-      expect(result.metadata).toBe("Custom metadata");
     });
   });
 });

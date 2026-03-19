@@ -13,7 +13,6 @@ export default [
       "*.config.ts",
       "webpack.config.js",
       "jest.config.js",
-      "src/webpack-public-path.ts",
     ],
   },
   {
