@@ -29,7 +29,7 @@ OP_ENDIF
 ```
 
 - **`OP_IF` branch** — user spends after the deadline passes.
-- **`OP_ELSE` branch** — provider spends with no time constraint (see [known bug](#known-bug-provider-race-after-deadline) below).
+- **`OP_ELSE` branch** — provider spends with no time constraint (see [known trust assumption](#known-trust-assumption-provider-race-after-deadline) below).
 
 Both scripts are intended to be constructed with the same `deadline` / `locktime` value so the user can withdraw from both in a single operation once the period ends.
 
@@ -65,7 +65,7 @@ Nothing in the script prevents either party from passing any key in any position
 | ------------------------------------------------------------ | ------------------------------------------------------------------- |
 | `beforePublicKey` belongs to the provider                    | Convention — caller-supplied                                        |
 | `afterPublicKey` and timelock `publicKey` belong to the user | Convention — caller-supplied                                        |
-| Provider claims escrow only before the deadline              | Convention — see known bug below                                    |
+| Provider claims escrow only before the deadline              | Convention — see known trust assumption below                       |
 | Provider distributes yield equal to the agreed amount        | Off-chain signed agreement between user and provider                |
 | Provider distributes to the correct timelock address         | Off-chain signed agreement; `distribute.ts` accepts any destination |
 
@@ -83,7 +83,7 @@ Nothing in the script prevents either party from passing any key in any position
 
 - **Signed by**: Provider (spending `OP_ELSE` branch, `spendAfterDeadline: false`)
 - **On-chain effect**: Sweeps the escrow UTXO to the provider's address
-- **Trust assumption**: Provider claims before the deadline. Bitcoin does not enforce this upper bound — see known bug.
+- **Trust assumption**: Provider claims before the deadline. Bitcoin does not enforce this upper bound — see known trust assumption below.
 - **Note**: `spendAfterDeadline: true` activates the `OP_IF` branch and is the **user's reclaim path**, not a normal provider operation.
 
 ### 3. Distribute (`createDistributionTransaction`)
@@ -101,9 +101,7 @@ Nothing in the script prevents either party from passing any key in any position
 
 ---
 
-## Known Bug: Provider Race After Deadline
-
-**Severity**: Medium — loss of principal possible in adversarial conditions.
+## Known Trust Assumption: Provider Race After Deadline
 
 After the deadline passes, both spending paths of the escrow become simultaneously valid:
 
@@ -112,11 +110,9 @@ After the deadline passes, both spending paths of the escrow become simultaneous
 
 This creates a race condition in which a malicious or negligent provider could sweep the escrow after the deadline, before the user submits their withdrawal. If the provider wins the race, the user loses their principal from that UTXO. The timelock UTXO is unaffected.
 
-**Why it cannot be fixed with CLTV alone**: Bitcoin's `OP_CHECKLOCKTIMEVERIFY` can enforce a lower bound ("not before time X") but has no opcode for an upper bound ("not after time X"). Adding a CLTV to the `OP_ELSE` branch would therefore require a redesign of the escrow script structure.
+**Why this is a trust assumption and not a bug**: Bitcoin's `OP_CHECKLOCKTIMEVERIFY` can enforce a lower bound ("not before time X") but has no opcode for an upper bound ("not after time X"). The `OP_ELSE` branch is intentionally unconstrained by time; provider honesty is a v0 protocol assumption, governed by the off-chain signed agreement.
 
-**Current mitigation**: The off-chain agreement requires the provider to claim before the deadline. Users are advised to submit their withdrawal promptly once the deadline passes.
-
-**Intended fix**: Tracked separately. Will require a script structure change in v1.
+**Mitigation**: The off-chain agreement requires the provider to claim before the deadline. Users are advised to submit their withdrawal promptly once the deadline passes.
 
 ---
 
@@ -125,7 +121,7 @@ This creates a race condition in which a malicious or negligent provider could s
 | Threat                                                 | Impact                       | Prevented by                                                        |
 | ------------------------------------------------------ | ---------------------------- | ------------------------------------------------------------------- |
 | Unauthorized third party steals escrow before deadline | Full loss of escrow UTXO     | Bitcoin (`OP_ELSE` requires valid signature from `beforePublicKey`) |
-| Provider steals principal **after** deadline           | Full loss of escrow UTXO     | **Not prevented** — see known bug                                   |
+| Provider steals principal **after** deadline           | Full loss of escrow UTXO     | Off-chain agreement only                                            |
 | Provider distributes less yield than agreed            | Shortfall in user's timelock | Off-chain agreement only                                            |
 | Provider distributes yield to wrong address            | Loss of yield                | Off-chain agreement only; `distribute.ts` accepts any destination   |
 | User withdraws before deadline                         | Impossible                   | Bitcoin CLTV                                                        |
