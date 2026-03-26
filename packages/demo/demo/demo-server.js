@@ -4,7 +4,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import swaggerUi from "swagger-ui-express";
-import swaggerSpec from "../../swagger.config.js";
+import swaggerSpec from "../swagger.config.js";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import { exec } from "child_process";
@@ -14,6 +14,10 @@ import { createRequire } from "module";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
+
+// Package paths
+const CORE_DOCS_DIR = path.join(__dirname, "..", "..", "core", "docs");
+const CORE_DIST_DIR = path.join(__dirname, "..", "..", "core", "dist");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -55,8 +59,8 @@ app.use("/api", apiRoutes);
 // Serve static files from the demo directory
 app.use(express.static(__dirname));
 
-// Serve the built bundle from the parent dist directory
-app.use("/dist", express.static(path.join(__dirname, "..", "dist")));
+// Serve the built bundle from packages/core/dist
+app.use("/dist", express.static(CORE_DIST_DIR));
 
 // Serve WASM files with correct MIME type and better error handling
 app.use("/dist", (req, res, next) => {
@@ -70,9 +74,7 @@ app.use("/dist", (req, res, next) => {
 app.use((req, res, next) => {
   if (req.path.endsWith(".wasm")) {
     const wasmPath = path.join(
-      __dirname,
-      "..",
-      "dist",
+      CORE_DIST_DIR,
       path.basename(req.path)
     );
     if (fs.existsSync(wasmPath)) {
@@ -177,7 +179,7 @@ app.get("/examples/:filename", (req, res) => {
 
 // Serve CLI documentation
 app.get("/cli", (req, res) => {
-  const cliMdPath = path.join(__dirname, "..", "CLI.md");
+  const cliMdPath = path.join(__dirname, "..", "..", "..", "CLI.md");
 
   if (fs.existsSync(cliMdPath)) {
     const content = fs.readFileSync(cliMdPath, "utf8");
@@ -190,7 +192,7 @@ app.get("/cli", (req, res) => {
 
 // Serve API documentation index (specific handler for the root docs page)
 app.get("/docs/", (req, res) => {
-  const docsPath = path.join(__dirname, "..", "docs", "index.html");
+  const docsPath = path.join(CORE_DOCS_DIR, "index.html");
 
   if (fs.existsSync(docsPath)) {
     // Read the file and inject base href if not present
@@ -203,7 +205,7 @@ app.get("/docs/", (req, res) => {
     // Try to generate docs automatically
     exec(
       "npm run docs",
-      { cwd: path.join(__dirname, "..") },
+      { cwd: path.join(__dirname, "..", "..", "core") },
       (error, stdout, stderr) => {
         if (error) {
           res.status(404).json({
@@ -241,13 +243,13 @@ app.get("/docs", (req, res) => {
 });
 
 // Serve docs static assets (for CSS, JS, images, etc.)
-app.use("/docs", express.static(path.join(__dirname, "..", "docs")));
+app.use("/docs", express.static(CORE_DOCS_DIR));
 
 // Middleware to inject base href into HTML files in docs
 app.use("/docs", (req, res, next) => {
   // Only process HTML files
   if (req.path.endsWith(".html")) {
-    const filePath = path.join(__dirname, "..", "docs", req.path);
+    const filePath = path.join(CORE_DOCS_DIR, req.path);
 
     if (fs.existsSync(filePath)) {
       let content = fs.readFileSync(filePath, "utf8");

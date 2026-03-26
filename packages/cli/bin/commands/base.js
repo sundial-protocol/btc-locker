@@ -190,7 +190,7 @@ async function handleSignCommand(cmdOptions, parentOptions) {
   const locker = await initLocker(parentOptions);
   let txHex = cmdOptions.hex;
   let privateKey = cmdOptions.privateKey;
-  let inputIndex = parseInt(cmdOptions.inputIndex);
+  const inputIndex = parseInt(cmdOptions.inputIndex);
   let script = cmdOptions.script;
 
   // Interactive prompts if options not provided

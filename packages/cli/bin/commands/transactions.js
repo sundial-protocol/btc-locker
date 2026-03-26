@@ -488,8 +488,8 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
   let toAddress = cmdOptions.to;
   let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
   let subjectId = cmdOptions.subjectId;
-  let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
-  let priority = parsePriority(cmdOptions.priority || "medium");
+  const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
+  const priority = parsePriority(cmdOptions.priority || "medium");
 
   // Interactive prompts if options not provided
   if (!fromPrivateKey || !toAddress || !amount) {
@@ -779,7 +779,7 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
   let redeemScript = cmdOptions.script;
   let privateKey = cmdOptions.key;
   let destinationAddress = cmdOptions.to;
-  let priority = parsePriority(cmdOptions.priority || "medium");
+  const priority = parsePriority(cmdOptions.priority || "medium");
   let emergencyKey = cmdOptions.emergencyKey;
 
   // Interactive prompts if options not provided
@@ -1011,14 +1011,14 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
     ? parseInt(cmdOptions.timelockAmount)
     : null;
 
-  let priority = parsePriority(cmdOptions.priority || "medium");
+  const priority = parsePriority(cmdOptions.priority || "medium");
   let feeAddress = cmdOptions.feeAddress;
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
   let subjectId = cmdOptions.subjectId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
-  let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
+  const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
 
   // Validate fee parameters
   if (feeAddress && !protocolFeeAmount) {
@@ -1421,14 +1421,14 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
   let timelockScript = cmdOptions.timelockScript;
   let privateKey = cmdOptions.privateKey;
   let destination = cmdOptions.destination;
-  let priority = parsePriority(cmdOptions.priority || "medium");
+  const priority = parsePriority(cmdOptions.priority || "medium");
   let feeAddress = cmdOptions.feeAddress;
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
   let subjectId = cmdOptions.subjectId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
-  let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
+  const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
 
   // Validate fee parameters
   if (feeAddress && !protocolFeeAmount) {
@@ -1877,7 +1877,7 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
  * Handle claim command
  */
 async function handleClaimCommand(cmdOptions, parentOptions) {
-  let {
+  const {
     address: scriptAddress,
     redeemScript,
     privateKey,
@@ -1889,7 +1889,7 @@ async function handleClaimCommand(cmdOptions, parentOptions) {
 
   let subjectId = cmdOptions.subjectId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
-  let flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
+  const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
 
   const priority = parsePriority(priorityStr);
 

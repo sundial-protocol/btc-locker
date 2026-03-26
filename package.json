@@ -1,6 +1,7 @@
 {
   "name": "btc-locker-monorepo",
   "private": true,
+  "packageManager": "npm@10.8.2",
   "workspaces": [
     "packages/*"
   ],
@@ -11,6 +12,7 @@
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
     "cli": "npm run start --workspace=packages/cli",
+    "docs": "npm run docs --workspace=packages/core",
     "demo": "npm run start --workspace=packages/demo",
     "demo:dev": "npm run dev --workspace=packages/demo"
   },
