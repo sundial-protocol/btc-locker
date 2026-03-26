@@ -13,7 +13,7 @@ let BTCLocker;
 async function loadBTCLocker() {
   try {
     // Try to load from ES module export first
-    const srcModule = await import("../dist/esm/index.js");
+    const srcModule = await import("@sundial-protocol/btc-locker");
     BTCLocker =
       srcModule.BTCLocker || srcModule.default?.BTCLocker || srcModule.default;
   } catch (error) {
@@ -21,7 +21,7 @@ async function loadBTCLocker() {
       // Fallback to CommonJS version
       const { createRequire } = await import("module");
       const require = createRequire(import.meta.url);
-      const bundle = require("../dist/cjs/index.js");
+      const bundle = require("@sundial-protocol/btc-locker");
       BTCLocker =
         bundle.BTCLocker || bundle.default?.BTCLocker || bundle.default;
     } catch (srcError) {

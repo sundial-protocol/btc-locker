@@ -1,0 +1,29 @@
+{
+  "name": "@sundial-protocol/btc-locker-demo",
+  "version": "1.6.4",
+  "private": true,
+  "type": "module",
+  "description": "Demo server for the BTC Locker Bitcoin timelock library",
+  "scripts": {
+    "start": "node demo/demo-server.js",
+    "dev": "node --watch demo/demo-server.js"
+  },
+  "dependencies": {
+    "@sundial-protocol/btc-locker": "*",
+    "express": "^4.18.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0",
+    "yamljs": "^0.3.0"
+  },
+  "keywords": [],
+  "author": "Sundial Protocol",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sundial-protocol/btc-locker.git",
+    "directory": "packages/demo"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

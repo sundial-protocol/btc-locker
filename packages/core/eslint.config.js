@@ -3,7 +3,6 @@ import typescriptParser from "@typescript-eslint/parser";
 
 export default [
   {
-    // Global ignores
     ignores: [
       "dist/**",
       "coverage/**",
@@ -16,7 +15,6 @@ export default [
     ],
   },
   {
-    // Base configuration for all files
     files: ["**/*.{js,ts}"],
     languageOptions: {
       ecmaVersion: 2021,
@@ -34,8 +32,7 @@ export default [
       },
     },
     rules: {
-      // Basic ESLint recommended rules
-      "no-unused-vars": "off", // Disabled in favor of TypeScript version
+      "no-unused-vars": "off",
       "no-console": "warn",
       "no-debugger": "error",
       "no-duplicate-imports": "error",
@@ -44,7 +41,6 @@ export default [
     },
   },
   {
-    // TypeScript specific configuration
     files: ["**/*.ts"],
     plugins: {
       "@typescript-eslint": typescriptEslint,
@@ -58,7 +54,6 @@ export default [
       },
     },
     rules: {
-      // Custom TypeScript rules
       "@typescript-eslint/no-unused-vars": "error",
       "@typescript-eslint/explicit-function-return-type": "off",
       "@typescript-eslint/explicit-module-boundary-types": "off",
@@ -69,7 +64,6 @@ export default [
     },
   },
   {
-    // Test files configuration
     files: ["**/*.test.ts", "tests/**/*.ts"],
     languageOptions: {
       globals: {
@@ -85,32 +79,8 @@ export default [
       },
     },
     rules: {
-      // Relax some rules for test files
       "@typescript-eslint/no-explicit-any": "off",
       "no-console": "off",
-    },
-  },
-  {
-    // CLI and scripts configuration
-    files: ["bin/**/*.js", "scripts/**/*.js", "scripts/**/*.mjs"],
-    languageOptions: {
-      globals: {
-        console: "readonly",
-        process: "readonly",
-        Buffer: "readonly",
-        __dirname: "readonly",
-        __filename: "readonly",
-      },
-    },
-    rules: {
-      "no-console": "off", // Allow console in CLI scripts
-    },
-  },
-  {
-    // Demo and example files
-    files: ["demo/**/*.js", "examples/**/*.js"],
-    rules: {
-      "no-console": "off", // Allow console in demo files
     },
   },
 ];

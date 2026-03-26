@@ -7,7 +7,7 @@ import chalk from "chalk";
 import fs from "fs";
 import path from "path";
 import { initLocker, displayResult } from "./shared.js";
-import { ScriptUtils } from "../../dist/esm/index.js";
+import { ScriptUtils } from "@sundial-protocol/btc-locker";
 import { validateLocktime, parseLocktime } from "../locktime.js";
 
 /**

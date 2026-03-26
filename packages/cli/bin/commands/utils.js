@@ -3,7 +3,7 @@
  */
 
 import { displayResult } from "./shared.js";
-import { ScriptUtils, TimeUtils } from "../../dist/esm/index.js";
+import { ScriptUtils, TimeUtils } from "@sundial-protocol/btc-locker";
 
 /**
  * Setup utility commands

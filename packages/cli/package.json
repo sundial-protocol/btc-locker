@@ -1,0 +1,44 @@
+{
+  "name": "@sundial-protocol/btc-locker-cli",
+  "version": "2.0.0",
+  "private": false,
+  "type": "module",
+  "description": "CLI for the BTC Locker Bitcoin timelock library",
+  "bin": {
+    "btc-locker": "./bin/btc-locker"
+  },
+  "scripts": {
+    "start": "node bin/btc-locker",
+    "lint": "eslint bin/**/*.js"
+  },
+  "dependencies": {
+    "@sundial-protocol/btc-locker": "*",
+    "bitcoinjs-lib": "^7.0.0",
+    "chalk": "^5.6.2",
+    "commander": "^11.1.0",
+    "inquirer": "^8.2.6"
+  },
+  "files": [
+    "bin/"
+  ],
+  "keywords": [
+    "bitcoin",
+    "timelock",
+    "cli",
+    "cryptocurrency",
+    "blockchain"
+  ],
+  "author": "Sundial Protocol",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sundial-protocol/btc-locker.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

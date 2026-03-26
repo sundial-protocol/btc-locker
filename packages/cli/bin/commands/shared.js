@@ -4,7 +4,7 @@
 
 import * as bitcoin from "bitcoinjs-lib";
 import chalk from "chalk";
-import { createBTCLocker } from "../../dist/esm/index.js";
+import { createBTCLocker } from "@sundial-protocol/btc-locker";
 
 /**
  * Initialize BTCLocker instance based on network option

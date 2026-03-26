@@ -5,18 +5,35 @@
  * Command-line interface for testing Bitcoin timelock scripts
  */
 
-import { Command } from "commander";
-import chalk from "chalk";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+// ── Bootstrap (runs before any module is evaluated) ─────────────────────────
 
-// Import command modules
-import { setupScriptsCommands } from "./commands/scripts.js";
-import { setupTransactionCommands } from "./commands/transactions.js";
-import { setupInspectCommands } from "./commands/inspect.js";
-import { setupUtilCommands } from "./commands/utils.js";
-import { setupBaseCommands } from "./commands/base.js";
+// Switch Windows console to UTF-8 so Unicode chars like ₿ render correctly.
+// chcp changes the shared console code page, fixing output through the npm
+// PS1 wrapper that PowerShell uses to launch global binaries.
+if (process.platform === "win32") {
+  try {
+    const { execSync } = await import("child_process");
+    execSync("chcp 65001", { stdio: "pipe", shell: true });
+  } catch (_) {}
+}
+
+// Force ANSI colors — chalk reads FORCE_COLOR at module evaluation time,
+// so this must be set before chalk (or any file importing chalk) is loaded.
+process.env.FORCE_COLOR = process.env.FORCE_COLOR || "1";
+
+// ── Imports (chalk now picks up FORCE_COLOR and the console is UTF-8) ────────
+
+const { Command } = await import("commander");
+const { default: chalk } = await import("chalk");
+const { default: fs } = await import("fs");
+const { default: path } = await import("path");
+const { fileURLToPath } = await import("url");
+
+const { setupScriptsCommands } = await import("./commands/scripts.js");
+const { setupTransactionCommands } = await import("./commands/transactions.js");
+const { setupInspectCommands } = await import("./commands/inspect.js");
+const { setupUtilCommands } = await import("./commands/utils.js");
+const { setupBaseCommands } = await import("./commands/base.js");
 
 // Get the directory of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -39,7 +56,7 @@ program.configureHelp({
 });
 
 // Simple ASCII art display function
-export function showAsciiArt() {
+function showAsciiArt() {
   const asciiArt =
     chalk.hex("#FFB70A")(`
       

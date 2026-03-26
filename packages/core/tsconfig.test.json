@@ -22,10 +22,6 @@
   "exclude": [
     "node_modules",
     "dist",
-    "coverage",
-    "examples",
-    "demo",
-    "docs",
-    "bin"
+    "coverage"
   ]
 }

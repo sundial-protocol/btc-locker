@@ -1,4 +1,4 @@
-import { TimeUtils } from "../dist/esm/index.js";
+import { TimeUtils } from "@sundial-protocol/btc-locker";
 
 export const validateLocktime = (input) => {
   if (input.match(/^\d+$/)) return true;

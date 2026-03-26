@@ -8,8 +8,8 @@ import fs from "fs";
 import path from "path";
 import * as bitcoin from "bitcoinjs-lib";
 import { initLocker, displayResult } from "./shared.js";
-import { ScriptUtils, TransactionUtils } from "../../dist/esm/index.js";
-import BitcoinAPI from "../../dist/esm/bitcoin-api.js";
+import { ScriptUtils, TransactionUtils } from "@sundial-protocol/btc-locker";
+import BitcoinAPI from "@sundial-protocol/btc-locker/bitcoin-api";
 
 /**
  * Format key pair data for file output
@@ -190,7 +190,7 @@ async function handleSignCommand(cmdOptions, parentOptions) {
   const locker = await initLocker(parentOptions);
   let txHex = cmdOptions.hex;
   let privateKey = cmdOptions.privateKey;
-  let inputIndex = parseInt(cmdOptions.inputIndex);
+  const inputIndex = parseInt(cmdOptions.inputIndex);
   let script = cmdOptions.script;
 
   // Interactive prompts if options not provided

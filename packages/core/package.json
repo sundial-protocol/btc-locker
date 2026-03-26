@@ -1,0 +1,121 @@
+{
+  "name": "@sundial-protocol/btc-locker",
+  "version": "2.0.0",
+  "description": "A comprehensive Bitcoin timelock script library for creating and managing time-locked transactions",
+  "main": "dist/cjs/index.js",
+  "types": "dist/cjs/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./bitcoin-api": {
+      "import": {
+        "types": "./dist/esm/bitcoin-api.d.ts",
+        "default": "./dist/esm/bitcoin-api.js"
+      },
+      "require": {
+        "types": "./dist/cjs/bitcoin-api.d.ts",
+        "default": "./dist/cjs/bitcoin-api.js"
+      }
+    },
+    "./utils/network": {
+      "import": {
+        "types": "./dist/esm/utils/network.d.ts",
+        "default": "./dist/esm/utils/network.js"
+      },
+      "require": {
+        "types": "./dist/cjs/utils/network.d.ts",
+        "default": "./dist/cjs/utils/network.js"
+      }
+    },
+    "./utils/metadata": {
+      "import": {
+        "types": "./dist/esm/utils/metadata.d.ts",
+        "default": "./dist/esm/utils/metadata.js"
+      },
+      "require": {
+        "types": "./dist/cjs/utils/metadata.d.ts",
+        "default": "./dist/cjs/utils/metadata.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && webpack --mode production",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.build.json --module commonjs --outDir dist/cjs",
+    "build:dev": "npm run build:esm && webpack --mode development",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "type-check": "tsc --noEmit",
+    "docs": "typedoc --tsconfig tsconfig.docs.json src/index.ts",
+    "example": "node examples/basic-usage.js"
+  },
+  "keywords": [
+    "bitcoin",
+    "timelock",
+    "script",
+    "cryptocurrency",
+    "blockchain",
+    "p2sh",
+    "escrow"
+  ],
+  "author": "Sundial Protocol",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sundial-protocol/btc-locker.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "bugs": {
+    "url": "https://github.com/sundial-protocol/btc-locker/issues"
+  },
+  "homepage": "https://github.com/sundial-protocol/btc-locker#readme",
+  "dependencies": {
+    "@bitcoinerlab/secp256k1": "^1.2.0",
+    "bip32": "^5.0.0",
+    "bitcoinjs-lib": "^7.0.0",
+    "ecpair": "^2.1.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "babel-loader": "^9.1.3",
+    "buffer": "^6.0.3",
+    "crypto-browserify": "^3.12.0",
+    "jsdoc": "^4.0.2",
+    "node-fetch": "^2.7.0",
+    "process": "^0.11.10",
+    "stream-browserify": "^3.0.0",
+    "ts-loader": "^9.5.0",
+    "typedoc": "^0.25.0",
+    "vitest": "^4.0.18",
+    "webpack": "^5.88.0",
+    "webpack-cli": "^5.1.0",
+    "yamljs": "^0.3.0"
+  },
+  "files": [
+    "src/",
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
