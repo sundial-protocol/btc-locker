@@ -12,9 +12,7 @@
     "dist",
     "coverage",
     "examples",
-    "demo",
     "docs",
-    "bin",
     "tests"
   ]
 }

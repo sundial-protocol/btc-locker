@@ -4,7 +4,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import swaggerUi from "swagger-ui-express";
-import swaggerSpec from "../swagger.config.js";
+import swaggerSpec from "../../swagger.config.js";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import { exec } from "child_process";

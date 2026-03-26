@@ -5,9 +5,9 @@
 import inquirer from "inquirer";
 import chalk from "chalk";
 import { initLocker, displayResult } from "./shared.js";
-import { ScriptUtils } from "../../dist/esm/index.js";
-import BitcoinAPI from "../../dist/esm/bitcoin-api.js";
-import { NETWORKS } from "../../dist/esm/utils/network.js";
+import { ScriptUtils } from "@sundial-protocol/btc-locker";
+import BitcoinAPI from "@sundial-protocol/btc-locker/bitcoin-api";
+import { NETWORKS } from "@sundial-protocol/btc-locker/utils/network";
 
 /**
  * Setup inspect commands
