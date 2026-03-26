@@ -16,7 +16,8 @@
     "demo": "npm run start --workspace=packages/demo",
     "demo:dev": "npm run dev --workspace=packages/demo",
     "version": "changeset version",
-    "release": "npm run build && changeset publish"
+    "release": "npm run build && changeset publish",
+    "test-all": "npm run type-check && npm run lint && npm run build && npm run test"
   },
   "devDependencies": {
     "@changesets/cli": "^2.30.0",
