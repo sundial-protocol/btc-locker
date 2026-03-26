@@ -14,9 +14,12 @@
     "cli": "npm run start --workspace=packages/cli",
     "docs": "npm run docs --workspace=packages/core",
     "demo": "npm run start --workspace=packages/demo",
-    "demo:dev": "npm run dev --workspace=packages/demo"
+    "demo:dev": "npm run dev --workspace=packages/demo",
+    "version": "changeset version",
+    "release": "npm run build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.30.0",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
