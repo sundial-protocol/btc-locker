@@ -34,6 +34,7 @@ const { setupTransactionCommands } = await import("./commands/transactions.js");
 const { setupInspectCommands } = await import("./commands/inspect.js");
 const { setupUtilCommands } = await import("./commands/utils.js");
 const { setupBaseCommands } = await import("./commands/base.js");
+const { setupBackendCommands } = await import("./commands/backend.js");
 
 // Get the directory of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -107,7 +108,12 @@ program
     "testnet"
   )
   .option("-v, --verbose", "Enable verbose logging")
-  .option("--json", "Output results in JSON format");
+  .option("--json", "Output results in JSON format")
+  .option(
+    "--server-url <url>",
+    "Sundial API server URL (overrides BTC_LOCKER_SERVER env var)",
+    process.env.BTC_LOCKER_SERVER || "http://localhost:8080"
+  );
 
 // Setup command groups
 setupBaseCommands(program);
@@ -115,6 +121,7 @@ setupScriptsCommands(program);
 setupTransactionCommands(program);
 setupInspectCommands(program);
 setupUtilCommands(program);
+setupBackendCommands(program);
 
 // Error handling
 process.on("unhandledRejection", (reason, promise) => {

@@ -14,6 +14,7 @@ import BitcoinAPI from "@sundial-protocol/btc-locker/bitcoin-api";
 import { NETWORKS } from "@sundial-protocol/btc-locker/utils/network";
 import { TxType } from "@sundial-protocol/btc-locker/utils/metadata";
 import { initLocker, displayResult } from "./shared.js";
+import { createDepositIntent, createDistributionIntent } from "./backend.js";
 import crypto from "crypto";
 
 /**
@@ -61,7 +62,12 @@ export function setupTransactionCommands(program) {
       "Fee priority: high, medium, low",
       "medium",
     )
-    .option("--deposit-id <uuid>", "Deposit ID (UUID v4) for Sundial metadata")
+    .option("--deposit-id <uuid>", "Deposit ID (UUID v4) for Sundial metadata (from provider-claimable)")
+    .option("--provider-id <uuid>", "Provider UUID (required for server registration)")
+    .option("--program-id <uuid>", "Program UUID (required for server registration)")
+    .option("--yield-sats <number>", "Yield portion in satoshis (required for server registration)")
+    .option("--payable-at <datetime>", "Distribution payable-at ISO datetime (defaults to now)")
+    .option("--skip-server", "Skip server intent registration")
     .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
@@ -150,12 +156,17 @@ export function setupTransactionCommands(program) {
     )
     .option(
       "--deposit-id <uuid>",
-      "Deposit ID (UUID v4); auto-generated if omitted",
+      "Deposit ID (UUID v4); auto-generated if omitted (server assigns one when --provider-id is given)",
     )
     .option(
       "--provider-pubkey <hex>",
       "Yield-provider x-only public key (64 hex chars)",
     )
+    .option("--provider-id <uuid>", "Provider UUID (required for server registration)")
+    .option("--program-id <uuid>", "Program UUID (required for server registration)")
+    .option("--alpha-bps <number>", "Escrow split in basis points (required for server registration)")
+    .option("--lock-ms <number>", "Lock duration in milliseconds (required for server registration)")
+    .option("--skip-server", "Skip server intent registration")
     .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
@@ -487,9 +498,14 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
   let fromPrivateKey = cmdOptions.fromKey;
   let toAddress = cmdOptions.to;
   let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
-  let subjectId = cmdOptions.subjectId;
+  let subjectId = cmdOptions.depositId;
   const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
   const priority = parsePriority(cmdOptions.priority || "medium");
+  let providerId = cmdOptions.providerId;
+  let programId = cmdOptions.programId;
+  let yieldSats = cmdOptions.yieldSats ? parseInt(cmdOptions.yieldSats) : null;
+  let payableAt = cmdOptions.payableAt || new Date().toISOString();
+  const skipServer = !!cmdOptions.skipServer;
 
   // Interactive prompts if options not provided
   if (!fromPrivateKey || !toAddress || !amount) {
@@ -544,6 +560,39 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
   }
 
   try {
+    // Register distribution intent with the server before building the tx
+    let distributionId;
+    if (!skipServer && providerId && programId && subjectId && yieldSats != null) {
+      console.log(chalk.blue("Registering distribution intent with server..."));
+      try {
+        const serverUrl = parentOptions.serverUrl || process.env.BTC_LOCKER_SERVER || "http://localhost:8080";
+        const intentResponse = await createDistributionIntent(
+          {
+            provider_id: providerId,
+            program_id: programId,
+            payable_at: payableAt,
+            allocations: [
+              {
+                deposit_id: subjectId,
+                yield_sats: yieldSats,
+                destination_address: toAddress,
+              },
+            ],
+          },
+          serverUrl,
+        );
+        distributionId = intentResponse.distribution_id;
+        console.log(chalk.green(`✓ Distribution intent registered. distribution_id: ${distributionId}`));
+      } catch (serverErr) {
+        console.error(chalk.red(`Server error: ${serverErr.message}`));
+        console.error(chalk.yellow("Ensure the deposit has reached PROVIDER_CLAIM_CONFIRMED status."));
+        console.error(chalk.yellow("Use --skip-server to bypass server registration."));
+        return;
+      }
+    } else if (!skipServer && (providerId || programId || yieldSats != null)) {
+      console.warn(chalk.yellow("⚠️  Skipping server registration: --provider-id, --program-id, --deposit-id, and --yield-sats are all required."));
+    }
+
     // Generate address from private key to check balance
     const keyPair = await locker.generateKeyPairFromPrivateKey(fromPrivateKey);
     const fromAddress = keyPair.address;
@@ -735,6 +784,14 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
             `   Flags: 0x${metadata.flags.toString(16).padStart(4, "0")}`,
           ),
         );
+    }
+
+    if (distributionId) {
+      console.log(chalk.gray(`ℹ️  Distribution ID: ${distributionId}`));
+    }
+    if (metadata?.subjectId) {
+      console.log(chalk.gray(`ℹ️  The indexer will confirm the distribution automatically.`));
+      console.log(chalk.gray(`   Poll deposit status: btc-locker backend deposit-status ${metadata.subjectId}`));
     }
 
     if (parentOptions.network === "testnet") {
@@ -1016,9 +1073,14 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
-  let subjectId = cmdOptions.subjectId;
+  let subjectId = cmdOptions.depositId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
+  let providerId = cmdOptions.providerId;
+  let programId = cmdOptions.programId;
+  let alphaBps = cmdOptions.alphaBps ? parseInt(cmdOptions.alphaBps) : null;
+  let lockMs = cmdOptions.lockMs ? parseInt(cmdOptions.lockMs) : null;
+  const skipServer = !!cmdOptions.skipServer;
 
   // Validate fee parameters
   if (feeAddress && !protocolFeeAmount) {
@@ -1172,7 +1234,40 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
       subjectId = subjectId || answers.subjectId || undefined;
     }
 
-    // Auto-generate deposit ID if not provided
+    // Register deposit intent with the server (gets server-assigned deposit_id)
+    if (!skipServer && providerId && programId && alphaBps != null && lockMs != null) {
+      const totalAmountSats = escrowAmount + timelockAmount;
+      // Derive beneficiary address from the sending key
+      const beneficiaryKeyPair = await locker.generateKeyPairFromPrivateKey(fromPrivateKey);
+      const userBeneficiaryAddress = beneficiaryKeyPair.address;
+
+      console.log(chalk.blue("Registering deposit intent with server..."));
+      try {
+        const serverUrl = parentOptions.serverUrl || process.env.BTC_LOCKER_SERVER || "http://localhost:8080";
+        const intentResponse = await createDepositIntent(
+          {
+            user_beneficiary_address: userBeneficiaryAddress,
+            provider_id: providerId,
+            program_id: programId,
+            amount_sats: totalAmountSats,
+            alpha_bps: alphaBps,
+            lock_ms: lockMs,
+          },
+          serverUrl,
+        );
+        subjectId = intentResponse.deposit_id;
+        console.log(chalk.green(`✓ Deposit intent registered. deposit_id: ${subjectId}`));
+      } catch (serverErr) {
+        console.error(chalk.red(`Server error: ${serverErr.message}`));
+        console.error(chalk.yellow("Use --skip-server to bypass server registration."));
+        return;
+      }
+    } else if (!skipServer && (providerId || programId || alphaBps != null || lockMs != null)) {
+      // Partial server args provided — warn but don't block
+      console.warn(chalk.yellow("⚠️  Skipping server registration: --provider-id, --program-id, --alpha-bps, and --lock-ms are all required for server registration."));
+    }
+
+    // Auto-generate deposit ID if not provided and server skipped
     if (!subjectId) {
       subjectId = crypto.randomUUID();
       console.log(chalk.gray(`Auto-generated deposit ID: ${subjectId}`));
@@ -1381,6 +1476,11 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
             `View on explorer: https://mempool.space/tx/${broadcastResult.txid}`,
           ),
         );
+      }
+
+      if (subjectId) {
+        console.log(chalk.gray(`ℹ️  The indexer will confirm the deposit automatically.`));
+        console.log(chalk.gray(`   Poll status: btc-locker backend deposit-status ${subjectId}`));
       }
     } else {
       console.log(chalk.yellow("\nDRY RUN: Transaction not broadcasted"));
@@ -1847,6 +1947,11 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
           );
       }
 
+      console.log(chalk.gray(`ℹ️  Withdrawal is tracked automatically by the indexer.`));
+      if (metadata?.subjectId) {
+        console.log(chalk.gray(`   Poll deposit status: btc-locker backend deposit-status ${metadata.subjectId}`));
+      }
+
       if (parentOptions.network === "testnet") {
         console.log(
           chalk.blue(
@@ -2183,6 +2288,11 @@ async function handleClaimCommand(cmdOptions, parentOptions) {
                 `   Flags: 0x${metadata.flags.toString(16).padStart(4, "0")}`,
               ),
             );
+        }
+
+        console.log(chalk.gray(`ℹ️  Provider claim is tracked automatically by the indexer.`));
+        if (metadata?.subjectId) {
+          console.log(chalk.gray(`   Poll deposit status: btc-locker backend deposit-status ${metadata.subjectId}`));
         }
 
         if (parentOptions.network === "testnet") {
