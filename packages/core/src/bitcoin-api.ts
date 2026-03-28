@@ -90,6 +90,57 @@ export default class BitcoinAPI {
   }
 
   /**
+   * Returns true for errors that indicate a provider is unreachable (network
+   * timeouts, connection refused, DNS failures, etc.) and warrant a failover.
+   */
+  private isNetworkError(errorMsg: string): boolean {
+    return (
+      errorMsg.includes("ETIMEDOUT") ||
+      errorMsg.includes("ECONNREFUSED") ||
+      errorMsg.includes("ENOTFOUND") ||
+      errorMsg.includes("ECONNRESET") ||
+      errorMsg.includes("EHOSTUNREACH") ||
+      errorMsg.includes("socket hang up") ||
+      errorMsg.includes("invalid network") ||
+      errorMsg.includes("API Error 400")
+    );
+  }
+
+  /**
+   * Cycles through all remaining providers when the current one is unreachable.
+   * Order is always mempool → blockstream → blockcypher, skipping the current
+   * provider. Stops cycling if a provider returns a non-network error.
+   */
+  private async withProviderFallback<T>(
+    operation: (api: BitcoinAPI) => Promise<T>,
+    errorPrefix: string,
+    originalError: string,
+  ): Promise<T> {
+    const allProviders: ApiProvider[] = [
+      "mempool",
+      "blockstream",
+      "blockcypher",
+    ];
+    const fallbacks = allProviders.filter((p) => p !== this.apiProvider);
+    const errors: string[] = [`${this.apiProvider}: ${originalError}`];
+
+    for (const provider of fallbacks) {
+      console.warn(`${this.apiProvider} unreachable, trying ${provider}...`);
+      try {
+        return await operation(new BitcoinAPI(this.network, provider));
+      } catch (err) {
+        const msg = (err as Error).message;
+        errors.push(`${provider}: ${msg}`);
+        if (!this.isNetworkError(msg)) break;
+      }
+    }
+
+    throw new Error(
+      `${errorPrefix} (all providers failed): ${errors.join("; ")}`,
+    );
+  }
+
+  /**
    * Make HTTP request for raw text responses
    */
   async makeRequestText(endpoint: string): Promise<string> {
@@ -215,9 +266,15 @@ export default class BitcoinAPI {
       }
       throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(
-        `Failed to get address info: ${(error as Error).message}`,
-      );
+      const errorMsg = (error as Error).message;
+      if (this.isNetworkError(errorMsg)) {
+        return this.withProviderFallback(
+          (api) => api.getAddressInfo(address),
+          "Failed to get address info",
+          errorMsg,
+        );
+      }
+      throw new Error(`Failed to get address info: ${errorMsg}`);
     }
   }
 
@@ -263,26 +320,13 @@ export default class BitcoinAPI {
       throw new Error("Unsupported API provider");
     } catch (error) {
       const errorMsg = (error as Error).message;
-
-      // If using mempool and network error occurs, try blockstream as fallback
-      if (
-        this.apiProvider === "mempool" &&
-        (errorMsg.includes("invalid network") ||
-          errorMsg.includes("API Error 400"))
-      ) {
-        console.warn(
-          `Mempool API failed for ${address}, trying Blockstream as fallback...`,
+      if (this.isNetworkError(errorMsg)) {
+        return this.withProviderFallback(
+          (api) => api.getAddressUtxos(address),
+          "Failed to get UTXOs",
+          errorMsg,
         );
-        try {
-          const fallbackApi = new BitcoinAPI(this.network, "blockstream");
-          return await fallbackApi.getAddressUtxos(address);
-        } catch (fallbackError) {
-          throw new Error(
-            `Failed to get UTXOs (tried multiple APIs): ${errorMsg}; Fallback: ${(fallbackError as Error).message}`,
-          );
-        }
       }
-
       throw new Error(`Failed to get UTXOs: ${errorMsg}`);
     }
   }
@@ -398,9 +442,15 @@ export default class BitcoinAPI {
       }
       throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(
-        `Failed to get fee estimates: ${(error as Error).message}`,
-      );
+      const errorMsg = (error as Error).message;
+      if (this.isNetworkError(errorMsg)) {
+        return this.withProviderFallback(
+          (api) => api.getFeeEstimates(),
+          "Failed to get fee estimates",
+          errorMsg,
+        );
+      }
+      throw new Error(`Failed to get fee estimates: ${errorMsg}`);
     }
   }
 
@@ -421,9 +471,15 @@ export default class BitcoinAPI {
       }
       throw new Error("Unsupported API provider");
     } catch (error) {
-      throw new Error(
-        `Failed to get block height: ${(error as Error).message}`,
-      );
+      const errorMsg = (error as Error).message;
+      if (this.isNetworkError(errorMsg)) {
+        return this.withProviderFallback(
+          (api) => api.getBlockHeight(),
+          "Failed to get block height",
+          errorMsg,
+        );
+      }
+      throw new Error(`Failed to get block height: ${errorMsg}`);
     }
   }
 }
