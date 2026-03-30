@@ -99,7 +99,7 @@ export default class ScriptUtils {
       }
 
       const scriptHash = bitcoin.crypto.hash160(redeemScript);
-      const payment = bitcoin.payments.p2sh({
+      const payment = bitcoin.payments.p2wpkh({
         hash: scriptHash,
         network: network,
       });
