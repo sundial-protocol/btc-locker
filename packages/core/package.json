@@ -18,12 +18,12 @@
     },
     "./bitcoin-api": {
       "import": {
-        "types": "./dist/esm/bitcoin-api.d.ts",
-        "default": "./dist/esm/bitcoin-api.js"
+        "types": "./dist/esm/bitcoin-api/index.d.ts",
+        "default": "./dist/esm/bitcoin-api/index.js"
       },
       "require": {
-        "types": "./dist/cjs/bitcoin-api.d.ts",
-        "default": "./dist/cjs/bitcoin-api.js"
+        "types": "./dist/cjs/bitcoin-api/index.d.ts",
+        "default": "./dist/cjs/bitcoin-api/index.js"
       }
     },
     "./utils/network": {

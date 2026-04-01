@@ -389,25 +389,25 @@ describe("BitcoinAPI", () => {
     });
   });
 
-  describe("getBlockHeight", () => {
+  describe("getBlockCount", () => {
     test("mempool: should return block height", async () => {
       mockRequest("850000");
       const api = new BitcoinAPI(NETWORKS.testnet, "mempool");
-      const result = await api.getBlockHeight();
+      const result = await api.getBlockCount();
       expect(result).toBe(850000);
     });
 
     test("blockcypher: should return height from JSON", async () => {
       mockRequest(JSON.stringify({ height: 850001 }));
       const api = new BitcoinAPI(NETWORKS.testnet, "blockcypher");
-      const result = await api.getBlockHeight();
+      const result = await api.getBlockCount();
       expect(result).toBe(850001);
     });
 
     test("should wrap errors", async () => {
       mockRequestError("fail");
       const api = new BitcoinAPI(NETWORKS.testnet, "mempool");
-      await expect(api.getBlockHeight()).rejects.toThrow(
+      await expect(api.getBlockCount()).rejects.toThrow(
         "Failed to get block height",
       );
     });

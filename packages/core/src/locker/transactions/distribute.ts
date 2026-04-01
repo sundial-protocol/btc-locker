@@ -5,7 +5,7 @@ import { FeePriorities } from "../../utils/fees.js";
 import { TxType } from "../../utils/metadata.js";
 import type { LockerContext } from "../core.js";
 import type { BaseTransactionParams, UTXO } from "../../types.js";
-import type BitcoinAPI from "../../bitcoin-api.js";
+import type BitcoinAPI from "../../bitcoin-api/index.js";
 
 /**
  * Parameters for yield distribution

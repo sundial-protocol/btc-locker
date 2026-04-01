@@ -1,68 +1,30 @@
 /**
- * Bitcoin API Service
- * Integrates with various Bitcoin APIs for testnet/mainnet operations
+ * Bitcoin REST Client
+ * Queries public Bitcoin APIs (mempool.space, blockstream.info, blockcypher)
+ * with automatic provider failover on network errors.
  */
 
 import https from "https";
-import type { UTXO } from "./types.js";
-import type { NetworkType } from "./utils/network.js";
+import type { UTXO } from "../types.js";
+import type { NetworkType } from "../utils/network.js";
+import type {
+  ApiProvider,
+  ApiUrls,
+  ApiUTXO,
+  AddressInfo,
+  BitcoinRpcBlock,
+  BitcoinRpcTransaction,
+  BroadcastResult,
+  FeeEstimates,
+} from "./types.js";
 
-/**
- * Bitcoin UTXO with API status information
- * @interface ApiUTXO
- * @description UTXO from Bitcoin API with confirmation status
- * @extends UTXO
- */
-export interface ApiUTXO extends UTXO {
-  status: {
-    confirmed: boolean;
-    block_height?: number;
-    block_hash?: string;
-  };
-}
-
-export type ApiProvider = "mempool" | "blockstream" | "blockcypher";
-
-export interface ApiUrls {
-  [provider: string]: {
-    [network: string]: string;
-  };
-}
-
-export interface AddressInfo {
-  address: string;
-  chain_stats: {
-    funded_txo_count: number;
-    funded_txo_sum: number;
-    spent_txo_count: number;
-    spent_txo_sum: number;
-    tx_count: number;
-  };
-  mempool_stats: {
-    funded_txo_count: number;
-    funded_txo_sum: number;
-    spent_txo_count: number;
-    spent_txo_sum: number;
-    tx_count: number;
-  };
-}
-
-export interface FeeEstimates {
-  [blocks: number]: number;
-}
-
-export interface BroadcastResult {
-  txid: string;
-}
-
-export default class BitcoinAPI {
+export class BitcoinRestClient {
   private network: NetworkType;
   private apiProvider: ApiProvider;
   private baseUrls: ApiUrls;
   private baseUrl: string;
 
   constructor(network: NetworkType, apiProvider: ApiProvider = "mempool") {
-    // Validate network support
     if (network.name === "regtest") {
       throw new Error(
         "Regtest network is not supported. Use 'bitcoin' or 'testnet' instead.",
@@ -90,8 +52,8 @@ export default class BitcoinAPI {
   }
 
   /**
-   * Returns true for errors that indicate a provider is unreachable (network
-   * timeouts, connection refused, DNS failures, etc.) and warrant a failover.
+   * Returns true for errors that indicate a provider is unreachable and
+   * warrant a failover to the next provider.
    */
   private isNetworkError(errorMsg: string): boolean {
     return (
@@ -108,11 +70,9 @@ export default class BitcoinAPI {
 
   /**
    * Cycles through all remaining providers when the current one is unreachable.
-   * Order is always mempool → blockstream → blockcypher, skipping the current
-   * provider. Stops cycling if a provider returns a non-network error.
    */
   private async withProviderFallback<T>(
-    operation: (api: BitcoinAPI) => Promise<T>,
+    operation: (client: BitcoinRestClient) => Promise<T>,
     errorPrefix: string,
     originalError: string,
   ): Promise<T> {
@@ -127,7 +87,7 @@ export default class BitcoinAPI {
     for (const provider of fallbacks) {
       console.warn(`${this.apiProvider} unreachable, trying ${provider}...`);
       try {
-        return await operation(new BitcoinAPI(this.network, provider));
+        return await operation(new BitcoinRestClient(this.network, provider));
       } catch (err) {
         const msg = (err as Error).message;
         errors.push(`${provider}: ${msg}`);
@@ -140,9 +100,6 @@ export default class BitcoinAPI {
     );
   }
 
-  /**
-   * Make HTTP request for raw text responses
-   */
   async makeRequestText(endpoint: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const url = `${this.baseUrl}${endpoint}`;
@@ -153,9 +110,7 @@ export default class BitcoinAPI {
         port: urlObj.port || 443,
         path: urlObj.pathname + urlObj.search,
         method: "GET",
-        headers: {
-          "User-Agent": "btc-locker-cli/1.0.0",
-        },
+        headers: { "User-Agent": "btc-locker-cli/1.0.0" },
       };
 
       const req = https.request(options, (res) => {
@@ -175,14 +130,11 @@ export default class BitcoinAPI {
     });
   }
 
-  /**
-   * Make HTTP request
-   */
+   
   async makeRequest(
     endpoint: string,
     method: "GET" | "POST" = "GET",
     data: any = null,
-    // eslint-disable-next-line
   ): Promise<any> {
     return new Promise((resolve, reject) => {
       const url = `${this.baseUrl}${endpoint}`;
@@ -201,10 +153,9 @@ export default class BitcoinAPI {
 
       if (data && method !== "GET") {
         const postData = JSON.stringify(data);
-        if (options.headers) {
-          (options.headers as any)["Content-Length"] =
-            Buffer.byteLength(postData);
-        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (options.headers as any)["Content-Length"] =
+          Buffer.byteLength(postData);
       }
 
       const req = https.request(options, (res) => {
@@ -213,8 +164,7 @@ export default class BitcoinAPI {
         res.on("end", () => {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
             try {
-              const result = body ? JSON.parse(body) : {};
-              resolve(result);
+              resolve(body ? JSON.parse(body) : {});
             } catch (error) {
               reject(new Error(`Parse Error: ${(error as Error).message}`));
             }
@@ -225,18 +175,49 @@ export default class BitcoinAPI {
       });
 
       req.on("error", reject);
-
-      if (data && method !== "GET") {
-        req.write(JSON.stringify(data));
-      }
-
+      if (data && method !== "GET") req.write(JSON.stringify(data));
       req.end();
     });
   }
 
-  /**
-   * Get address balance and transaction count
-   */
+  async makeBroadcastRequest(
+    endpoint: string,
+    txHex: string,
+  ): Promise<BroadcastResult> {
+    return new Promise((resolve, reject) => {
+      const url = `${this.baseUrl}${endpoint}`;
+      const urlObj = new URL(url);
+
+      const options: https.RequestOptions = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || 443,
+        path: urlObj.pathname + urlObj.search,
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain",
+          "User-Agent": "btc-locker-cli/1.0.0",
+          "Content-Length": Buffer.byteLength(txHex),
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let body = "";
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ txid: body.trim() });
+          } else {
+            reject(new Error(`API Error ${res.statusCode}: ${body}`));
+          }
+        });
+      });
+
+      req.on("error", reject);
+      req.write(txHex);
+      req.end();
+    });
+  }
+
   async getAddressInfo(address: string): Promise<AddressInfo> {
     try {
       if (
@@ -269,7 +250,7 @@ export default class BitcoinAPI {
       const errorMsg = (error as Error).message;
       if (this.isNetworkError(errorMsg)) {
         return this.withProviderFallback(
-          (api) => api.getAddressInfo(address),
+          (c) => c.getAddressInfo(address),
           "Failed to get address info",
           errorMsg,
         );
@@ -278,18 +259,15 @@ export default class BitcoinAPI {
     }
   }
 
-  /**
-   * Get UTXOs for an address
-   */
   async getAddressUtxos(address: string): Promise<ApiUTXO[]> {
     try {
       if (
         this.apiProvider === "mempool" ||
         this.apiProvider === "blockstream"
       ) {
+         
         const rawUtxos = await this.makeRequest(`/address/${address}/utxo`);
-
-        // Return flat UTXO structure with status attached
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return rawUtxos.map((rawUtxo: any) => ({
           txid: rawUtxo.txid,
           vout: rawUtxo.vout,
@@ -304,6 +282,7 @@ export default class BitcoinAPI {
         const result = await this.makeRequest(
           `/addrs/${address}?unspentOnly=true&includeScript=true`,
         );
+         
         return (
           result.txrefs?.map((utxo: any) => ({
             txid: utxo.tx_hash,
@@ -322,7 +301,7 @@ export default class BitcoinAPI {
       const errorMsg = (error as Error).message;
       if (this.isNetworkError(errorMsg)) {
         return this.withProviderFallback(
-          (api) => api.getAddressUtxos(address),
+          (c) => c.getAddressUtxos(address),
           "Failed to get UTXOs",
           errorMsg,
         );
@@ -331,9 +310,6 @@ export default class BitcoinAPI {
     }
   }
 
-  /**
-   * Get raw transaction data
-   */
   async getTransaction(txid: string): Promise<string> {
     try {
       if (
@@ -351,9 +327,6 @@ export default class BitcoinAPI {
     }
   }
 
-  /**
-   * Broadcast transaction to network
-   */
   async broadcastTransaction(txHex: string): Promise<BroadcastResult> {
     try {
       if (
@@ -372,59 +345,11 @@ export default class BitcoinAPI {
     }
   }
 
-  /**
-   * Make broadcast request (for raw hex data)
-   */
-  async makeBroadcastRequest(
-    endpoint: string,
-    txHex: string,
-  ): Promise<BroadcastResult> {
-    return new Promise((resolve, reject) => {
-      const url = `${this.baseUrl}${endpoint}`;
-      const urlObj = new URL(url);
-
-      const options: https.RequestOptions = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || 443,
-        path: urlObj.pathname + urlObj.search,
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain",
-          "User-Agent": "btc-locker-cli/1.0.0",
-          "Content-Length": Buffer.byteLength(txHex),
-        },
-      };
-
-      const req = https.request(options, (res) => {
-        let body = "";
-        res.on("data", (chunk) => (body += chunk));
-        res.on("end", () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            // Return the response as-is (usually the txid)
-            resolve({ txid: body.trim() });
-          } else {
-            reject(new Error(`API Error ${res.statusCode}: ${body}`));
-          }
-        });
-      });
-
-      req.on("error", (error) => reject(error));
-      req.write(txHex);
-      req.end();
-    });
-  }
-
-  /**
-   * Get confirmed UTXOs for an address.
-   */
   async fetchConfirmedUtxos(address: string): Promise<UTXO[]> {
     const utxos = await this.getAddressUtxos(address);
     return utxos.filter((u) => u.status?.confirmed);
   }
 
-  /**
-   * Get current fee estimates
-   */
   async getFeeEstimates(): Promise<FeeEstimates> {
     try {
       if (
@@ -433,19 +358,14 @@ export default class BitcoinAPI {
       ) {
         return await this.makeRequest("/fee-estimates");
       } else if (this.apiProvider === "blockcypher") {
-        // BlockCypher doesn't have fee estimates, return defaults
-        return {
-          1: 20, // high priority (next block)
-          6: 10, // medium priority (6 blocks)
-          144: 5, // low priority (1 day)
-        };
+        return { 1: 20, 6: 10, 144: 5 };
       }
       throw new Error("Unsupported API provider");
     } catch (error) {
       const errorMsg = (error as Error).message;
       if (this.isNetworkError(errorMsg)) {
         return this.withProviderFallback(
-          (api) => api.getFeeEstimates(),
+          (c) => c.getFeeEstimates(),
           "Failed to get fee estimates",
           errorMsg,
         );
@@ -454,17 +374,13 @@ export default class BitcoinAPI {
     }
   }
 
-  /**
-   * Get current block height
-   */
-  async getBlockHeight(): Promise<number> {
+  async getBlockCount(): Promise<number> {
     try {
       if (
         this.apiProvider === "mempool" ||
         this.apiProvider === "blockstream"
       ) {
-        const tip = await this.makeRequest("/blocks/tip/height");
-        return tip;
+        return await this.makeRequest("/blocks/tip/height");
       } else if (this.apiProvider === "blockcypher") {
         const result = await this.makeRequest("/");
         return result.height;
@@ -474,12 +390,127 @@ export default class BitcoinAPI {
       const errorMsg = (error as Error).message;
       if (this.isNetworkError(errorMsg)) {
         return this.withProviderFallback(
-          (api) => api.getBlockHeight(),
-          "Failed to get block height",
+          (c) => c.getBlockCount(),
+          "Failed to get block count",
           errorMsg,
         );
       }
       throw new Error(`Failed to get block height: ${errorMsg}`);
     }
   }
+
+  async getBlockHash(height: number): Promise<string> {
+    try {
+      if (
+        this.apiProvider === "mempool" ||
+        this.apiProvider === "blockstream"
+      ) {
+        return await this.makeRequestText(`/block-height/${height}`);
+      } else if (this.apiProvider === "blockcypher") {
+        const result = await this.makeRequest(`/blocks/${height}`);
+        return result.hash;
+      }
+      throw new Error("Unsupported API provider");
+    } catch (error) {
+      const errorMsg = (error as Error).message;
+      if (this.isNetworkError(errorMsg)) {
+        return this.withProviderFallback(
+          (c) => c.getBlockHash(height),
+          "Failed to get block hash",
+          errorMsg,
+        );
+      }
+      throw new Error(`Failed to get block hash: ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Fetch all transactions for a block, handling pagination.
+   * mempool/blockstream return 25 txs per page; stops when a page is short or
+   * the API returns a 400 (end of range).
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async fetchAllBlockTxs(hash: string): Promise<any[]> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const txs: any[] = [];
+    let startIndex = 0;
+    while (true) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let batch: any[];
+      try {
+        batch = await this.makeRequest(`/block/${hash}/txs/${startIndex}`);
+      } catch (err) {
+        // A 400 means start_index is past the end of the block — stop paging.
+        if ((err as Error).message.includes("API Error 400")) break;
+        throw err;
+      }
+      if (!batch || batch.length === 0) break;
+      txs.push(...batch);
+      if (batch.length < 25) break; // last page
+      startIndex += batch.length;
+    }
+    return txs;
+  }
+
+  async getBlock(hash: string): Promise<BitcoinRpcBlock> {
+    try {
+      if (
+        this.apiProvider === "mempool" ||
+        this.apiProvider === "blockstream"
+      ) {
+        const [meta, rawTxs] = await Promise.all([
+          this.makeRequest(`/block/${hash}`),
+          this.fetchAllBlockTxs(hash),
+        ]);
+        return {
+          hash: meta.id,
+          height: meta.height,
+          time: meta.timestamp,
+          mediantime: meta.mediantime,
+          previousblockhash: meta.previousblockhash,
+          tx: rawTxs.map(mapRestTxToRpc),
+        };
+      } else if (this.apiProvider === "blockcypher") {
+        // blockcypher does not expose full vout details per block; fall back to
+        // a provider that does.
+        throw new Error("invalid network");
+      }
+      throw new Error("Unsupported API provider");
+    } catch (error) {
+      const errorMsg = (error as Error).message;
+      if (this.isNetworkError(errorMsg)) {
+        return this.withProviderFallback(
+          (c) => c.getBlock(hash),
+          "Failed to get block",
+          errorMsg,
+        );
+      }
+      throw new Error(`Failed to get block: ${errorMsg}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapRestTxToRpc(tx: any): BitcoinRpcTransaction {
+  return {
+    txid: tx.txid,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vout: tx.vout.map((out: any, i: number) => ({
+      n: i,
+      value: out.value / 1e8, // satoshis → BTC
+      valueSats: out.value,
+      scriptPubKey: {
+        hex: out.scriptpubkey,
+        asm: out.scriptpubkey_asm,
+        address: out.scriptpubkey_address,
+        addresses: out.scriptpubkey_address
+          ? [out.scriptpubkey_address]
+          : undefined,
+      },
+    })),
+  };
 }

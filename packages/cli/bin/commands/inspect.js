@@ -130,7 +130,7 @@ export function setupInspectCommands(program) {
             api.getAddressInfo(address),
             api.getAddressUtxos(address),
             api.getFeeEstimates(),
-            api.getBlockHeight(),
+            api.getBlockCount(),
           ]);
 
         const totalBalance =
@@ -180,10 +180,18 @@ export function setupInspectCommands(program) {
             })),
           },
           fee_estimates: {
-            high_priority: `${feeEstimates["1"] || "N/A"} sat/vB (~10 min, 1 block)`,
-            medium_priority: `${feeEstimates["6"] || "N/A"} sat/vB (~1 hour, 6 blocks)`,
-            low_priority: `${feeEstimates["144"] || "N/A"} sat/vB (~1 day, 144 blocks)`,
-            very_low_priority: `${feeEstimates["504"] || "N/A"} sat/vB (~3.5 days, 500 blocks)`,
+            high_priority: `${
+              feeEstimates["1"] || "N/A"
+            } sat/vB (~10 min, 1 block)`,
+            medium_priority: `${
+              feeEstimates["6"] || "N/A"
+            } sat/vB (~1 hour, 6 blocks)`,
+            low_priority: `${
+              feeEstimates["144"] || "N/A"
+            } sat/vB (~1 day, 144 blocks)`,
+            very_low_priority: `${
+              feeEstimates["504"] || "N/A"
+            } sat/vB (~3.5 days, 500 blocks)`,
           },
         };
 

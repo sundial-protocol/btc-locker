@@ -21,7 +21,7 @@ import {
   Utils,
 } from "./utils/index.js";
 import { BTCLockerError, ValidationError, TimelockError } from "./errors.js";
-import BitcoinAPI from "./bitcoin-api.js";
+import BitcoinAPI from "./bitcoin-api/index.js";
 
 // Export all types and interfaces
 export type {
@@ -49,27 +49,17 @@ export type { SundialMetadata } from "./utils/metadata.js";
 
 export type { ExtendedKeyPair } from "./locker/keypair.js";
 
-export type {
-  DepositParams,
-} from "./locker/transactions/deposit/deposit.js";
+export type { DepositParams } from "./locker/transactions/deposit/deposit.js";
 
-export type {
-  DepositWithScriptParams,
-} from "./locker/transactions/deposit/deposit-with-script.js";
+export type { DepositWithScriptParams } from "./locker/transactions/deposit/deposit-with-script.js";
 
-export type {
-  DepositCalculationParams,
-} from "./locker/transactions/deposit/calculate.js";
+export type { DepositCalculationParams } from "./locker/transactions/deposit/calculate.js";
 
-export type {
-  WithdrawalParams,
-} from "./locker/transactions/withdraw.js";
+export type { WithdrawalParams } from "./locker/transactions/withdraw.js";
 
 export type { ClaimParams } from "./locker/transactions/claim.js";
 
-export type {
-  DistributionParams,
-} from "./locker/transactions/distribute.js";
+export type { DistributionParams } from "./locker/transactions/distribute.js";
 
 export type {
   SpendingTransactionParams,
@@ -88,7 +78,7 @@ export type {
   ApiUTXO,
   FeeEstimates,
   BroadcastResult,
-} from "./bitcoin-api.js";
+} from "./bitcoin-api/index.js";
 
 import { NETWORKS } from "./utils/network.js";
 
