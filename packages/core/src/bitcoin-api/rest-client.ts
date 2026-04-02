@@ -12,8 +12,8 @@ import type {
   ApiUrls,
   ApiUTXO,
   AddressInfo,
-  BitcoinRpcBlock,
-  BitcoinRpcTransaction,
+  BitcoinBlock,
+  BitcoinTransaction,
   BroadcastResult,
   FeeEstimates,
 } from "./types.js";
@@ -454,7 +454,7 @@ export class BitcoinRestClient {
     return txs;
   }
 
-  async getBlock(hash: string): Promise<BitcoinRpcBlock> {
+  async getBlock(hash: string): Promise<BitcoinBlock> {
     try {
       if (
         this.apiProvider === "mempool" ||
@@ -497,7 +497,7 @@ export class BitcoinRestClient {
 // ---------------------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapRestTxToRpc(tx: any): BitcoinRpcTransaction {
+function mapRestTxToRpc(tx: any): BitcoinTransaction {
   return {
     txid: tx.txid,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -56,34 +56,34 @@ export interface BroadcastResult {
 // Block / transaction types (shared data shapes)
 // ---------------------------------------------------------------------------
 
-export type BitcoinRpcScriptPubKey = {
+export type BitcoinScriptPubKey = {
   asm?: string;
   hex?: string;
   address?: string;
   addresses?: string[];
 };
 
-export type BitcoinRpcVout = {
+export type BitcoinVout = {
   n: number;
   /** Output value in BTC. */
   value?: number;
   /** Output value in satoshis. */
   valueSats?: number;
-  scriptPubKey: BitcoinRpcScriptPubKey;
+  scriptPubKey: BitcoinScriptPubKey;
 };
 
-export type BitcoinRpcTransaction = {
+export type BitcoinTransaction = {
   txid: string;
-  vout: BitcoinRpcVout[];
+  vout: BitcoinVout[];
 };
 
-export type BitcoinRpcBlock = {
+export type BitcoinBlock = {
   hash: string;
   height: number;
   time?: number;
   mediantime?: number;
   previousblockhash?: string;
-  tx: BitcoinRpcTransaction[];
+  tx: BitcoinTransaction[];
 };
 
 // ---------------------------------------------------------------------------
