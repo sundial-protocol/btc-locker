@@ -23,8 +23,9 @@ export class BitcoinRestClient {
   private apiProvider: ApiProvider;
   private baseUrls: ApiUrls;
   private baseUrl: string;
+  private isFallback: boolean;
 
-  constructor(network: NetworkType, apiProvider: ApiProvider = "mempool") {
+  constructor(network: NetworkType, apiProvider: ApiProvider = "mempool", isFallback = false) {
     if (network.name === "regtest") {
       throw new Error(
         "Regtest network is not supported. Use 'bitcoin' or 'testnet' instead.",
@@ -33,6 +34,7 @@ export class BitcoinRestClient {
 
     this.network = network;
     this.apiProvider = apiProvider;
+    this.isFallback = isFallback;
     this.baseUrls = {
       mempool: {
         bitcoin: "https://mempool.space/api",
@@ -87,7 +89,7 @@ export class BitcoinRestClient {
     for (const provider of fallbacks) {
       console.warn(`${this.apiProvider} unreachable, trying ${provider}...`);
       try {
-        return await operation(new BitcoinRestClient(this.network, provider));
+        return await operation(new BitcoinRestClient(this.network, provider, true));
       } catch (err) {
         const msg = (err as Error).message;
         errors.push(`${provider}: ${msg}`);
@@ -96,7 +98,7 @@ export class BitcoinRestClient {
     }
 
     throw new Error(
-      `${errorPrefix} (all providers failed): ${errors.join("; ")}`,
+      `${errorPrefix} (tried multiple APIs, all failed): ${errors.join("; ")}`,
     );
   }
 
@@ -248,7 +250,7 @@ export class BitcoinRestClient {
       throw new Error("Unsupported API provider");
     } catch (error) {
       const errorMsg = (error as Error).message;
-      if (this.isNetworkError(errorMsg)) {
+      if (!this.isFallback && this.isNetworkError(errorMsg)) {
         return this.withProviderFallback(
           (c) => c.getAddressInfo(address),
           "Failed to get address info",
@@ -299,7 +301,7 @@ export class BitcoinRestClient {
       throw new Error("Unsupported API provider");
     } catch (error) {
       const errorMsg = (error as Error).message;
-      if (this.isNetworkError(errorMsg)) {
+      if (!this.isFallback && this.isNetworkError(errorMsg)) {
         return this.withProviderFallback(
           (c) => c.getAddressUtxos(address),
           "Failed to get UTXOs",
@@ -363,7 +365,7 @@ export class BitcoinRestClient {
       throw new Error("Unsupported API provider");
     } catch (error) {
       const errorMsg = (error as Error).message;
-      if (this.isNetworkError(errorMsg)) {
+      if (!this.isFallback && this.isNetworkError(errorMsg)) {
         return this.withProviderFallback(
           (c) => c.getFeeEstimates(),
           "Failed to get fee estimates",
@@ -388,7 +390,7 @@ export class BitcoinRestClient {
       throw new Error("Unsupported API provider");
     } catch (error) {
       const errorMsg = (error as Error).message;
-      if (this.isNetworkError(errorMsg)) {
+      if (!this.isFallback && this.isNetworkError(errorMsg)) {
         return this.withProviderFallback(
           (c) => c.getBlockCount(),
           "Failed to get block count",
@@ -413,7 +415,7 @@ export class BitcoinRestClient {
       throw new Error("Unsupported API provider");
     } catch (error) {
       const errorMsg = (error as Error).message;
-      if (this.isNetworkError(errorMsg)) {
+      if (!this.isFallback && this.isNetworkError(errorMsg)) {
         return this.withProviderFallback(
           (c) => c.getBlockHash(height),
           "Failed to get block hash",
@@ -478,7 +480,7 @@ export class BitcoinRestClient {
       throw new Error("Unsupported API provider");
     } catch (error) {
       const errorMsg = (error as Error).message;
-      if (this.isNetworkError(errorMsg)) {
+      if (!this.isFallback && this.isNetworkError(errorMsg)) {
         return this.withProviderFallback(
           (c) => c.getBlock(hash),
           "Failed to get block",
