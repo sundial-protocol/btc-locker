@@ -501,10 +501,10 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
   let subjectId = cmdOptions.depositId;
   const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
   const priority = parsePriority(cmdOptions.priority || "medium");
-  let providerId = cmdOptions.providerId;
-  let programId = cmdOptions.programId;
-  let yieldSats = cmdOptions.yieldSats ? parseInt(cmdOptions.yieldSats) : null;
-  let payableAt = cmdOptions.payableAt || new Date().toISOString();
+  const providerId = cmdOptions.providerId;
+  const programId = cmdOptions.programId;
+  const yieldSats = cmdOptions.yieldSats ? parseInt(cmdOptions.yieldSats) : null;
+  const payableAt = cmdOptions.payableAt || new Date().toISOString();
   const skipServer = !!cmdOptions.skipServer;
 
   // Interactive prompts if options not provided
@@ -836,7 +836,6 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
   let redeemScript = cmdOptions.script;
   let privateKey = cmdOptions.key;
   let destinationAddress = cmdOptions.to;
-  const priority = parsePriority(cmdOptions.priority || "medium");
   let emergencyKey = cmdOptions.emergencyKey;
 
   // Interactive prompts if options not provided
@@ -1076,10 +1075,10 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
   let subjectId = cmdOptions.depositId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
-  let providerId = cmdOptions.providerId;
-  let programId = cmdOptions.programId;
-  let alphaBps = cmdOptions.alphaBps ? parseInt(cmdOptions.alphaBps) : null;
-  let lockMs = cmdOptions.lockMs ? parseInt(cmdOptions.lockMs) : null;
+  const providerId = cmdOptions.providerId;
+  const programId = cmdOptions.programId;
+  const alphaBps = cmdOptions.alphaBps ? parseInt(cmdOptions.alphaBps) : null;
+  const lockMs = cmdOptions.lockMs ? parseInt(cmdOptions.lockMs) : null;
   const skipServer = !!cmdOptions.skipServer;
 
   // Validate fee parameters
