@@ -5,6 +5,11 @@
 ### Minor Changes
 
 - bitcoin-api / bitcoinrpcclient merger
+## 2.0.2
+
+### Patch Changes
+
+- P2WSH script addresses
 
 ## 2.0.1
 

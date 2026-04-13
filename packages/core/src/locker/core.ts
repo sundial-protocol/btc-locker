@@ -16,6 +16,22 @@ export interface LockerContext {
   api: BitcoinAPI;
 }
 
+/**
+ * Encode a witness stack into the compact serialization used by PSBT finalizers.
+ * Each item is length-prefixed; the whole stack is prefixed with the item count.
+ */
+function psbtEncodeWitness(items: Buffer[]): Buffer {
+  const chunks: Buffer[] = [];
+  // varint for item count
+  chunks.push(Buffer.from([items.length]));
+  for (const item of items) {
+    // varint for item length
+    chunks.push(Buffer.from([item.length]));
+    chunks.push(item);
+  }
+  return Buffer.concat(chunks);
+}
+
 // ECC will be initialized asynchronously
 let ecc: ECCLib | null = null;
 let bip32: ReturnType<typeof BIP32Factory> | null = null;
@@ -236,19 +252,57 @@ export class BTCLockerCore {
     for (let i = 0; i < psbt.inputCount; i++) {
       const input = psbt.data.inputs[i];
 
-      if (input.redeemScript) {
-        // Custom finalization for scripts
-        const redeemScript = Buffer.from(input.redeemScript);
+      if (input.witnessScript) {
+        // P2WSH: custom finalization — witness stack, empty scriptSig
+        const witnessScript = Buffer.from(input.witnessScript);
 
-        // Auto-detect script type and apply appropriate finalization
-        if (this.hasConditionalLogic(redeemScript)) {
-          // Escrow-style script with conditional logic
+        if (this.hasConditionalLogic(witnessScript)) {
+          // Escrow-style script with conditional logic (IF/ELSE)
           psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
             const signature = inputData.partialSig?.[0]?.signature;
             if (!signature) {
               throw new Error(`Missing signature for input ${inputIndex}`);
             }
-            // check whether to use after-deadline spending path for escrow scripts
+            // P2WSH witness: <sig> <branch_selector> <witnessScript>
+            const witness = [
+              signature,
+              spendAfterDeadline
+                ? Buffer.from([0x01]) // OP_TRUE branch
+                : Buffer.alloc(0),    // OP_FALSE branch (empty = falsy)
+              witnessScript,
+            ];
+
+            return {
+              finalScriptSig: Buffer.alloc(0),
+              finalScriptWitness: psbtEncodeWitness(witness),
+            };
+          });
+        } else {
+          // Simple P2WSH script or timelock script
+          psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
+            const signature = inputData.partialSig?.[0]?.signature;
+            if (!signature) {
+              throw new Error(`Missing signature for input ${inputIndex}`);
+            }
+
+            const witness = [signature, witnessScript];
+
+            return {
+              finalScriptSig: Buffer.alloc(0),
+              finalScriptWitness: psbtEncodeWitness(witness),
+            };
+          });
+        }
+      } else if (input.redeemScript) {
+        // Legacy P2SH: custom finalization — scriptSig, no witness
+        const redeemScript = Buffer.from(input.redeemScript);
+
+        if (this.hasConditionalLogic(redeemScript)) {
+          psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
+            const signature = inputData.partialSig?.[0]?.signature;
+            if (!signature) {
+              throw new Error(`Missing signature for input ${inputIndex}`);
+            }
             const scriptSig = bitcoin.script.compile([
               signature,
               spendAfterDeadline
@@ -263,7 +317,6 @@ export class BTCLockerCore {
             };
           });
         } else {
-          // Simple script or timelock script
           psbt.finalizeInput(i, (inputIndex: number, inputData: any) => {
             const signature = inputData.partialSig?.[0]?.signature;
             if (!signature) {

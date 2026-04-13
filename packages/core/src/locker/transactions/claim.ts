@@ -86,37 +86,42 @@ export async function createClaimTransaction(
     }
 
     const sequence = spendAfterDeadline ? 0xfffffffe : 0xffffffff;
-    const redeemScript = Buffer.from(scriptData.redeemScript, "hex");
+    const witnessScript = Buffer.from(scriptData.redeemScript, "hex");
+    const p2wsh = bitcoin.payments.p2wsh({
+      redeem: { output: witnessScript, network: ctx.network },
+      network: ctx.network,
+    });
 
-    let inputData = {
-      hash: utxoTxId,
-      index: utxoIndex,
-      sequence,
-      redeemScript,
-      nonWitnessUtxo: Buffer.alloc(0),
-    };
-
+    // Fetch the previous transaction to extract the exact UTXO value for witnessUtxo
+    let utxoValue = BigInt(amount);
     if (previousTransaction) {
-      inputData = {
-        ...inputData,
-        nonWitnessUtxo: Buffer.from(previousTransaction),
-      };
+      const prevTx = bitcoin.Transaction.fromBuffer(
+        Buffer.from(previousTransaction),
+      );
+      utxoValue = prevTx.outs[utxoIndex].value;
     } else {
       try {
         const txHex = await ctx.api.getTransaction(utxoTxId);
-        inputData = {
-          ...inputData,
-          nonWitnessUtxo: Buffer.from(txHex, "hex"),
-        };
+        const prevTx = bitcoin.Transaction.fromHex(txHex);
+        utxoValue = prevTx.outs[utxoIndex].value;
       } catch (error) {
         throw new Error(
-          `Failed to fetch previous transaction ${utxoTxId}. P2SH escrow scripts require the full previous transaction for signing. ` +
+          `Failed to fetch previous transaction ${utxoTxId}. P2WSH escrow scripts require the UTXO value for signing. ` +
             `API error: ${(error as Error).message}. Please provide the previous transaction manually using the previousTransaction parameter.`,
         );
       }
     }
 
-    psbt.addInput(inputData);
+    psbt.addInput({
+      hash: utxoTxId,
+      index: utxoIndex,
+      sequence,
+      witnessScript,
+      witnessUtxo: {
+        script: p2wsh.output!,
+        value: utxoValue,
+      },
+    });
 
     const feeRate = await FeeUtils.queryChainFeeRates(priority);
     const estimatedFee = FeeUtils.estimateFee(1, 1, feeRate);
