@@ -129,6 +129,22 @@ export async function getUserClaimable(address, serverUrl) {
   return getJson(`/v1/users/${encodeURIComponent(address)}/claimable`, serverUrl);
 }
 
+/**
+ * Look up a single program from GET /v1/providers.
+ * Returns the program object (with escrow_script / timelock_script), or null if not found.
+ */
+export async function getProviderProgram(providerId, programId, serverUrl) {
+  const providers = await getProviders(serverUrl);
+  const provider = providers.find((p) => p.provider_id === providerId);
+  if (!provider) return null;
+  return provider.programs?.find((p) => p.program_id === programId) ?? null;
+}
+
+/** POST /v1/programs – register a new program for a provider */
+export async function createProgram(dto, serverUrl) {
+  return postJson('/v1/programs', dto, serverUrl);
+}
+
 // ── CLI command registration ──────────────────────────────────────────────────
 
 export function setupBackendCommands(program) {
@@ -165,6 +181,10 @@ export function setupBackendCommands(program) {
               console.log(`        expected_yield: ${prog.expected_yield_bps} bps`);
               console.log(`        min_lock:       ${prog.min_lock_ms} ms`);
               console.log(`        vault_address:  ${prog.program_vault_address}`);
+              if (prog.escrow_script)
+                console.log(`        escrow_script:  ${prog.escrow_script}`);
+              if (prog.timelock_script)
+                console.log(`        timelock_script: ${prog.timelock_script}`);
             }
           } else {
             console.log(`  programs: none`);
@@ -206,6 +226,10 @@ export function setupBackendCommands(program) {
           console.log(`  reserve_amount_sats: ${d.reserve_amount_sats}`);
           console.log(`  alpha_bps:           ${d.alpha_bps}`);
           console.log(`  lock_ms:             ${d.lock_ms}`);
+          if (d.escrow_script)
+            console.log(`  escrow_script:       ${d.escrow_script}`);
+          if (d.timelock_script)
+            console.log(`  timelock_script:     ${d.timelock_script}`);
         }
         console.log("");
       } catch (err) {

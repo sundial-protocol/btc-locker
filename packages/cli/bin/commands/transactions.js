@@ -14,7 +14,7 @@ import BitcoinAPI from "@sundial-protocol/btc-locker/bitcoin-api";
 import { NETWORKS } from "@sundial-protocol/btc-locker/utils/network";
 import { TxType } from "@sundial-protocol/btc-locker/utils/metadata";
 import { initLocker, displayResult } from "./shared.js";
-import { createDepositIntent, createDistributionIntent } from "./backend.js";
+import { createDepositIntent, createDistributionIntent, getProviders, getProviderClaimable } from "./backend.js";
 import crypto from "crypto";
 
 /**
@@ -123,6 +123,10 @@ export function setupTransactionCommands(program) {
       "--provider-pubkey <hex>",
       "Yield-provider x-only public key (64 hex chars)",
     )
+    .option(
+      "--provider-id <uuid>",
+      "Provider UUID – auto-populates --address and --redeem-script from provider-claimable when combined with --deposit-id",
+    )
     .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
@@ -209,6 +213,10 @@ export function setupTransactionCommands(program) {
     .option(
       "--provider-pubkey <hex>",
       "Yield-provider x-only public key (64 hex chars)",
+    )
+    .option(
+      "--provider-id <uuid>",
+      "Provider UUID – auto-populates --escrow-script and --timelock-script from provider-claimable when combined with --deposit-id",
     )
     .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
@@ -1101,6 +1109,35 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
   }
 
   try {
+    // Auto-populate escrow/timelock addresses from the program when --provider-id + --program-id
+    // are given but the addresses were not explicitly passed.
+    if (providerId && programId && (!escrowAddress || !timelockAddress)) {
+      const serverUrl = parentOptions.serverUrl || process.env.BTC_LOCKER_SERVER || "http://localhost:8080";
+      try {
+        const providers = await getProviders(serverUrl);
+        const prov = providers.find((p) => p.provider_id === providerId);
+        const prog = prov?.programs?.find((p) => p.program_id === programId) ?? null;
+        if (prog) {
+          if (prog.escrow_script && !escrowAddress) {
+            escrowAddress = ScriptUtils.createScriptAddress(
+              Buffer.from(prog.escrow_script, "hex"),
+              network,
+            );
+            console.log(chalk.gray(`Auto-populated escrow address from program: ${escrowAddress}`));
+          }
+          if (prog.timelock_script && !timelockAddress) {
+            timelockAddress = ScriptUtils.createScriptAddress(
+              Buffer.from(prog.timelock_script, "hex"),
+              network,
+            );
+            console.log(chalk.gray(`Auto-populated timelock address from program: ${timelockAddress}`));
+          }
+        }
+      } catch (scriptErr) {
+        console.warn(chalk.yellow(`⚠️  Could not auto-populate addresses from program: ${scriptErr.message}`));
+      }
+    }
+
     // Interactive prompts if options not provided
     if (
       !fromPrivateKey ||
@@ -1525,9 +1562,10 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
-  let subjectId = cmdOptions.subjectId;
+  let subjectId = cmdOptions.depositId ?? cmdOptions.subjectId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
+  const providerId = cmdOptions.providerId;
 
   // Validate fee parameters
   if (feeAddress && !protocolFeeAmount) {
@@ -1549,6 +1587,44 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
   }
 
   try {
+    // Auto-populate scripts and addresses from provider-claimable when
+    // --provider-id + --deposit-id are given but values were not explicitly passed.
+    if (providerId && subjectId && (!escrowScript || !timelockScript || !escrowAddress || !timelockAddress)) {
+      const serverUrl = parentOptions.serverUrl || process.env.BTC_LOCKER_SERVER || "http://localhost:8080";
+      try {
+        const claimable = await getProviderClaimable(providerId, serverUrl);
+        const deposit = claimable.find((d) => d.deposit_id === subjectId);
+        if (deposit) {
+          if (deposit.escrow_script && !escrowScript) {
+            escrowScript = deposit.escrow_script;
+            console.log(chalk.gray(`Auto-populated escrow redeem script from provider-claimable`));
+          }
+          if (deposit.escrow_script && !escrowAddress) {
+            escrowAddress = ScriptUtils.createScriptAddress(
+              Buffer.from(deposit.escrow_script, "hex"),
+              network,
+            );
+            console.log(chalk.gray(`Auto-populated escrow address from provider-claimable: ${escrowAddress}`));
+          }
+          if (deposit.timelock_script && !timelockScript) {
+            timelockScript = deposit.timelock_script;
+            console.log(chalk.gray(`Auto-populated timelock redeem script from provider-claimable`));
+          }
+          if (deposit.timelock_script && !timelockAddress) {
+            timelockAddress = ScriptUtils.createScriptAddress(
+              Buffer.from(deposit.timelock_script, "hex"),
+              network,
+            );
+            console.log(chalk.gray(`Auto-populated timelock address from provider-claimable: ${timelockAddress}`));
+          }
+        } else {
+          console.warn(chalk.yellow(`⚠️  Deposit ${subjectId} not found in provider-claimable. Pass scripts manually.`));
+        }
+      } catch (claimableErr) {
+        console.warn(chalk.yellow(`⚠️  Could not fetch provider-claimable: ${claimableErr.message}`));
+      }
+    }
+
     // Interactive prompts if options not provided
     if (
       !escrowAddress ||
@@ -1981,19 +2057,18 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
  * Handle claim command
  */
 async function handleClaimCommand(cmdOptions, parentOptions) {
-  const {
-    address: scriptAddress,
-    redeemScript,
-    privateKey,
-    to: destinationAddress,
-    afterDeadline,
-    priority: priorityStr = "medium",
-    dryRun,
-  } = cmdOptions;
+  let scriptAddress = cmdOptions.address;
+  let redeemScript = cmdOptions.redeemScript;
+  let privateKey = cmdOptions.privateKey;
+  let destinationAddress = cmdOptions.to;
+  let afterDeadline = cmdOptions.afterDeadline;
+  const priorityStr = cmdOptions.priority || "medium";
+  const dryRun = cmdOptions.dryRun;
 
-  let subjectId = cmdOptions.subjectId;
+  let subjectId = cmdOptions.depositId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
+  const providerId = cmdOptions.providerId;
 
   const priority = parsePriority(priorityStr);
 
@@ -2010,6 +2085,33 @@ async function handleClaimCommand(cmdOptions, parentOptions) {
   const locker = await initLocker(parentOptions);
 
   try {
+    // Auto-populate escrow address and redeem script from provider-claimable when
+    // --provider-id + --deposit-id are given but the values were not explicitly passed.
+    if (providerId && subjectId && (!scriptAddress || !redeemScript)) {
+      const serverUrl = parentOptions.serverUrl || process.env.BTC_LOCKER_SERVER || "http://localhost:8080";
+      try {
+        const claimable = await getProviderClaimable(providerId, serverUrl);
+        const deposit = claimable.find((d) => d.deposit_id === subjectId);
+        if (deposit) {
+          if (deposit.escrow_script && !redeemScript) {
+            redeemScript = deposit.escrow_script;
+            console.log(chalk.gray(`Auto-populated redeem script from provider-claimable`));
+          }
+          if (deposit.escrow_script && !scriptAddress) {
+            scriptAddress = ScriptUtils.createScriptAddress(
+              Buffer.from(deposit.escrow_script, "hex"),
+              locker.network,
+            );
+            console.log(chalk.gray(`Auto-populated escrow address from provider-claimable: ${scriptAddress}`));
+          }
+        } else {
+          console.warn(chalk.yellow(`⚠️  Deposit ${subjectId} not found in provider-claimable. Pass --address and --redeem-script manually.`));
+        }
+      } catch (claimableErr) {
+        console.warn(chalk.yellow(`⚠️  Could not fetch provider-claimable: ${claimableErr.message}`));
+      }
+    }
+
     // Interactive prompts if options not provided
     if (!scriptAddress || !redeemScript || !privateKey || !destinationAddress) {
       const answers = await inquirer.prompt([
