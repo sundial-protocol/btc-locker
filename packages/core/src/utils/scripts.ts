@@ -79,10 +79,10 @@ export default class ScriptUtils {
   }
 
   /**
-   * Create P2SH address from redeem script
+   * Create P2WSH address from redeem script
    * @param redeemScript - The redeem script buffer
    * @param network - Bitcoin network
-   * @returns P2SH address string
+   * @returns P2WSH address string
    * @throws If script is invalid or address creation fails
    */
   static createScriptAddress(
@@ -98,10 +98,9 @@ export default class ScriptUtils {
         throw new Error("Invalid network: network parameter is undefined");
       }
 
-      const scriptHash = bitcoin.crypto.hash160(redeemScript);
-      const payment = bitcoin.payments.p2wpkh({
-        hash: scriptHash,
-        network: network,
+      const payment = bitcoin.payments.p2wsh({
+        redeem: { output: redeemScript, network },
+        network,
       });
 
       if (!payment || !payment.address) {
