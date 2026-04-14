@@ -2085,127 +2085,167 @@ async function handleClaimCommand(cmdOptions, parentOptions) {
   const locker = await initLocker(parentOptions);
 
   try {
-    // Auto-populate escrow address and redeem script from provider-claimable when
-    // --provider-id + --deposit-id are given but the values were not explicitly passed.
-    if (providerId && subjectId && (!scriptAddress || !redeemScript)) {
+    // --- Step 1: Auto-populate from server whenever --provider-id is given ---
+    if (providerId) {
       const serverUrl = parentOptions.serverUrl || process.env.BTC_LOCKER_SERVER || "http://localhost:8080";
       try {
+        console.log(chalk.gray("Fetching claimable deposits..."));
         const claimable = await getProviderClaimable(providerId, serverUrl);
-        const deposit = claimable.find((d) => d.deposit_id === subjectId);
-        if (deposit) {
-          if (deposit.escrow_script && !redeemScript) {
-            redeemScript = deposit.escrow_script;
-            console.log(chalk.gray(`Auto-populated redeem script from provider-claimable`));
+        if (!claimable || claimable.length === 0) {
+          console.log(chalk.yellow("⚠️  No claimable deposits found for this provider"));
+          return;
+        }
+
+        let deposit;
+        if (subjectId) {
+          deposit = claimable.find((d) => d.deposit_id === subjectId);
+          if (!deposit) {
+            console.warn(chalk.yellow(`⚠️  Deposit ${subjectId} not found in claimable list`));
           }
-          if (deposit.escrow_script && !scriptAddress) {
-            scriptAddress = ScriptUtils.createScriptAddress(
-              Buffer.from(deposit.escrow_script, "hex"),
-              locker.network,
-            );
-            console.log(chalk.gray(`Auto-populated escrow address from provider-claimable: ${scriptAddress}`));
-          }
+        } else if (claimable.length === 1) {
+          deposit = claimable[0];
+          console.log(chalk.gray(`Auto-selected deposit: ${deposit.deposit_id}`));
         } else {
-          console.warn(chalk.yellow(`⚠️  Deposit ${subjectId} not found in provider-claimable. Pass --address and --redeem-script manually.`));
+          const { selectedDepositId } = await inquirer.prompt([{
+            type: "list",
+            name: "selectedDepositId",
+            message: "Select deposit to claim:",
+            choices: claimable.map((d) => ({
+              name: `${d.deposit_id}  (${d.escrow_amount_sats} sats, vault: ${d.program_vault})`,
+              value: d.deposit_id,
+            })),
+          }]);
+          deposit = claimable.find((d) => d.deposit_id === selectedDepositId);
+        }
+
+        if (deposit) {
+          if (!redeemScript && deposit.escrow_script) {
+            redeemScript = deposit.escrow_script;
+            console.log(chalk.gray("Auto-populated redeem script"));
+          }
+          if (!scriptAddress && deposit.program_vault_address) {
+            scriptAddress = deposit.program_vault_address;
+            console.log(chalk.gray(`Auto-populated escrow address: ${scriptAddress}`));
+          }
+          if (!subjectId && deposit.deposit_id) {
+            subjectId = deposit.deposit_id;
+          }
         }
       } catch (claimableErr) {
         console.warn(chalk.yellow(`⚠️  Could not fetch provider-claimable: ${claimableErr.message}`));
       }
     }
 
-    // Interactive prompts if options not provided
-    if (!scriptAddress || !redeemScript || !privateKey || !destinationAddress) {
-      const answers = await inquirer.prompt([
-        {
-          type: "input",
-          name: "scriptAddress",
-          message: "Enter escrow script address:",
-          when: !scriptAddress,
-          validate: (input) => {
-            try {
-              bitcoin.address.toOutputScript(input, locker.network);
-              return true;
-            } catch {
-              return "Invalid Bitcoin address";
-            }
-          },
-        },
-        {
-          type: "input",
-          name: "redeemScript",
-          message: "Enter redeem script (hex):",
-          when: !redeemScript,
-          validate: (input) =>
-            /^[0-9a-fA-F]+$/.test(input) || "Invalid hex string",
-        },
-        {
-          type: "input",
-          name: "privateKey",
-          message: "Enter private key (hex):",
-          when: !privateKey,
-          validate: (input) =>
-            ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
-        },
-        {
-          type: "input",
-          name: "destinationAddress",
-          message: "Enter destination address:",
-          when: !destinationAddress,
-          validate: (input) => {
-            try {
-              bitcoin.address.toOutputScript(input, locker.network);
-              return true;
-            } catch {
-              return "Invalid Bitcoin address";
-            }
-          },
-        },
-        {
-          type: "confirm",
-          name: "afterDeadline",
-          message: "Spend after deadline? (No = spend before deadline)",
-          default: false,
-          when: afterDeadline === undefined,
-        },
-        {
-          type: "input",
-          name: "providerPubkey",
-          message:
-            "Enter yield-provider x-only public key (64 hex chars, press enter to skip):",
-          when: () => !providerPubkey,
-          validate: (input) => {
-            if (!input) return true;
-            return (
-              /^[0-9a-fA-F]{64}$/.test(input) ||
-              "Must be a 64-character hex string (32-byte x-only pubkey)"
-            );
-          },
-        },
-        {
-          type: "input",
-          name: "subjectId",
-          message: "Enter deposit ID (UUID v4) for Sundial metadata:",
-          when: (answers) => answers.providerPubkey || providerPubkey,
-          validate: (input) => {
-            if (!input)
-              return "Deposit ID is required when provider pubkey is given";
-            return (
-              /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(
-                input,
-              ) || "Must be a valid UUID v4"
-            );
-          },
-        },
-      ]);
+    // --- Step 2: Extract providerPubkey from escrow script (beforePublicKey = second 33-byte pubkey) ---
+    if (redeemScript && !providerPubkey) {
+      try {
+        const ops = bitcoin.script.decompile(Buffer.from(redeemScript, "hex"));
+        const pubkeys = ops ? ops.filter((op) => Buffer.isBuffer(op) && op.length === 33) : [];
+        if (pubkeys.length >= 2) {
+          providerPubkey = KeyUtils.toXOnly(pubkeys[1].toString("hex"));
+          console.log(chalk.gray(`Auto-extracted provider pubkey: ${providerPubkey}`));
+        }
+      } catch { /* non-fatal */ }
+    }
 
+    // --- Step 3: Prompt for private key first so we can derive the destination address ---
+    if (!privateKey) {
+      const { pk } = await inquirer.prompt([{
+        type: "input",
+        name: "pk",
+        message: "Enter private key (hex):",
+        validate: (input) => ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
+      }]);
+      privateKey = pk;
+    }
+
+    // --- Step 4: Derive destination address from private key ---
+    if (!destinationAddress) {
+      try {
+        const kp = await locker.generateKeyPairFromPrivateKey(privateKey);
+        destinationAddress = kp.address;
+        console.log(chalk.gray(`Auto-derived destination address: ${destinationAddress}`));
+      } catch { /* will be caught by validation below */ }
+    }
+
+    // --- Step 5: Prompt only for fields that are still missing ---
+    const remainingPrompts = [];
+    if (!scriptAddress) {
+      remainingPrompts.push({
+        type: "input",
+        name: "scriptAddress",
+        message: "Enter escrow script address:",
+        validate: (input) => {
+          try { bitcoin.address.toOutputScript(input, locker.network); return true; }
+          catch { return "Invalid Bitcoin address"; }
+        },
+      });
+    }
+    if (!redeemScript) {
+      remainingPrompts.push({
+        type: "input",
+        name: "redeemScript",
+        message: "Enter redeem script (hex):",
+        validate: (input) => /^[0-9a-fA-F]+$/.test(input) || "Invalid hex string",
+      });
+    }
+    if (!destinationAddress) {
+      remainingPrompts.push({
+        type: "input",
+        name: "destinationAddress",
+        message: "Enter destination address:",
+        validate: (input) => {
+          try { bitcoin.address.toOutputScript(input, locker.network); return true; }
+          catch { return "Invalid Bitcoin address"; }
+        },
+      });
+    }
+    // For provider flow, default to before-deadline without asking
+    if (afterDeadline === undefined && !providerId) {
+      remainingPrompts.push({
+        type: "confirm",
+        name: "afterDeadline",
+        message: "Spend after deadline? (No = spend before deadline)",
+        default: false,
+      });
+    }
+    if (!providerPubkey) {
+      remainingPrompts.push({
+        type: "input",
+        name: "providerPubkey",
+        message: "Enter yield-provider x-only public key (64 hex chars, press enter to skip):",
+        validate: (input) => {
+          if (!input) return true;
+          return /^[0-9a-fA-F]{64}$/.test(input) || "Must be a 64-character hex string";
+        },
+      });
+    }
+    if (providerPubkey && !subjectId) {
+      remainingPrompts.push({
+        type: "input",
+        name: "subjectId",
+        message: "Enter deposit ID (UUID v4) for Sundial metadata:",
+        validate: (input) => {
+          if (!input) return "Deposit ID is required when provider pubkey is given";
+          return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(input) || "Must be a valid UUID v4";
+        },
+      });
+    }
+
+    if (remainingPrompts.length > 0) {
+      const answers = await inquirer.prompt(remainingPrompts);
       scriptAddress = scriptAddress || answers.scriptAddress;
       redeemScript = redeemScript || answers.redeemScript;
-      privateKey = privateKey || answers.privateKey;
       destinationAddress = destinationAddress || answers.destinationAddress;
-      afterDeadline =
-        afterDeadline !== undefined ? afterDeadline : answers.afterDeadline;
       providerPubkey = providerPubkey || answers.providerPubkey || undefined;
       subjectId = subjectId || answers.subjectId || undefined;
+      if (afterDeadline === undefined) {
+        afterDeadline = answers.afterDeadline ?? false;
+      }
     }
+
+    // Final default for afterDeadline
+    if (afterDeadline === undefined) afterDeadline = false;
 
     // Build Sundial metadata if provider pubkey and deposit ID are available
     let metadata;
