@@ -118,12 +118,23 @@ export async function createSpendingTransaction(
     psbt.setLocktime(locktime);
   }
 
+  const witnessScript = Buffer.from(redeemScript, "hex");
+  const p2wsh = bitcoin.payments.p2wsh({
+    redeem: { output: witnessScript, network: ctx.network },
+    network: ctx.network,
+  });
+
   inputs.forEach((utxo) => {
     const txHash = Buffer.from(utxo.txid, "hex").reverse();
     psbt.addInput({
       hash: txHash,
       index: utxo.vout,
       sequence: locktime ? 0xfffffffe : 0xffffffff,
+      witnessScript,
+      witnessUtxo: {
+        script: p2wsh.output!,
+        value: BigInt(utxo.value),
+      },
     });
   });
 
