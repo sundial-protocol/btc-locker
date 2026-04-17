@@ -133,7 +133,7 @@ export async function createSpendingTransaction(
 
   TransactionUtils.appendMetadataOutput(psbt, params.metadata);
 
-  return psbt.toHex();
+  return psbt.toBase64();
 }
 
 export async function createFundingTransaction(
