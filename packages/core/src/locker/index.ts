@@ -166,7 +166,7 @@ export class BTCLocker extends BTCLockerCore {
   async createSpendingTransaction(
     params: SpendingTransactionParams,
   ): Promise<string> {
-    return this.createSpendingTransaction(params);
+    return this.transactionManager.createSpendingTransaction(params);
   }
 
   /**
@@ -188,7 +188,7 @@ export class BTCLocker extends BTCLockerCore {
   async createFundingTransaction(
     params: FundingTransactionParams,
   ): Promise<string> {
-    return this.createFundingTransaction(params);
+    return this.transactionManager.createFundingTransaction(params);
   }
 
   /**
@@ -447,8 +447,6 @@ export type {
   ClaimParams,
 } from "./transactions/index.js";
 
-export type {
-  DistributionParams,
-} from "./transactions/index.js";
+export type { DistributionParams } from "./transactions/index.js";
 
 export default BTCLocker;
