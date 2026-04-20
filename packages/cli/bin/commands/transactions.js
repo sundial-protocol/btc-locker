@@ -1240,6 +1240,7 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
     // Create the unsigned deposit transaction (fee calculation handled automatically)
     const unsignedPsbt = await locker.createDepositTransaction({
       inputs: txInputs,
+      sourceAddress: changeAddress,
       escrowAddress,
       escrowAmount,
       timelockAddress,
@@ -1713,8 +1714,12 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
       metadata,
     });
 
-    // Sign the transaction with the single private key
-    const signedTx = await locker.signTransaction(unsignedPsbt, privateKey);
+    // Sign the transaction with the single private key.
+    // The user's key is always in the OP_ELSE branch of the escrow script,
+    // so spendAfterDeadline must be false to select that branch.
+    const signedTx = await locker.signTransaction(unsignedPsbt, privateKey, {
+      spendAfterDeadline: false,
+    });
 
     // Calculate actual fees from the transaction
     const allInputs = [...escrowInputs, ...timelockInputs];
