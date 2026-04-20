@@ -59,6 +59,8 @@ export interface UTXO {
   value: number;
   /** Optional scriptPubKey hex for the output being spent (required for correct BIP143 segwit sighash when sourceAddress is unavailable) */
   scriptPubKey?: string;
+  /** When true, this UTXO will never be selected by selectUtxos (use for inscriptions, ordinals, or reserved outputs) */
+  doNotSpend?: boolean;
 }
 
 /**
