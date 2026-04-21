@@ -9,6 +9,7 @@ import {
   KeyUtils,
   ScriptUtils,
   TransactionUtils,
+  FeeUtils,
 } from "@sundial-protocol/btc-locker";
 import BitcoinAPI from "@sundial-protocol/btc-locker/bitcoin-api";
 import { NETWORKS } from "@sundial-protocol/btc-locker/utils/network";
@@ -86,7 +87,9 @@ export function setupTransactionCommands(program) {
    */
   txCommand
     .command("spend")
-    .description("Spend Bitcoin from a timelock script")
+    .description(
+      "Spend Bitcoin from a timelock script (supports both absolute CLTV and relative CSV scripts)",
+    )
     .option(
       "-k, --private-key <key>",
       "Private key corresponding to the script",
@@ -664,6 +667,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
 
     const unsignedPsbt = await locker.createDistributionTransaction({
       inputs: txInputs,
+      sourceAddress: fromAddress,
       timelockAddress: toAddress,
       amount: amount,
       priority: priority,
@@ -935,25 +939,36 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
       0,
     );
 
-    // For spending transactions, let the transaction method handle fee calculation
-    // We'll use the full input amount and let the system calculate optimal output
     console.log(chalk.blue("Creating spending transaction..."));
 
-    // Create unsigned spending transaction (fee calculation handled automatically)
+    // Estimate fee before building the transaction so the output value is correct
+    const feeRate = await FeeUtils.queryChainFeeRates(undefined, networkType);
+    const inputCount = spendableUtxos.length;
+    const feeAmount = FeeUtils.estimateFee(inputCount, 1, feeRate);
+    const outputValue = totalInputValue - feeAmount;
+
+    if (outputValue < FeeUtils.DUST_THRESHOLD) {
+      console.log(
+        chalk.red(
+          `❌ Insufficient funds after fees. Have ${totalInputValue} sat, fee ${feeAmount} sat, output would be ${outputValue} sat (below dust threshold)`,
+        ),
+      );
+      return;
+    }
+
     const txInputs = spendableUtxos.map((utxo) => ({
       txid: utxo.txid,
       vout: utxo.vout,
       value: utxo.value,
-      scriptPubKey: null, // Will be set by the library
+      scriptPubKey: null,
     }));
 
-    // Create outputs with full available amount (fees will be deducted automatically)
     const txParams = {
       inputs: txInputs,
       outputs: [
         {
           address: destinationAddress,
-          value: totalInputValue, // Start with full amount, fees deducted automatically
+          value: outputValue,
         },
       ],
       redeemScript,

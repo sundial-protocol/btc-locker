@@ -27,15 +27,32 @@ Redeem Script (Hex): ${script.redeemScript}
 
 ${
   scriptType === "Timelock"
-    ? `Lock Time: ${script.locktime_readable || new Date(script.locktime * 1000).toISOString()}
+    ? `Lock Time: ${
+        script.locktime_readable ||
+        new Date(script.locktime * 1000).toISOString()
+      }
 Lock Time (Unix): ${script.locktime}
 
 `
     : ""
 }${
     scriptType === "Escrow"
-      ? `Deadline: ${script.deadline_readable || (script.deadline ? new Date(script.deadline * 1000).toISOString() : "N/A")}
+      ? `Deadline: ${
+          script.deadline_readable ||
+          (script.deadline
+            ? new Date(script.deadline * 1000).toISOString()
+            : "N/A")
+        }
 Deadline (Unix): ${script.deadline || "N/A"}
+
+`
+      : ""
+  }${
+    scriptType === "CSV"
+      ? `Relative Locktime (blocks): ${script.sequence}
+Approximate Duration: ~${
+          Math.round(((script.sequence * 10) / 60) * 10) / 10
+        } hours (assuming 10 min/block)
 
 `
       : ""
@@ -268,6 +285,91 @@ export function setupScriptsCommands(program) {
           console.log();
           console.log(chalk.gray(`Before-deadline key: ${beforePublicKey}`));
           console.log(chalk.gray(`After-deadline key: ${afterPublicKey}`));
+        }
+      } catch (error) {
+        console.error(chalk.red(`Error: ${error.message}`));
+      }
+    });
+
+  /**
+   * Create relative timelock (CSV) script command
+   */
+  scriptsCommand
+    .command("csv")
+    .description(
+      "Create a relative timelock script (OP_CHECKSEQUENCEVERIFY) — locks funds for N blocks after the UTXO is confirmed",
+    )
+    .option("-b, --blocks <number>", "Number of blocks to lock (1–65535)")
+    .option("-p, --pubkey <pubkey>", "Public key (hex)")
+    .option("-o, --output <file>", "Save output to file")
+    .action(async (cmdOptions) => {
+      const parentOptions = program.opts();
+      const locker = await initLocker(parentOptions);
+
+      let blocks = cmdOptions.blocks ? parseInt(cmdOptions.blocks) : null;
+      let publicKey = cmdOptions.pubkey;
+
+      // Interactive prompts if options not provided
+      if (!blocks || !publicKey) {
+        const answers = await inquirer.prompt([
+          {
+            type: "input",
+            name: "blocks",
+            message:
+              "Enter number of blocks to lock (1–65535, ~144 blocks per day):",
+            when: () => !blocks,
+            validate: (input) => {
+              const n = parseInt(input);
+              if (isNaN(n) || n < 1 || n > 65535)
+                return "Please enter a whole number between 1 and 65535";
+              return true;
+            },
+          },
+          {
+            type: "input",
+            name: "publicKey",
+            message: "Enter public key (hex):",
+            when: () => !publicKey,
+            validate: (input) =>
+              ScriptUtils.isValidPublicKey(input) ||
+              "Invalid public key format",
+          },
+        ]);
+
+        blocks = blocks || parseInt(answers.blocks);
+        publicKey = publicKey || answers.publicKey;
+      }
+
+      if (blocks < 1 || blocks > 65535) {
+        console.error(
+          chalk.red("Error: Block count must be between 1 and 65535"),
+        );
+        return;
+      }
+
+      try {
+        const script = await locker.createRelativeTimelockScript(
+          blocks,
+          publicKey,
+        );
+
+        handleScriptOutput(script, "CSV", cmdOptions, parentOptions);
+
+        if (!parentOptions.json && !cmdOptions.output) {
+          const approxHours = Math.round(((blocks * 10) / 60) * 10) / 10;
+          console.log(chalk.yellow(`Send Bitcoin to: ${script.address}`));
+          console.log(
+            chalk.yellow(
+              `Funds locked for: ${blocks} blocks (~${approxHours} hours after confirmation)`,
+            ),
+          );
+          console.log();
+          console.log(chalk.cyan("To spend after the relative lock expires:"));
+          console.log(
+            chalk.green(
+              `  btc-locker tx spend --address ${script.address} --redeem-script ${script.redeemScript} --private-key <key> --to <dest>`,
+            ),
+          );
         }
       } catch (error) {
         console.error(chalk.red(`Error: ${error.message}`));

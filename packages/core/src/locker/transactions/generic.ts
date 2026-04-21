@@ -98,6 +98,12 @@ export async function createSpendingTransaction(
   const { inputs, outputs, redeemScript } = params;
 
   const locktime = ScriptUtils.extractLocktimeFromScript(redeemScript);
+  // Only look for CSV if the script is not CLTV
+  const csvSequence =
+    locktime === null
+      ? ScriptUtils.extractSequenceFromScript(redeemScript)
+      : null;
+
   if (locktime !== null) {
     const currentTime = Math.floor(Date.now() / 1000);
     if (currentTime < locktime) {
@@ -118,18 +124,32 @@ export async function createSpendingTransaction(
     psbt.setLocktime(locktime);
   }
 
+  if (csvSequence !== null) {
+    // BIP-68 requires transaction version ≥ 2 for CSV to be enforced
+    psbt.setVersion(2);
+  }
+
   const witnessScript = Buffer.from(redeemScript, "hex");
   const p2wsh = bitcoin.payments.p2wsh({
     redeem: { output: witnessScript, network: ctx.network },
     network: ctx.network,
   });
 
+  // BIP-68 block-based nSequence: low 16 bits hold the block count,
+  // bit 22 (type flag) = 0 for blocks, bit 31 (disable flag) = 0.
+  const inputSequence =
+    locktime !== null
+      ? 0xfffffffe // CLTV: enable nLockTime
+      : csvSequence !== null
+      ? csvSequence & 0xffff // CSV: BIP-68 block-based relative locktime
+      : 0xffffffff; // plain script: final sequence
+
   inputs.forEach((utxo) => {
     const txHash = Buffer.from(utxo.txid, "hex").reverse();
     psbt.addInput({
       hash: txHash,
       index: utxo.vout,
-      sequence: locktime ? 0xfffffffe : 0xffffffff,
+      sequence: inputSequence,
       witnessScript,
       witnessUtxo: {
         script: p2wsh.output!,
