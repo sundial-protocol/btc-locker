@@ -166,8 +166,13 @@ router.post(
     const locker = new BTCLocker(networkObj);
     await locker.init();
 
-    const keyPair = await locker.generateKeyPairFromPrivateKey(privateKey);
-    res.json(keyPair);
+    const keyPair = await locker.keyPairGenerator.generateKeyPairFromPrivateKey(
+      privateKey,
+    );
+    res.json({
+      publicKey: keyPair.publicKey,
+      address: keyPair.address,
+    });
   }),
 );
 

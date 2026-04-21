@@ -70,13 +70,6 @@ describe("BTCLocker (index)", () => {
       expect(kp).toHaveProperty("address");
     });
 
-    test("should delegate generateKeyPairFromPrivateKey", async () => {
-      const privKeyHex =
-        "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-      const kp = await locker.generateKeyPairFromPrivateKey(privKeyHex);
-      expect(kp.privateKey).toBe(privKeyHex);
-    });
-
     test("should delegate createTimelockScript", async () => {
       const kp = await locker.generateKeyPair();
       const locktime = Math.floor(Date.now() / 1000) + 3600;

@@ -325,7 +325,9 @@ async function handleLockCommand(cmdOptions, parentOptions) {
 
   try {
     // Generate address from private key to check balance
-    const keyPair = await locker.generateKeyPairFromPrivateKey(fromPrivateKey);
+    const keyPair = await locker.keyPairGenerator.generateKeyPairFromPrivateKey(
+      fromPrivateKey,
+    );
     const fromAddress = keyPair.address;
 
     console.log(chalk.blue(`Checking balance for ${fromAddress}...`));
@@ -584,7 +586,9 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
 
   try {
     // Generate address from private key to check balance
-    const keyPair = await locker.generateKeyPairFromPrivateKey(fromPrivateKey);
+    const keyPair = await locker.keyPairGenerator.generateKeyPairFromPrivateKey(
+      fromPrivateKey,
+    );
     const fromAddress = keyPair.address;
 
     // Derive provider x-only pubkey from the sender's key (distribute is always called by the provider)
@@ -1281,9 +1285,10 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
     }
 
     // Generate key pair from private key
-    const fromKeyPair = await locker.generateKeyPairFromPrivateKey(
-      fromPrivateKey,
-    );
+    const fromKeyPair =
+      await locker.keyPairGenerator.generateKeyPairFromPrivateKey(
+        fromPrivateKey,
+      );
     const changeAddress = fromKeyPair.address; // Use sender's address for change
     console.log(chalk.yellow(`Sending from address: ${fromKeyPair.address}`));
 
@@ -1697,7 +1702,8 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
 
     // Calculate destination address from private key if not provided
     if (!destination) {
-      const keyPair = await locker.generateKeyPairFromPrivateKey(privateKey);
+      const keyPair =
+        await locker.keyPairGenerator.generateKeyPairFromPrivateKey(privateKey);
       destination = keyPair.address;
       console.log(
         chalk.yellow(
