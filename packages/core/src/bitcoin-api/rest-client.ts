@@ -20,7 +20,7 @@ import type {
 
 export class BitcoinRestClient {
   private network: NetworkType;
-  private apiProvider: ApiProvider;
+  readonly apiProvider: ApiProvider;
   private baseUrls: ApiUrls;
   private baseUrl: string;
   private isFallback: boolean;
