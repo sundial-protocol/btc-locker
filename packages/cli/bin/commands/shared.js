@@ -11,7 +11,8 @@ import { createBTCLocker } from "@sundial-protocol/btc-locker";
  */
 export async function initLocker(options) {
   // Convert 'mainnet' to 'bitcoin' for consistency with NetworkType names
-  const networkName = options.network === "mainnet" ? "bitcoin" : options.network;
+  const networkName =
+    options.network === "mainnet" ? "bitcoin" : options.network;
   return await createBTCLocker(networkName);
 }
 
@@ -24,10 +25,10 @@ export function displayResult(data, options, title) {
   } else {
     console.log(chalk.green(`\n${title}`));
     console.log(chalk.blue("=".repeat(50)));
-    
+
     const displayValue = (value, indent = 0) => {
       const spacing = "  ".repeat(indent);
-      
+
       if (Array.isArray(value)) {
         value.forEach((item, index) => {
           console.log(`${spacing}[${index}]:`);
@@ -46,7 +47,7 @@ export function displayResult(data, options, title) {
         console.log(`${spacing}${value}`);
       }
     };
-    
+
     Object.entries(data).forEach(([key, value]) => {
       if (typeof value === "object" && value !== null) {
         console.log(chalk.yellow(`${key}:`));

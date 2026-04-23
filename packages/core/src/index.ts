@@ -47,29 +47,17 @@ export { TxType, packMetadata, unpackMetadata } from "./utils/metadata.js";
 // Export additional interfaces from individual modules
 export type { SundialMetadata } from "./utils/metadata.js";
 
-export type { ExtendedKeyPair } from "./locker/keypair.js";
+export type { DepositParams } from "./locker/transactions/deposit/deposit.js";
 
-export type {
-  DepositParams,
-} from "./locker/transactions/deposit/deposit.js";
+export type { DepositWithScriptParams } from "./locker/transactions/deposit/deposit-with-script.js";
 
-export type {
-  DepositWithScriptParams,
-} from "./locker/transactions/deposit/deposit-with-script.js";
+export type { DepositCalculationParams } from "./locker/transactions/deposit/calculate.js";
 
-export type {
-  DepositCalculationParams,
-} from "./locker/transactions/deposit/calculate.js";
-
-export type {
-  WithdrawalParams,
-} from "./locker/transactions/withdraw.js";
+export type { WithdrawalParams } from "./locker/transactions/withdraw.js";
 
 export type { ClaimParams } from "./locker/transactions/claim.js";
 
-export type {
-  DistributionParams,
-} from "./locker/transactions/distribute.js";
+export type { DistributionParams } from "./locker/transactions/distribute.js";
 
 export type {
   SpendingTransactionParams,

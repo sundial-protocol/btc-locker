@@ -1,5 +1,10 @@
 import { assert, assertAll } from "../errors.js";
 
+// Maximum Bitcoin supply expressed in satoshis (21,000,000 BTC × 10^8).
+// This is also well within Number.MAX_SAFE_INTEGER, so integer precision
+// is guaranteed for all valid values.
+const MAX_SATOSHIS = 2_100_000_000_000_000;
+
 /**
  * Common validation utilities
  */
@@ -46,6 +51,10 @@ export default class ValidationUtils {
       [
         allowZero ? amountNumber >= 0 : amountNumber > 0,
         `${paramName} must be ${allowZero ? "non-negative" : "positive"}`,
+      ],
+      [
+        amountNumber <= MAX_SATOSHIS,
+        `${paramName} exceeds maximum Bitcoin supply (${MAX_SATOSHIS} sat)`,
       ],
     ]);
     return amountNumber;

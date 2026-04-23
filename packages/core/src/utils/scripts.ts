@@ -153,4 +153,44 @@ export default class ScriptUtils {
       return null;
     }
   }
+
+  /**
+   * Extract the relative sequence value from a CSV redeem script.
+   * Returns the raw block/time count encoded in the script, or null if not a CSV script.
+   * The caller is responsible for BIP-68 nSequence encoding.
+   * @param redeemScriptHex - Redeem script in hex format
+   * @returns Sequence as number, or null if not a CSV script
+   */
+  static extractSequenceFromScript(redeemScriptHex: string): number | null {
+    try {
+      const ops = bitcoin.script.decompile(Buffer.from(redeemScriptHex, "hex"));
+      if (!ops) return null;
+      const csvIndex = ops.findIndex(
+        (op) => op === bitcoin.opcodes.OP_CHECKSEQUENCEVERIFY,
+      );
+      if (csvIndex < 1) return null;
+      const sequenceOp = ops[csvIndex - 1];
+      if (typeof sequenceOp === "number") {
+        // OP_1 (0x51) through OP_16 (0x60) are minimal encodings for integers 1–16.
+        // script.decompile() returns them as their opcode constants, not as the
+        // integer they push — so we must map them back to their actual values.
+        if (
+          sequenceOp >= bitcoin.opcodes.OP_1 &&
+          sequenceOp <= bitcoin.opcodes.OP_16
+        ) {
+          return sequenceOp - bitcoin.opcodes.OP_1 + 1;
+        }
+        return sequenceOp;
+      }
+      if (Buffer.isBuffer(sequenceOp) || sequenceOp instanceof Uint8Array) {
+        let value = 0;
+        for (let i = 0; i < sequenceOp.length; i++)
+          value += sequenceOp[i] << (8 * i);
+        return value;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
 }

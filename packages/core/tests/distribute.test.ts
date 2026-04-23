@@ -104,6 +104,7 @@ describe("YieldDistributor (mocked fees)", () => {
     test("should create unsigned PSBT with provided inputs", async () => {
       const result = await txManager.createDistributionTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 100000 }],
+        sourceAddress: testAddress2,
         timelockAddress: testAddress,
         amount: 50000,
       });
@@ -120,6 +121,7 @@ describe("YieldDistributor (mocked fees)", () => {
     test("should include change output when above dust", async () => {
       const result = await txManager.createDistributionTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
+        sourceAddress: testAddress2,
         timelockAddress: testAddress,
         amount: 50000,
         changeAddress: testAddress2,
@@ -135,6 +137,7 @@ describe("YieldDistributor (mocked fees)", () => {
     test("should include metadata output", async () => {
       const result = await txManager.createDistributionTransaction({
         inputs: [{ txid: "a".repeat(64), vout: 0, value: 500000 }],
+        sourceAddress: testAddress2,
         timelockAddress: testAddress,
         amount: 50000,
         metadata: JSON.stringify({
@@ -157,6 +160,7 @@ describe("YieldDistributor (mocked fees)", () => {
           { txid: "a".repeat(64), vout: 0, value: 30000 },
           { txid: "b".repeat(64), vout: 1, value: 40000 },
         ],
+        sourceAddress: testAddress2,
         timelockAddress: testAddress,
         amount: 50000,
       });

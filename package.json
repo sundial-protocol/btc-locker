@@ -12,6 +12,7 @@
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
     "cli": "npm run start --workspace=packages/cli",
+    "cli-link": "npm link --workspace=packages/cli",
     "docs": "npm run docs --workspace=packages/core",
     "demo": "npm run start --workspace=packages/demo",
     "demo:dev": "npm run dev --workspace=packages/demo",

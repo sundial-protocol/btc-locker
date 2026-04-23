@@ -29,7 +29,9 @@ export default class TransactionUtils {
    * Picks largest UTXOs first until the target is covered.
    */
   static selectUtxos(availableUtxos: UTXO[], targetAmount: number): UTXO[] {
-    const sortedUtxos = [...availableUtxos].sort((a, b) => b.value - a.value);
+    const sortedUtxos = [...availableUtxos]
+      .filter((utxo) => !utxo.doNotSpend)
+      .sort((a, b) => b.value - a.value);
 
     const selectedUtxos: UTXO[] = [];
     let totalValue = 0;
@@ -45,7 +47,9 @@ export default class TransactionUtils {
 
     if (totalValue < targetAmount) {
       throw new Error(
-        `Insufficient funds in available UTXOs. Need: ${targetAmount}, Available: ${totalValue}, Shortage: ${targetAmount - totalValue}`,
+        `Insufficient funds in available UTXOs. Need: ${targetAmount}, Available: ${totalValue}, Shortage: ${
+          targetAmount - totalValue
+        }`,
       );
     }
 

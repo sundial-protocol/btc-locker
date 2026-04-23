@@ -50,6 +50,10 @@ export async function createDistributionTransaction(
   let inputs: UTXO[] = [];
 
   if (providedInputs) {
+    assert(
+      !!sourceAddress || providedInputs.every((u) => !!u.scriptPubKey),
+      "When providing explicit inputs, either sourceAddress or a scriptPubKey on each UTXO is required so the correct input script can be set",
+    );
     inputs = providedInputs;
   } else if (api && sourceAddress) {
     inputs = await api.fetchConfirmedUtxos(sourceAddress);
@@ -82,10 +86,9 @@ export async function createDistributionTransaction(
   TransactionUtils.addWitnessInputs(
     psbt,
     inputs,
-    bitcoin.address.toOutputScript(
-      sourceAddress || timelockAddress,
-      ctx.network,
-    ),
+    sourceAddress
+      ? bitcoin.address.toOutputScript(sourceAddress, ctx.network)
+      : undefined,
   );
 
   psbt.addOutput({

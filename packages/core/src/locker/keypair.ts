@@ -3,20 +3,8 @@
  */
 
 import * as bitcoin from "bitcoinjs-lib";
-import { ECPairInterface } from "ecpair";
 import { BTCLockerCore, getECC } from "./core.js";
 import type { KeyPair } from "../types.js";
-
-/**
- * Extended key pair with ECPair interface
- * @interface ExtendedKeyPair
- * @description Bitcoin key pair with additional ECPair interface for advanced operations
- * @extends KeyPair
- */
-export interface ExtendedKeyPair extends KeyPair {
-  /** ECPair interface for cryptographic operations */
-  keyPair: ECPairInterface;
-}
 
 /**
  * Key pair generation class for Bitcoin addresses
@@ -69,9 +57,7 @@ export class KeyPairGenerator extends BTCLockerCore {
    * const keyPair = await generator.generateKeyPairFromPrivateKey('1234567890abcdef...');
    * console.log(keyPair.address);
    */
-  async generateKeyPairFromPrivateKey(
-    privateKeyHex: string,
-  ): Promise<ExtendedKeyPair> {
+  async generateKeyPairFromPrivateKey(privateKeyHex: string): Promise<KeyPair> {
     await this.ensureInitialized();
     const { ECPair } = getECC();
 
@@ -99,7 +85,6 @@ export class KeyPairGenerator extends BTCLockerCore {
       privateKey: keyPair.privateKey.toString("hex"),
       publicKey: keyPair.publicKey.toString("hex"),
       address,
-      keyPair, // Include keyPair object for signing
     };
   }
 }

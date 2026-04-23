@@ -246,7 +246,7 @@ export class BTCLockerCore {
 
   finalizeTransaction(
     psbt: bitcoin.Psbt,
-    spendAfterDeadline = true,
+    spendAfterDeadline = false,
   ): bitcoin.Psbt {
     // Auto-finalize based on script structure
     for (let i = 0; i < psbt.inputCount; i++) {

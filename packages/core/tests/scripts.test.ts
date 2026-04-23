@@ -154,4 +154,72 @@ describe("ScriptUtils", () => {
       expect(hash.length).toBe(40); // 20 bytes = 40 hex chars
     });
   });
+
+  describe("extractSequenceFromScript", () => {
+    test("returns the sequence value from a CSV script", () => {
+      const pubKeyBuf = Buffer.from(validCompressedPubKey, "hex");
+      const sequence = 144; // 1 day in blocks
+      const script = bitcoin.script.compile([
+        bitcoin.script.number.encode(sequence),
+        bitcoin.opcodes.OP_CHECKSEQUENCEVERIFY,
+        bitcoin.opcodes.OP_DROP,
+        pubKeyBuf,
+        bitcoin.opcodes.OP_CHECKSIG,
+      ]);
+      const result = ScriptUtils.extractSequenceFromScript(
+        Buffer.from(script).toString("hex"),
+      );
+      expect(result).toBe(sequence);
+    });
+
+    test("returns null for a CLTV script (not CSV)", () => {
+      const pubKeyBuf = Buffer.from(validCompressedPubKey, "hex");
+      const locktime = Math.floor(Date.now() / 1000) - 3600;
+      const script = bitcoin.script.compile([
+        bitcoin.script.number.encode(locktime),
+        bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
+        bitcoin.opcodes.OP_DROP,
+        pubKeyBuf,
+        bitcoin.opcodes.OP_CHECKSIG,
+      ]);
+      const result = ScriptUtils.extractSequenceFromScript(
+        Buffer.from(script).toString("hex"),
+      );
+      expect(result).toBeNull();
+    });
+
+    test("returns null for a plain OP_CHECKSIG script", () => {
+      const pubKeyBuf = Buffer.from(validCompressedPubKey, "hex");
+      const script = bitcoin.script.compile([
+        pubKeyBuf,
+        bitcoin.opcodes.OP_CHECKSIG,
+      ]);
+      const result = ScriptUtils.extractSequenceFromScript(
+        Buffer.from(script).toString("hex"),
+      );
+      expect(result).toBeNull();
+    });
+
+    test("returns null for an empty/invalid hex string", () => {
+      expect(ScriptUtils.extractSequenceFromScript("")).toBeNull();
+      expect(ScriptUtils.extractSequenceFromScript("zzzzzz")).toBeNull();
+    });
+
+    test("extractLocktimeFromScript returns null for a CSV script", () => {
+      // Ensure the two extractors don't cross-detect each other's opcode
+      const pubKeyBuf = Buffer.from(validCompressedPubKey, "hex");
+      const script = bitcoin.script.compile([
+        bitcoin.script.number.encode(144),
+        bitcoin.opcodes.OP_CHECKSEQUENCEVERIFY,
+        bitcoin.opcodes.OP_DROP,
+        pubKeyBuf,
+        bitcoin.opcodes.OP_CHECKSIG,
+      ]);
+      expect(
+        ScriptUtils.extractLocktimeFromScript(
+          Buffer.from(script).toString("hex"),
+        ),
+      ).toBeNull();
+    });
+  });
 });
