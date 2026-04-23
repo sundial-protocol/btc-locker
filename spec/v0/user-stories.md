@@ -164,6 +164,10 @@ export interface DistributionParams {
   amount: number;
   /** Optional change address for remaining funds */
   changeAddress?: string;
+  /** Optional fee address for protocol fees */
+  feeAddress?: string;
+  /** Optional protocol fee amount in satoshis (required if feeAddress is provided) */
+  protocolFeeAmount?: number;
 }
 ```
 
