@@ -1,6 +1,7 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { UTXO } from "../types.js";
 import MetadataUtils, { TxType, SundialMetadata } from "./metadata.js";
+import { FeeUtils } from "../index.js";
 
 /**
  * Transaction utilities
@@ -89,6 +90,23 @@ export default class TransactionUtils {
         hash: input.txid,
         index: input.vout,
         witnessUtxo: { script, value: BigInt(input.value) },
+      });
+    }
+  }
+
+  /**
+   * Append a protocol fee output to a PSBT. No-ops when either argument is falsy
+   * or the amount is below the dust threshold.
+   */
+  static appendProtocolFeeOutput(
+    psbt: bitcoin.Psbt,
+    feeAddress: string | undefined,
+    protocolFeeAmount: number | undefined,
+  ): void {
+    if (feeAddress && protocolFeeAmount && protocolFeeAmount >= FeeUtils.DUST_THRESHOLD) {
+      psbt.addOutput({
+        address: feeAddress,
+        value: BigInt(protocolFeeAmount),
       });
     }
   }

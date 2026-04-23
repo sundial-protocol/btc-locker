@@ -22,7 +22,8 @@ import type { LockerContext } from "../core.js";
  * @description Configuration for withdrawing from both escrow and timelock Dawn staking outputs
  */
 export interface WithdrawalParams
-  extends BaseTransactionParams, ProtocolFeeParams {
+  extends BaseTransactionParams,
+    ProtocolFeeParams {
   /** Array of escrow inputs to withdraw from (optional - will fetch all UTXOs from escrow address if not provided) */
   escrowInputs?: UTXO[];
   /** Escrow script address (optional - will be calculated from escrowRedeemScript if not provided) */
@@ -70,7 +71,9 @@ export async function createWithdrawalTransaction(
     if (timestamp !== null) {
       if (currentTime < timestamp) {
         throw new Error(
-          `Cannot withdraw from ${label} script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(timestamp * 1000).toISOString()}`,
+          `Cannot withdraw from ${label} script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(
+            timestamp * 1000,
+          ).toISOString()}`,
         );
       }
       maxLocktime = Math.max(maxLocktime, timestamp);
@@ -98,7 +101,9 @@ export async function createWithdrawalTransaction(
       escrowInputs = await ctx.api.fetchConfirmedUtxos(escrowAddress);
     } catch (error) {
       throw new Error(
-        `Failed to fetch escrow UTXOs from ${escrowAddress}: ${(error as Error).message}`,
+        `Failed to fetch escrow UTXOs from ${escrowAddress}: ${
+          (error as Error).message
+        }`,
       );
     }
   }
@@ -108,7 +113,9 @@ export async function createWithdrawalTransaction(
       timelockInputs = await ctx.api.fetchConfirmedUtxos(timelockAddress);
     } catch (error) {
       throw new Error(
-        `Failed to fetch timelock UTXOs from ${timelockAddress}: ${(error as Error).message}`,
+        `Failed to fetch timelock UTXOs from ${timelockAddress}: ${
+          (error as Error).message
+        }`,
       );
     }
   }
@@ -157,7 +164,7 @@ export async function createWithdrawalTransaction(
       network: ctx.network,
     });
 
-    if(!p2wsh.output) {
+    if (!p2wsh.output) {
       throw new Error("Failed to derive P2WSH output from redeem script");
     }
 
@@ -183,16 +190,7 @@ export async function createWithdrawalTransaction(
     value: BigInt(destinationValue),
   });
 
-  if (
-    feeAddress &&
-    protocolFeeAmount &&
-    protocolFeeAmount >= FeeUtils.DUST_THRESHOLD
-  ) {
-    psbt.addOutput({
-      address: feeAddress,
-      value: BigInt(protocolFeeAmount),
-    });
-  }
+  TransactionUtils.appendProtocolFeeOutput(psbt, feeAddress, protocolFeeAmount);
 
   TransactionUtils.appendMetadataOutput(psbt, metadata, TxType.Withdrawal);
 
