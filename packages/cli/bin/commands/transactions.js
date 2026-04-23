@@ -9,6 +9,7 @@ import {
   KeyUtils,
   ScriptUtils,
   TransactionUtils,
+  FeeUtils,
 } from "@sundial-protocol/btc-locker";
 import BitcoinAPI from "@sundial-protocol/btc-locker/bitcoin-api";
 import { NETWORKS } from "@sundial-protocol/btc-locker/utils/network";
@@ -40,6 +41,12 @@ export function setupTransactionCommands(program) {
       "medium",
     )
     .option("--dry-run", "Create transaction but don't broadcast")
+    .option(
+      "--exclude <txid:vout>",
+      "Exclude a UTXO from coin selection, e.g. for inscriptions (repeatable)",
+      (v, a) => [...a, v],
+      [],
+    )
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
       await handleLockCommand(cmdOptions, parentOptions);
@@ -70,6 +77,12 @@ export function setupTransactionCommands(program) {
     .option("--skip-server", "Skip server intent registration")
     .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
+    .option(
+      "--exclude <txid:vout>",
+      "Exclude a UTXO from coin selection, e.g. for inscriptions (repeatable)",
+      (v, a) => [...a, v],
+      [],
+    )
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
       await handleDistributeCommand(cmdOptions, parentOptions);
@@ -80,7 +93,9 @@ export function setupTransactionCommands(program) {
    */
   txCommand
     .command("spend")
-    .description("Spend Bitcoin from a timelock script")
+    .description(
+      "Spend Bitcoin from a timelock script (supports both absolute CLTV and relative CSV scripts)",
+    )
     .option(
       "-k, --private-key <key>",
       "Private key corresponding to the script",
@@ -94,6 +109,12 @@ export function setupTransactionCommands(program) {
       "medium",
     )
     .option("--dry-run", "Create transaction but don't broadcast")
+    .option(
+      "--exclude <txid:vout>",
+      "Exclude a UTXO from coin selection, e.g. for inscriptions (repeatable)",
+      (v, a) => [...a, v],
+      [],
+    )
     .action(async (cmdOptions) => {
       const parentOptions = program.opts();
       await handleSpendCommand(cmdOptions, parentOptions);
@@ -323,7 +344,9 @@ async function handleLockCommand(cmdOptions, parentOptions) {
 
   try {
     // Generate address from private key to check balance
-    const keyPair = await locker.generateKeyPairFromPrivateKey(fromPrivateKey);
+    const keyPair = await locker.keyPairGenerator.generateKeyPairFromPrivateKey(
+      fromPrivateKey,
+    );
     const fromAddress = keyPair.address;
 
     console.log(chalk.blue(`Checking balance for ${fromAddress}...`));
@@ -332,7 +355,23 @@ async function handleLockCommand(cmdOptions, parentOptions) {
     const utxos = await api.getAddressUtxos(fromAddress);
     const confirmedUtxos = utxos.filter((u) => u.status.confirmed);
 
-    if (confirmedUtxos.length === 0) {
+    const excludedOutpoints = new Set(
+      (cmdOptions.exclude || []).map((s) => s.toLowerCase()),
+    );
+    const spendableUtxos = confirmedUtxos.filter(
+      (u) => !excludedOutpoints.has(`${u.txid}:${u.vout}`),
+    );
+    if (spendableUtxos.length < confirmedUtxos.length) {
+      console.log(
+        chalk.yellow(
+          `⚠️  Excluded ${
+            confirmedUtxos.length - spendableUtxos.length
+          } UTXO(s) from coin selection`,
+        ),
+      );
+    }
+
+    if (spendableUtxos.length === 0) {
       console.log(
         chalk.yellow("⚠️  No confirmed UTXOs found at source address"),
       );
@@ -347,7 +386,7 @@ async function handleLockCommand(cmdOptions, parentOptions) {
     }
 
     // Calculate total available
-    const totalInputValue = confirmedUtxos.reduce(
+    const totalInputValue = spendableUtxos.reduce(
       (sum, utxo) => sum + utxo.value,
       0,
     );
@@ -365,7 +404,7 @@ async function handleLockCommand(cmdOptions, parentOptions) {
     console.log(chalk.blue("Creating locking transaction..."));
 
     // Create the locking transaction
-    const txInputs = confirmedUtxos.map((utxo) => ({
+    const txInputs = spendableUtxos.map((utxo) => ({
       txid: utxo.txid,
       vout: utxo.vout,
       value: utxo.value,
@@ -440,7 +479,9 @@ async function handleLockCommand(cmdOptions, parentOptions) {
         name: "confirm",
         message: `Lock ${TransactionUtils.satoshisToBTC(
           amount,
-        )} BTC in timelock script with ${lockingTx.fee} sat fee (${lockingTx.feeRate} sat/byte)?`,
+        )} BTC in timelock script with ${lockingTx.fee} sat fee (${
+          lockingTx.feeRate
+        } sat/byte)?`,
         default: false,
       },
     ]);
@@ -602,7 +643,9 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
     }
 
     // Generate address from private key to check balance
-    const keyPair = await locker.generateKeyPairFromPrivateKey(fromPrivateKey);
+    const keyPair = await locker.keyPairGenerator.generateKeyPairFromPrivateKey(
+      fromPrivateKey,
+    );
     const fromAddress = keyPair.address;
 
     // Derive provider x-only pubkey from the sender's key (distribute is always called by the provider)
@@ -628,7 +671,23 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
     const utxos = await api.getAddressUtxos(fromAddress);
     const confirmedUtxos = utxos.filter((u) => u.status.confirmed);
 
-    if (confirmedUtxos.length === 0) {
+    const excludedOutpoints = new Set(
+      (cmdOptions.exclude || []).map((s) => s.toLowerCase()),
+    );
+    const spendableUtxos = confirmedUtxos.filter(
+      (u) => !excludedOutpoints.has(`${u.txid}:${u.vout}`),
+    );
+    if (spendableUtxos.length < confirmedUtxos.length) {
+      console.log(
+        chalk.yellow(
+          `⚠️  Excluded ${
+            confirmedUtxos.length - spendableUtxos.length
+          } UTXO(s) from coin selection`,
+        ),
+      );
+    }
+
+    if (spendableUtxos.length === 0) {
       console.log(
         chalk.yellow("⚠️  No confirmed UTXOs found at source address"),
       );
@@ -643,7 +702,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
     }
 
     // Calculate total available
-    const totalInputValue = confirmedUtxos.reduce(
+    const totalInputValue = spendableUtxos.reduce(
       (sum, utxo) => sum + utxo.value,
       0,
     );
@@ -661,7 +720,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
     console.log(chalk.blue("Creating distribution transaction..."));
 
     // Create unsigned distribution transaction
-    const txInputs = confirmedUtxos.map((utxo) => ({
+    const txInputs = spendableUtxos.map((utxo) => ({
       txid: utxo.txid,
       vout: utxo.vout,
       value: utxo.value,
@@ -669,6 +728,7 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
 
     const unsignedPsbt = await locker.createDistributionTransaction({
       inputs: txInputs,
+      sourceAddress: fromAddress,
       timelockAddress: toAddress,
       amount: amount,
       priority: priority,
@@ -741,10 +801,14 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
     const confirmationMessage = metadata
       ? `Distribute ${TransactionUtils.satoshisToBTC(
           distributionResult.distribution.amount,
-        )} BTC yield to timelock with ${distributionResult.fee} sat fee (${distributionResult.feeRate} sat/byte)?\nDeposit ID: ${metadata.subjectId}`
+        )} BTC yield to timelock with ${distributionResult.fee} sat fee (${
+          distributionResult.feeRate
+        } sat/byte)?\nDeposit ID: ${metadata.subjectId}`
       : `Distribute ${TransactionUtils.satoshisToBTC(
           distributionResult.distribution.amount,
-        )} BTC yield to timelock with ${distributionResult.fee} sat fee (${distributionResult.feeRate} sat/byte)?`;
+        )} BTC yield to timelock with ${distributionResult.fee} sat fee (${
+          distributionResult.feeRate
+        } sat/byte)?`;
 
     const { confirm } = await inquirer.prompt([
       {
@@ -916,36 +980,63 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
 
     const confirmedUtxos = utxos.filter((u) => u.status && u.status.confirmed);
 
-    if (confirmedUtxos.length === 0) {
+    const excludedOutpoints = new Set(
+      (cmdOptions.exclude || []).map((s) => s.toLowerCase()),
+    );
+    const spendableUtxos = confirmedUtxos.filter(
+      (u) => !excludedOutpoints.has(`${u.txid}:${u.vout}`),
+    );
+    if (spendableUtxos.length < confirmedUtxos.length) {
+      console.log(
+        chalk.yellow(
+          `⚠️  Excluded ${
+            confirmedUtxos.length - spendableUtxos.length
+          } UTXO(s) from coin selection`,
+        ),
+      );
+    }
+
+    if (spendableUtxos.length === 0) {
       console.log(chalk.yellow("⚠️  No confirmed UTXOs found at this address"));
       return;
     }
 
     // Calculate total available
-    const totalInputValue = confirmedUtxos.reduce(
+    const totalInputValue = spendableUtxos.reduce(
       (sum, utxo) => sum + utxo.value,
       0,
     );
 
-    // For spending transactions, let the transaction method handle fee calculation
-    // We'll use the full input amount and let the system calculate optimal output
     console.log(chalk.blue("Creating spending transaction..."));
 
-    // Create unsigned spending transaction (fee calculation handled automatically)
-    const txInputs = confirmedUtxos.map((utxo) => ({
+    // Estimate fee before building the transaction so the output value is correct
+    const feeRate = await FeeUtils.queryChainFeeRates(undefined, networkType);
+    const inputCount = spendableUtxos.length;
+    const feeAmount = FeeUtils.estimateFee(inputCount, 1, feeRate);
+    const outputValue = totalInputValue - feeAmount;
+
+    if (outputValue < FeeUtils.DUST_THRESHOLD) {
+      console.log(
+        chalk.red(
+          `❌ Insufficient funds after fees. Have ${totalInputValue} sat, fee ${feeAmount} sat, output would be ${outputValue} sat (below dust threshold)`,
+        ),
+      );
+      return;
+    }
+
+    const txInputs = spendableUtxos.map((utxo) => ({
       txid: utxo.txid,
       vout: utxo.vout,
       value: utxo.value,
-      scriptPubKey: null, // Will be set by the library
+      scriptPubKey: null,
     }));
 
-    // Create outputs with full available amount (fees will be deducted automatically)
     const txParams = {
       inputs: txInputs,
       outputs: [
         {
           address: destinationAddress,
-          value: totalInputValue, // Start with full amount, fees deducted automatically
+          value: outputValue,
         },
       ],
       redeemScript,
@@ -1007,7 +1098,9 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
         name: "confirm",
         message: `Broadcast transaction spending ${TransactionUtils.satoshisToBTC(
           totalInputValue,
-        )} BTC with ${spendingTx.fee} sat fee (${spendingTx.feeRate} sat/byte)?`,
+        )} BTC with ${spendingTx.fee} sat fee (${
+          spendingTx.feeRate
+        } sat/byte)?`,
         default: false,
       },
     ]);
@@ -1324,7 +1417,9 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
 
     // Generate key pair from private key
     const fromKeyPair =
-      await locker.generateKeyPairFromPrivateKey(fromPrivateKey);
+      await locker.keyPairGenerator.generateKeyPairFromPrivateKey(
+        fromPrivateKey,
+      );
     const changeAddress = fromKeyPair.address; // Use sender's address for change
     console.log(chalk.yellow(`Sending from address: ${fromKeyPair.address}`));
 
@@ -1371,6 +1466,7 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
     // Create the unsigned deposit transaction (fee calculation handled automatically)
     const unsignedPsbt = await locker.createDepositTransaction({
       inputs: txInputs,
+      sourceAddress: changeAddress,
       escrowAddress,
       escrowAmount,
       timelockAddress,
@@ -1451,19 +1547,25 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
       console.log(chalk.yellow("Output Summary:"));
       console.log(
         chalk.green(
-          `  → Escrow: ${TransactionUtils.satoshisToBTC(stakingTx.outputs.escrowAmount)} BTC to ${escrowAddress}`,
+          `  → Escrow: ${TransactionUtils.satoshisToBTC(
+            stakingTx.outputs.escrowAmount,
+          )} BTC to ${escrowAddress}`,
         ),
       );
       console.log(
         chalk.green(
-          `  → Timelock: ${TransactionUtils.satoshisToBTC(stakingTx.outputs.timelockAmount)} BTC to ${timelockAddress}`,
+          `  → Timelock: ${TransactionUtils.satoshisToBTC(
+            stakingTx.outputs.timelockAmount,
+          )} BTC to ${timelockAddress}`,
         ),
       );
 
       if (protocolFeeAmount && feeAddress) {
         console.log(
           chalk.green(
-            `  → Protocol Fee: ${TransactionUtils.satoshisToBTC(protocolFeeAmount)} BTC to ${feeAddress}`,
+            `  → Protocol Fee: ${TransactionUtils.satoshisToBTC(
+              protocolFeeAmount,
+            )} BTC to ${feeAddress}`,
           ),
         );
       }
@@ -1471,14 +1573,18 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
       if (stakingTx.outputs.changeAmount > 0) {
         console.log(
           chalk.green(
-            `  → Change: ${TransactionUtils.satoshisToBTC(stakingTx.outputs.changeAmount)} BTC to ${changeAddress}`,
+            `  → Change: ${TransactionUtils.satoshisToBTC(
+              stakingTx.outputs.changeAmount,
+            )} BTC to ${changeAddress}`,
           ),
         );
       }
 
       console.log(
         chalk.cyan(
-          `Total Fee: ${TransactionUtils.satoshisToBTC(stakingTx.fee)} BTC (${(stakingTx.fee / stakingTx.size).toFixed(2)} sat/byte)`,
+          `Total Fee: ${TransactionUtils.satoshisToBTC(stakingTx.fee)} BTC (${(
+            stakingTx.fee / stakingTx.size
+          ).toFixed(2)} sat/byte)`,
         ),
       );
 
@@ -1771,7 +1877,8 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
 
     // Calculate destination address from private key if not provided
     if (!destination) {
-      const keyPair = await locker.generateKeyPairFromPrivateKey(privateKey);
+      const keyPair =
+        await locker.keyPairGenerator.generateKeyPairFromPrivateKey(privateKey);
       destination = keyPair.address;
       console.log(
         chalk.yellow(
@@ -1824,7 +1931,9 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
     if (totalInputValue <= (protocolFeeAmount || 0)) {
       console.log(
         chalk.red(
-          `Insufficient funds. Have ${totalInputValue} sats, need at least ${protocolFeeAmount || 0} sats for protocol fees + network fees`,
+          `Insufficient funds. Have ${totalInputValue} sats, need at least ${
+            protocolFeeAmount || 0
+          } sats for protocol fees + network fees`,
         ),
       );
       return;
@@ -1833,17 +1942,23 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
     console.log(chalk.blue("Creating withdrawal transaction..."));
     console.log(
       chalk.gray(
-        `  Escrow balance: ${escrowValue} sats (${TransactionUtils.satoshisToBTC(escrowValue)} BTC)`,
+        `  Escrow balance: ${escrowValue} sats (${TransactionUtils.satoshisToBTC(
+          escrowValue,
+        )} BTC)`,
       ),
     );
     console.log(
       chalk.gray(
-        `  Timelock balance: ${timelockValue} sats (${TransactionUtils.satoshisToBTC(timelockValue)} BTC)`,
+        `  Timelock balance: ${timelockValue} sats (${TransactionUtils.satoshisToBTC(
+          timelockValue,
+        )} BTC)`,
       ),
     );
     console.log(
       chalk.gray(
-        `  Total input: ${totalInputValue} sats (${TransactionUtils.satoshisToBTC(totalInputValue)} BTC)`,
+        `  Total input: ${totalInputValue} sats (${TransactionUtils.satoshisToBTC(
+          totalInputValue,
+        )} BTC)`,
       ),
     );
     if (protocolFeeAmount && feeAddress) {
@@ -1888,8 +2003,12 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
       metadata,
     });
 
-    // Sign the transaction with the single private key
-    const signedTx = await locker.signTransaction(unsignedPsbt, privateKey);
+    // Sign the transaction with the single private key.
+    // The user's key is always in the OP_ELSE branch of the escrow script,
+    // so spendAfterDeadline must be false to select that branch.
+    const signedTx = await locker.signTransaction(unsignedPsbt, privateKey, {
+      spendAfterDeadline: false,
+    });
 
     // Calculate actual fees from the transaction
     const allInputs = [...escrowInputs, ...timelockInputs];
@@ -1987,7 +2106,11 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
       {
         type: "confirm",
         name: "confirm",
-        message: `Broadcast withdrawal transaction moving ${TransactionUtils.satoshisToBTC(totalInputValue)} BTC to ${destination} with ${withdrawalResult.fee} sat fee (${withdrawalResult.feeRate} sat/byte)?`,
+        message: `Broadcast withdrawal transaction moving ${TransactionUtils.satoshisToBTC(
+          totalInputValue,
+        )} BTC to ${destination} with ${withdrawalResult.fee} sat fee (${
+          withdrawalResult.feeRate
+        } sat/byte)?`,
         default: false,
       },
     ]);
@@ -2399,7 +2522,11 @@ async function handleClaimCommand(cmdOptions, parentOptions) {
         {
           type: "confirm",
           name: "confirm",
-          message: `Broadcast transaction spending ${TransactionUtils.satoshisToBTC(amount)} BTC with ${feeInfo.actualFee} sat fee (${feeInfo.feeRate} sat/byte)?`,
+          message: `Broadcast transaction spending ${TransactionUtils.satoshisToBTC(
+            amount,
+          )} BTC with ${feeInfo.actualFee} sat fee (${
+            feeInfo.feeRate
+          } sat/byte)?`,
           default: false,
         },
       ]);

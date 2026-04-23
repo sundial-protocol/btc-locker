@@ -92,6 +92,10 @@ export async function createClaimTransaction(
       network: ctx.network,
     });
 
+    if (!p2wsh.output) {
+      throw new Error("Failed to derive P2WSH output from redeem script");
+    }
+
     // Fetch the previous transaction to extract the exact UTXO value for witnessUtxo
     let utxoValue = BigInt(amount);
     if (previousTransaction) {
@@ -118,7 +122,7 @@ export async function createClaimTransaction(
       sequence,
       witnessScript,
       witnessUtxo: {
-        script: p2wsh.output!,
+        script: p2wsh.output,
         value: utxoValue,
       },
     });

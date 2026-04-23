@@ -1,19 +1,30 @@
 ﻿import * as bitcoin from "bitcoinjs-lib";
 import { assert } from "../../errors.js";
-import { FeeUtils, TransactionUtils } from "../../utils/index.js";
+import {
+  FeeUtils,
+  TransactionUtils,
+  ValidationUtils,
+} from "../../utils/index.js";
 import { FeePriorities } from "../../utils/fees.js";
 import { TxType } from "../../utils/metadata.js";
 import type { LockerContext } from "../core.js";
-import type { BaseTransactionParams, UTXO } from "../../types.js";
-import type BitcoinAPI from "../../bitcoin-api/index.js";
+import type {
+  BaseTransactionParams,
+  ProtocolFeeParams,
+  UTXO,
+} from "../../types.js";
+import { BitcoinAPI } from "../../index.js";
 
 /**
  * Parameters for yield distribution
  * @interface DistributionParams
  * @extends BaseTransactionParams
+ * @extends ProtocolFeeParams
  * @description Configuration for distributing yield from time-locked Bitcoin funds
  */
-export interface DistributionParams extends BaseTransactionParams {
+export interface DistributionParams
+  extends BaseTransactionParams,
+    ProtocolFeeParams {
   /** Array of unspent transaction outputs from timelock (optional - will fetch from address if not provided) */
   inputs?: UTXO[];
   /** Source address for automatic UTXO selection (required if inputs not provided) */
@@ -40,16 +51,23 @@ export async function createDistributionTransaction(
     amount,
     metadata,
     priority = FeePriorities.MEDIUM,
+    feeAddress,
+    protocolFeeAmount,
   } = params;
 
   assert(
     !!providedInputs || (!!sourceAddress && !!api),
     "Either inputs or both sourceAddress and api must be provided",
   );
+  ValidationUtils.assertProtocolFeeParams(feeAddress, protocolFeeAmount);
 
   let inputs: UTXO[] = [];
 
   if (providedInputs) {
+    assert(
+      !!sourceAddress || providedInputs.every((u) => !!u.scriptPubKey),
+      "When providing explicit inputs, either sourceAddress or a scriptPubKey on each UTXO is required so the correct input script can be set",
+    );
     inputs = providedInputs;
   } else if (api && sourceAddress) {
     inputs = await api.fetchConfirmedUtxos(sourceAddress);
@@ -63,6 +81,7 @@ export async function createDistributionTransaction(
 
   const feeRate = await FeeUtils.queryChainFeeRates(priority);
   const outputCount = TransactionUtils.countOutputs(1, [
+    protocolFeeAmount && feeAddress,
     metadata,
     params.changeAddress,
   ]);
@@ -75,23 +94,24 @@ export async function createDistributionTransaction(
   const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
   const changeResult = FeeUtils.calculateChange(
     totalInputValue,
-    amount,
+    amount + (protocolFeeAmount || 0),
     estimatedFee,
   );
 
   TransactionUtils.addWitnessInputs(
     psbt,
     inputs,
-    bitcoin.address.toOutputScript(
-      sourceAddress || timelockAddress,
-      ctx.network,
-    ),
+    sourceAddress
+      ? bitcoin.address.toOutputScript(sourceAddress, ctx.network)
+      : undefined,
   );
 
   psbt.addOutput({
     address: timelockAddress,
     value: BigInt(amount),
   });
+
+  TransactionUtils.appendProtocolFeeOutput(psbt, feeAddress, protocolFeeAmount);
 
   if (changeResult.isAboveDustThreshold) {
     psbt.addOutput({

@@ -22,7 +22,8 @@ import type { LockerContext } from "../core.js";
  * @description Configuration for withdrawing from both escrow and timelock Dawn staking outputs
  */
 export interface WithdrawalParams
-  extends BaseTransactionParams, ProtocolFeeParams {
+  extends BaseTransactionParams,
+    ProtocolFeeParams {
   /** Array of escrow inputs to withdraw from (optional - will fetch all UTXOs from escrow address if not provided) */
   escrowInputs?: UTXO[];
   /** Escrow script address (optional - will be calculated from escrowRedeemScript if not provided) */
@@ -70,7 +71,9 @@ export async function createWithdrawalTransaction(
     if (timestamp !== null) {
       if (currentTime < timestamp) {
         throw new Error(
-          `Cannot withdraw from ${label} script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(timestamp * 1000).toISOString()}`,
+          `Cannot withdraw from ${label} script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(
+            timestamp * 1000,
+          ).toISOString()}`,
         );
       }
       maxLocktime = Math.max(maxLocktime, timestamp);
@@ -98,7 +101,9 @@ export async function createWithdrawalTransaction(
       escrowInputs = await ctx.api.fetchConfirmedUtxos(escrowAddress);
     } catch (error) {
       throw new Error(
-        `Failed to fetch escrow UTXOs from ${escrowAddress}: ${(error as Error).message}`,
+        `Failed to fetch escrow UTXOs from ${escrowAddress}: ${
+          (error as Error).message
+        }`,
       );
     }
   }
@@ -108,7 +113,9 @@ export async function createWithdrawalTransaction(
       timelockInputs = await ctx.api.fetchConfirmedUtxos(timelockAddress);
     } catch (error) {
       throw new Error(
-        `Failed to fetch timelock UTXOs from ${timelockAddress}: ${(error as Error).message}`,
+        `Failed to fetch timelock UTXOs from ${timelockAddress}: ${
+          (error as Error).message
+        }`,
       );
     }
   }
@@ -149,68 +156,41 @@ export async function createWithdrawalTransaction(
     psbt.setLocktime(maxLocktime);
   }
 
-  // Helper to add script inputs (escrow or timelock)
-  const addScriptInputs = async (inputs: UTXO[], redeemScriptHex: string) => {
-    const redeemScript = Buffer.from(redeemScriptHex, "hex");
+  // Helper to add P2WSH script inputs (escrow or timelock)
+  const addScriptInputs = (inputs: UTXO[], redeemScriptHex: string) => {
+    const witnessScript = Buffer.from(redeemScriptHex, "hex");
+    const p2wsh = bitcoin.payments.p2wsh({
+      redeem: { output: witnessScript, network: ctx.network },
+      network: ctx.network,
+    });
+
+    if (!p2wsh.output) {
+      throw new Error("Failed to derive P2WSH output from redeem script");
+    }
+
     for (const input of inputs) {
-      let inputData;
-      if (ctx.api) {
-        try {
-          const txHex = await ctx.api.getTransaction(input.txid);
-          inputData = {
-            hash: input.txid,
-            index: input.vout,
-            nonWitnessUtxo: Buffer.from(txHex, "hex"),
-            redeemScript,
-            sequence: 0xfffffffe,
-          };
-        } catch (error) {
-          throw new Error(
-            `Failed to fetch transaction ${input.txid}: ${(error as Error).message}`,
-          );
-        }
-      } else {
-        const scriptHash = bitcoin.crypto.hash160(redeemScript);
-        const p2shScript = bitcoin.script.compile([
-          bitcoin.opcodes.OP_HASH160,
-          scriptHash,
-          bitcoin.opcodes.OP_EQUAL,
-        ]);
-
-        inputData = {
-          hash: input.txid,
-          index: input.vout,
-          witnessUtxo: {
-            script: p2shScript,
-            value: BigInt(input.value),
-          },
-          redeemScript,
-          sequence: 0xfffffffe,
-        };
-      }
-
-      psbt.addInput(inputData);
+      psbt.addInput({
+        hash: input.txid,
+        index: input.vout,
+        sequence: 0xfffffffe,
+        witnessScript,
+        witnessUtxo: {
+          script: p2wsh.output,
+          value: BigInt(input.value),
+        },
+      });
     }
   };
 
-  await addScriptInputs(escrowInputs, escrowRedeemScript);
-  await addScriptInputs(timelockInputs, timelockRedeemScript);
+  addScriptInputs(escrowInputs, escrowRedeemScript);
+  addScriptInputs(timelockInputs, timelockRedeemScript);
 
   psbt.addOutput({
     address: destination,
     value: BigInt(destinationValue),
   });
 
-  if (
-    feeAddress &&
-    protocolFeeAmount &&
-    protocolFeeAmount >= FeeUtils.DUST_THRESHOLD
-  ) {
-    psbt.addOutput({
-      address: feeAddress,
-      value: BigInt(protocolFeeAmount),
-    });
-  }
+  TransactionUtils.appendProtocolFeeOutput(psbt, feeAddress, protocolFeeAmount);
 
   TransactionUtils.appendMetadataOutput(psbt, metadata, TxType.Withdrawal);
 

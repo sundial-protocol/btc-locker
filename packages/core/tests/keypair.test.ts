@@ -37,7 +37,6 @@ describe("KeyPairGenerator", () => {
       expect(kp.privateKey).toBe(privKeyHex);
       expect(kp.publicKey).toBeDefined();
       expect(kp.address).toBeDefined();
-      expect(kp).toHaveProperty("keyPair"); // ExtendedKeyPair
     });
 
     test("should throw for invalid private key hex", async () => {

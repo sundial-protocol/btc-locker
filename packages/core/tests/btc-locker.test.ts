@@ -30,7 +30,7 @@ describe("BTCLocker", () => {
     });
 
     test("should accept network objects", async () => {
-      const networkLocker = new BTCLocker('testnet');
+      const networkLocker = new BTCLocker("testnet");
       await networkLocker.init();
       expect(networkLocker.network).toBe(bitcoin.networks.testnet);
     });
@@ -54,21 +54,13 @@ describe("BTCLocker", () => {
       expect(keyPair.address).toMatch(/^(tb1|2|m|n)/);
     });
 
-    test("should generate key pair from private key", async () => {
-      const privateKeyHex =
-        "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-      const keyPair: KeyPair = await locker.generateKeyPairFromPrivateKey(privateKeyHex);
-
-      expect(keyPair.privateKey).toBe(privateKeyHex);
-      expect(keyPair.publicKey).toBeDefined();
-      expect(keyPair.address).toBeDefined();
-    });
-
     test("should throw error for invalid private key", async () => {
       const invalidPrivateKey = "invalid_private_key";
 
       await expect(
-        locker.generateKeyPairFromPrivateKey(invalidPrivateKey)
+        locker.keyPairGenerator.generateKeyPairFromPrivateKey(
+          invalidPrivateKey,
+        ),
       ).rejects.toThrow();
     });
   });
@@ -80,7 +72,7 @@ describe("BTCLocker", () => {
 
       const scriptInfo: ScriptInfo = await locker.createTimelockScript(
         locktime,
-        keyPair.publicKey
+        keyPair.publicKey,
       );
 
       expect(scriptInfo).toHaveProperty("redeemScript");
@@ -98,7 +90,7 @@ describe("BTCLocker", () => {
 
       const scriptInfo: ScriptInfo = await locker.createRelativeTimelockScript(
         sequence,
-        keyPair.publicKey
+        keyPair.publicKey,
       );
 
       expect(scriptInfo).toHaveProperty("redeemScript");
@@ -113,7 +105,7 @@ describe("BTCLocker", () => {
       const keyPair: KeyPair = await locker.generateKeyPair();
 
       await expect(
-        locker.createTimelockScript(-1, keyPair.publicKey)
+        locker.createTimelockScript(-1, keyPair.publicKey),
       ).rejects.toThrow("locktime must be a non-negative integer");
     });
 
@@ -121,7 +113,7 @@ describe("BTCLocker", () => {
       const locktime = Math.floor(Date.now() / 1000) + 3600;
 
       await expect(
-        locker.createTimelockScript(locktime, "invalid_public_key")
+        locker.createTimelockScript(locktime, "invalid_public_key"),
       ).rejects.toThrow();
     });
   });
@@ -135,7 +127,7 @@ describe("BTCLocker", () => {
       const scriptInfo: ScriptInfo = await locker.createEscrowScript(
         deadline,
         beforeKeyPair.publicKey,
-        afterKeyPair.publicKey
+        afterKeyPair.publicKey,
       );
 
       expect(scriptInfo).toHaveProperty("redeemScript");

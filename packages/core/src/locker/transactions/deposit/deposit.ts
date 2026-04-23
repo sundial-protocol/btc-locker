@@ -24,7 +24,8 @@ import type { LockerContext } from "../../core.js";
  * @description Configuration for creating Dawn protocol staking transactions with dual outputs
  */
 export interface DepositParams
-  extends BaseTransactionParams, ProtocolFeeParams {
+  extends BaseTransactionParams,
+    ProtocolFeeParams {
   /** Array of unspent transaction outputs to deposit (optional - will auto-select from address if not provided) */
   inputs?: UTXO[];
   /** Source address for automatic UTXO selection (required if inputs not provided) */
@@ -138,7 +139,9 @@ export async function createDepositTransaction(
 
   if (changeAmount < 0) {
     throw new Error(
-      `Insufficient funds. Total: ${totalInputValue}, Required: ${totalRequiredAmount} (Escrow: ${escrowAmount}, Timelock: ${timelockAmount}${protocolFeeAmount ? `, Protocol Fee: ${protocolFeeAmount}` : ""}, Network Fee: ${estimatedFee}), Shortage: ${Math.abs(changeAmount)}`,
+      `Insufficient funds. Total: ${totalInputValue}, Required: ${totalRequiredAmount} (Escrow: ${escrowAmount}, Timelock: ${timelockAmount}${
+        protocolFeeAmount ? `, Protocol Fee: ${protocolFeeAmount}` : ""
+      }, Network Fee: ${estimatedFee}), Shortage: ${Math.abs(changeAmount)}`,
     );
   }
 
@@ -171,16 +174,11 @@ export async function createDepositTransaction(
       value: BigInt(timelockAmount),
     });
 
-    if (
-      feeAddress &&
-      protocolFeeAmount &&
-      protocolFeeAmount >= FeeUtils.DUST_THRESHOLD
-    ) {
-      psbt.addOutput({
-        address: feeAddress,
-        value: BigInt(protocolFeeAmount),
-      });
-    }
+    TransactionUtils.appendProtocolFeeOutput(
+      psbt,
+      feeAddress,
+      protocolFeeAmount,
+    );
 
     if (changeAddress && changeAmount >= FeeUtils.DUST_THRESHOLD) {
       psbt.addOutput({

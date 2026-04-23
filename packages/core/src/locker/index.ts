@@ -96,21 +96,6 @@ export class BTCLocker extends BTCLockerCore {
   }
 
   /**
-   * Generate key pair from existing private key
-   * @async
-   * @param {string} privateKeyHex - Private key in hex format (64 characters)
-   * @returns {Promise<KeyPair>} Key pair object
-   * @throws {Error} If private key is invalid
-   * @example
-   * const locker = new BTCLocker();
-   * const keyPair = await locker.generateKeyPairFromPrivateKey('1234567890abcdef...');
-   * console.log(keyPair.address);
-   */
-  async generateKeyPairFromPrivateKey(privateKeyHex: string): Promise<KeyPair> {
-    return this.keyPairGenerator.generateKeyPairFromPrivateKey(privateKeyHex);
-  }
-
-  /**
    * Create a simple timelock script (absolute time)
    * @async
    * @param {number} locktime - Unix timestamp (for time-based) or block height (for height-based)
@@ -166,7 +151,7 @@ export class BTCLocker extends BTCLockerCore {
   async createSpendingTransaction(
     params: SpendingTransactionParams,
   ): Promise<string> {
-    return this.createSpendingTransaction(params);
+    return this.transactionManager.createSpendingTransaction(params);
   }
 
   /**
@@ -188,7 +173,7 @@ export class BTCLocker extends BTCLockerCore {
   async createFundingTransaction(
     params: FundingTransactionParams,
   ): Promise<string> {
-    return this.createFundingTransaction(params);
+    return this.transactionManager.createFundingTransaction(params);
   }
 
   /**
