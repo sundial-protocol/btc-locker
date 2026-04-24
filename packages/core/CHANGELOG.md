@@ -1,5 +1,11 @@
 # @sundial-protocol/btc-locker
 
+## 2.0.3
+
+### Patch Changes
+
+- audit fixes & fees
+
 ## 2.0.2
 
 ### Patch Changes

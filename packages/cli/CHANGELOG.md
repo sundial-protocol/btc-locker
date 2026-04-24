@@ -1,5 +1,13 @@
 # @sundial-protocol/btc-locker-cli
 
+## 2.0.3
+
+### Patch Changes
+
+- audit fixes & fees
+- Updated dependencies
+  - @sundial-protocol/btc-locker@2.0.3
+
 ## 2.0.0
 
 ### Major Changes
