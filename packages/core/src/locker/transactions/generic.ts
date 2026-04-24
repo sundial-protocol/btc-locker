@@ -6,7 +6,7 @@ import * as bitcoin from "bitcoinjs-lib";
 import { LockerContext } from "../core.js";
 import type { UTXO, BaseTransactionParams } from "../../types.js";
 import { TransactionUtils, ScriptUtils } from "../../utils/index.js";
-import BitcoinAPI from "../../bitcoin-api.js";
+import BitcoinAPI from "../../bitcoin-api/index.js";
 
 /**
  * Transaction output specification

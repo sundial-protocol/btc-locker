@@ -8,7 +8,7 @@ import { ECPairFactory } from "ecpair";
 import tinysecp from "@bitcoinerlab/secp256k1";
 import type { ECCLib, InitializedECC } from "../types.js";
 import { NetworkType, NETWORKS } from "../utils/network.js";
-import BitcoinAPI from "../bitcoin-api.js";
+import BitcoinAPI from "../bitcoin-api/index.js";
 
 /** Shared context for transaction-building functions */
 export interface LockerContext {
@@ -381,8 +381,9 @@ export class BTCLockerCore {
       // Broadcast via API if available
       if (apiToUse && typeof apiToUse.broadcastTransaction === "function") {
         try {
-          const broadcastResult =
-            await apiToUse.broadcastTransaction(transactionHex);
+          const broadcastResult = await apiToUse.broadcastTransaction(
+            transactionHex,
+          );
           return broadcastResult.txid || txid;
         } catch (error) {
           throw new Error(

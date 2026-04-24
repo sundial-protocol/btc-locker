@@ -18,7 +18,7 @@ import {
 } from "./transactions/index.js";
 import { KeyPair, ScriptInfo } from "../types.js";
 import { NETWORKS, type NetworkType } from "../utils/network.js";
-import BitcoinAPI from "../bitcoin-api.js";
+import BitcoinAPI from "../bitcoin-api/index.js";
 import { DistributionParams } from "../index.js";
 
 /**

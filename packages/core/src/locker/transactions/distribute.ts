@@ -13,7 +13,7 @@ import type {
   ProtocolFeeParams,
   UTXO,
 } from "../../types.js";
-import type BitcoinAPI from "../../bitcoin-api.js";
+import { BitcoinAPI } from "../../index.js";
 
 /**
  * Parameters for yield distribution

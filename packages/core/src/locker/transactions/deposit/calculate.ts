@@ -1,6 +1,7 @@
 ﻿import type { LockerContext } from "../../core.js";
 import { assertAll } from "../../../errors.js";
 import { FeeUtils, TransactionUtils } from "../../../utils/index.js";
+import type { UTXO } from "../../../types.js";
 
 /**
  * Parameters for Dawn staking amount calculation
@@ -95,7 +96,7 @@ export async function calculateDepositAmounts(
         minimumCost + approxFee,
       ).map((utxo) => ({ value: utxo.value }));
     } catch {
-      inputs = availableInputs.map((utxo) => ({ value: utxo.value }));
+      inputs = availableInputs.map((utxo: UTXO) => ({ value: utxo.value }));
     }
   }
 
@@ -136,7 +137,9 @@ export async function calculateDepositAmounts(
     ],
     [
       changeAmount < 0,
-      `Insufficient funds: need ${totalRequired}, have ${totalInputValue}, shortage ${Math.abs(changeAmount)}. `,
+      `Insufficient funds: need ${totalRequired}, have ${totalInputValue}, shortage ${Math.abs(
+        changeAmount,
+      )}. `,
     ],
     [
       includeChange &&

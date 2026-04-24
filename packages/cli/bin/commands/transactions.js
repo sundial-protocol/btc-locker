@@ -15,6 +15,7 @@ import BitcoinAPI from "@sundial-protocol/btc-locker/bitcoin-api";
 import { NETWORKS } from "@sundial-protocol/btc-locker/utils/network";
 import { TxType } from "@sundial-protocol/btc-locker/utils/metadata";
 import { initLocker, displayResult } from "./shared.js";
+import { createDepositIntent, createDistributionIntent, getProviders, getProviderClaimable } from "./backend.js";
 import crypto from "crypto";
 
 /**
@@ -68,7 +69,12 @@ export function setupTransactionCommands(program) {
       "Fee priority: high, medium, low",
       "medium",
     )
-    .option("--deposit-id <uuid>", "Deposit ID (UUID v4) for Sundial metadata")
+    .option("--deposit-id <uuid>", "Deposit ID (UUID v4) for Sundial metadata (from provider-claimable)")
+    .option("--provider-id <uuid>", "Provider UUID (required for server registration)")
+    .option("--program-id <uuid>", "Program UUID (required for server registration)")
+    .option("--yield-sats <number>", "Yield portion in satoshis (required for server registration)")
+    .option("--payable-at <datetime>", "Distribution payable-at ISO datetime (defaults to now)")
+    .option("--skip-server", "Skip server intent registration")
     .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
     .option(
@@ -138,6 +144,10 @@ export function setupTransactionCommands(program) {
       "--provider-pubkey <hex>",
       "Yield-provider x-only public key (64 hex chars)",
     )
+    .option(
+      "--provider-id <uuid>",
+      "Provider UUID – auto-populates --address and --redeem-script from provider-claimable when combined with --deposit-id",
+    )
     .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
@@ -171,12 +181,17 @@ export function setupTransactionCommands(program) {
     )
     .option(
       "--deposit-id <uuid>",
-      "Deposit ID (UUID v4); auto-generated if omitted",
+      "Deposit ID (UUID v4); auto-generated if omitted (server assigns one when --provider-id is given)",
     )
     .option(
       "--provider-pubkey <hex>",
       "Yield-provider x-only public key (64 hex chars)",
     )
+    .option("--provider-id <uuid>", "Provider UUID (required for server registration)")
+    .option("--program-id <uuid>", "Program UUID (required for server registration)")
+    .option("--alpha-bps <number>", "Escrow split in basis points (required for server registration)")
+    .option("--lock-ms <number>", "Lock duration in milliseconds (required for server registration)")
+    .option("--skip-server", "Skip server intent registration")
     .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
     .action(async (cmdOptions) => {
@@ -219,6 +234,10 @@ export function setupTransactionCommands(program) {
     .option(
       "--provider-pubkey <hex>",
       "Yield-provider x-only public key (64 hex chars)",
+    )
+    .option(
+      "--provider-id <uuid>",
+      "Provider UUID – auto-populates --escrow-script and --timelock-script from provider-claimable when combined with --deposit-id",
     )
     .option("--flags <number>", "Optional 2-byte flags field (default 0)")
     .option("--dry-run", "Create transaction but don't broadcast")
@@ -528,9 +547,14 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
   let fromPrivateKey = cmdOptions.fromKey;
   let toAddress = cmdOptions.to;
   let amount = cmdOptions.amount ? parseInt(cmdOptions.amount) : null;
-  let subjectId = cmdOptions.subjectId;
+  let subjectId = cmdOptions.depositId;
   const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
   const priority = parsePriority(cmdOptions.priority || "medium");
+  const providerId = cmdOptions.providerId;
+  const programId = cmdOptions.programId;
+  const yieldSats = cmdOptions.yieldSats ? parseInt(cmdOptions.yieldSats) : null;
+  const payableAt = cmdOptions.payableAt || new Date().toISOString();
+  const skipServer = !!cmdOptions.skipServer;
 
   // Interactive prompts if options not provided
   if (!fromPrivateKey || !toAddress || !amount) {
@@ -585,6 +609,39 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
   }
 
   try {
+    // Register distribution intent with the server before building the tx
+    let distributionId;
+    if (!skipServer && providerId && programId && subjectId && yieldSats != null) {
+      console.log(chalk.blue("Registering distribution intent with server..."));
+      try {
+        const serverUrl = parentOptions.serverUrl || process.env.BTC_LOCKER_SERVER || "http://localhost:8080";
+        const intentResponse = await createDistributionIntent(
+          {
+            provider_id: providerId,
+            program_id: programId,
+            payable_at: payableAt,
+            allocations: [
+              {
+                deposit_id: subjectId,
+                yield_sats: yieldSats,
+                destination_address: toAddress,
+              },
+            ],
+          },
+          serverUrl,
+        );
+        distributionId = intentResponse.distribution_id;
+        console.log(chalk.green(`✓ Distribution intent registered. distribution_id: ${distributionId}`));
+      } catch (serverErr) {
+        console.error(chalk.red(`Server error: ${serverErr.message}`));
+        console.error(chalk.yellow("Ensure the deposit has reached PROVIDER_CLAIM_CONFIRMED status."));
+        console.error(chalk.yellow("Use --skip-server to bypass server registration."));
+        return;
+      }
+    } else if (!skipServer && (providerId || programId || yieldSats != null)) {
+      console.warn(chalk.yellow("⚠️  Skipping server registration: --provider-id, --program-id, --deposit-id, and --yield-sats are all required."));
+    }
+
     // Generate address from private key to check balance
     const keyPair = await locker.keyPairGenerator.generateKeyPairFromPrivateKey(
       fromPrivateKey,
@@ -801,6 +858,14 @@ async function handleDistributeCommand(cmdOptions, parentOptions) {
         );
     }
 
+    if (distributionId) {
+      console.log(chalk.gray(`ℹ️  Distribution ID: ${distributionId}`));
+    }
+    if (metadata?.subjectId) {
+      console.log(chalk.gray(`ℹ️  The indexer will confirm the distribution automatically.`));
+      console.log(chalk.gray(`   Poll deposit status: btc-locker backend deposit-status ${metadata.subjectId}`));
+    }
+
     if (parentOptions.network === "testnet") {
       console.log(
         chalk.blue(
@@ -843,7 +908,6 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
   let redeemScript = cmdOptions.script;
   let privateKey = cmdOptions.key;
   let destinationAddress = cmdOptions.to;
-  const priority = parsePriority(cmdOptions.priority || "medium");
   let emergencyKey = cmdOptions.emergencyKey;
 
   // Interactive prompts if options not provided
@@ -1109,9 +1173,14 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
-  let subjectId = cmdOptions.subjectId;
+  let subjectId = cmdOptions.depositId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
+  const providerId = cmdOptions.providerId;
+  const programId = cmdOptions.programId;
+  const alphaBps = cmdOptions.alphaBps ? parseInt(cmdOptions.alphaBps) : null;
+  const lockMs = cmdOptions.lockMs ? parseInt(cmdOptions.lockMs) : null;
+  const skipServer = !!cmdOptions.skipServer;
 
   // Validate fee parameters
   if (feeAddress && !protocolFeeAmount) {
@@ -1133,6 +1202,35 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
   }
 
   try {
+    // Auto-populate escrow/timelock addresses from the program when --provider-id + --program-id
+    // are given but the addresses were not explicitly passed.
+    if (providerId && programId && (!escrowAddress || !timelockAddress)) {
+      const serverUrl = parentOptions.serverUrl || process.env.BTC_LOCKER_SERVER || "http://localhost:8080";
+      try {
+        const providers = await getProviders(serverUrl);
+        const prov = providers.find((p) => p.provider_id === providerId);
+        const prog = prov?.programs?.find((p) => p.program_id === programId) ?? null;
+        if (prog) {
+          if (prog.escrow_script && !escrowAddress) {
+            escrowAddress = ScriptUtils.createScriptAddress(
+              Buffer.from(prog.escrow_script, "hex"),
+              network,
+            );
+            console.log(chalk.gray(`Auto-populated escrow address from program: ${escrowAddress}`));
+          }
+          if (prog.timelock_script && !timelockAddress) {
+            timelockAddress = ScriptUtils.createScriptAddress(
+              Buffer.from(prog.timelock_script, "hex"),
+              network,
+            );
+            console.log(chalk.gray(`Auto-populated timelock address from program: ${timelockAddress}`));
+          }
+        }
+      } catch (scriptErr) {
+        console.warn(chalk.yellow(`⚠️  Could not auto-populate addresses from program: ${scriptErr.message}`));
+      }
+    }
+
     // Interactive prompts if options not provided
     if (
       !fromPrivateKey ||
@@ -1265,7 +1363,40 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
       subjectId = subjectId || answers.subjectId || undefined;
     }
 
-    // Auto-generate deposit ID if not provided
+    // Register deposit intent with the server (gets server-assigned deposit_id)
+    if (!skipServer && providerId && programId && alphaBps != null && lockMs != null) {
+      const totalAmountSats = escrowAmount + timelockAmount;
+      // Derive beneficiary address from the sending key
+      const beneficiaryKeyPair = await locker.generateKeyPairFromPrivateKey(fromPrivateKey);
+      const userBeneficiaryAddress = beneficiaryKeyPair.address;
+
+      console.log(chalk.blue("Registering deposit intent with server..."));
+      try {
+        const serverUrl = parentOptions.serverUrl || process.env.BTC_LOCKER_SERVER || "http://localhost:8080";
+        const intentResponse = await createDepositIntent(
+          {
+            user_beneficiary_address: userBeneficiaryAddress,
+            provider_id: providerId,
+            program_id: programId,
+            amount_sats: totalAmountSats,
+            alpha_bps: alphaBps,
+            lock_ms: lockMs,
+          },
+          serverUrl,
+        );
+        subjectId = intentResponse.deposit_id;
+        console.log(chalk.green(`✓ Deposit intent registered. deposit_id: ${subjectId}`));
+      } catch (serverErr) {
+        console.error(chalk.red(`Server error: ${serverErr.message}`));
+        console.error(chalk.yellow("Use --skip-server to bypass server registration."));
+        return;
+      }
+    } else if (!skipServer && (providerId || programId || alphaBps != null || lockMs != null)) {
+      // Partial server args provided — warn but don't block
+      console.warn(chalk.yellow("⚠️  Skipping server registration: --provider-id, --program-id, --alpha-bps, and --lock-ms are all required for server registration."));
+    }
+
+    // Auto-generate deposit ID if not provided and server skipped
     if (!subjectId) {
       subjectId = crypto.randomUUID();
       console.log(chalk.gray(`Auto-generated deposit ID: ${subjectId}`));
@@ -1488,6 +1619,11 @@ async function handleDepositCommand(cmdOptions, parentOptions) {
           ),
         );
       }
+
+      if (subjectId) {
+        console.log(chalk.gray(`ℹ️  The indexer will confirm the deposit automatically.`));
+        console.log(chalk.gray(`   Poll status: btc-locker backend deposit-status ${subjectId}`));
+      }
     } else {
       console.log(chalk.yellow("\nDRY RUN: Transaction not broadcasted"));
       console.log(
@@ -1532,9 +1668,10 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
   let protocolFeeAmount = cmdOptions.protocolFeeAmount
     ? parseInt(cmdOptions.protocolFeeAmount)
     : null;
-  let subjectId = cmdOptions.subjectId;
+  let subjectId = cmdOptions.depositId ?? cmdOptions.subjectId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
+  const providerId = cmdOptions.providerId;
 
   // Validate fee parameters
   if (feeAddress && !protocolFeeAmount) {
@@ -1556,6 +1693,44 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
   }
 
   try {
+    // Auto-populate scripts and addresses from provider-claimable when
+    // --provider-id + --deposit-id are given but values were not explicitly passed.
+    if (providerId && subjectId && (!escrowScript || !timelockScript || !escrowAddress || !timelockAddress)) {
+      const serverUrl = parentOptions.serverUrl || process.env.BTC_LOCKER_SERVER || "http://localhost:8080";
+      try {
+        const claimable = await getProviderClaimable(providerId, serverUrl);
+        const deposit = claimable.find((d) => d.deposit_id === subjectId);
+        if (deposit) {
+          if (deposit.escrow_script && !escrowScript) {
+            escrowScript = deposit.escrow_script;
+            console.log(chalk.gray(`Auto-populated escrow redeem script from provider-claimable`));
+          }
+          if (deposit.escrow_script && !escrowAddress) {
+            escrowAddress = ScriptUtils.createScriptAddress(
+              Buffer.from(deposit.escrow_script, "hex"),
+              network,
+            );
+            console.log(chalk.gray(`Auto-populated escrow address from provider-claimable: ${escrowAddress}`));
+          }
+          if (deposit.timelock_script && !timelockScript) {
+            timelockScript = deposit.timelock_script;
+            console.log(chalk.gray(`Auto-populated timelock redeem script from provider-claimable`));
+          }
+          if (deposit.timelock_script && !timelockAddress) {
+            timelockAddress = ScriptUtils.createScriptAddress(
+              Buffer.from(deposit.timelock_script, "hex"),
+              network,
+            );
+            console.log(chalk.gray(`Auto-populated timelock address from provider-claimable: ${timelockAddress}`));
+          }
+        } else {
+          console.warn(chalk.yellow(`⚠️  Deposit ${subjectId} not found in provider-claimable. Pass scripts manually.`));
+        }
+      } catch (claimableErr) {
+        console.warn(chalk.yellow(`⚠️  Could not fetch provider-claimable: ${claimableErr.message}`));
+      }
+    }
+
     // Interactive prompts if options not provided
     if (
       !escrowAddress ||
@@ -1970,6 +2145,11 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
           );
       }
 
+      console.log(chalk.gray(`ℹ️  Withdrawal is tracked automatically by the indexer.`));
+      if (metadata?.subjectId) {
+        console.log(chalk.gray(`   Poll deposit status: btc-locker backend deposit-status ${metadata.subjectId}`));
+      }
+
       if (parentOptions.network === "testnet") {
         console.log(
           chalk.blue(
@@ -2000,19 +2180,18 @@ async function handleWithdrawalCommand(cmdOptions, parentOptions) {
  * Handle claim command
  */
 async function handleClaimCommand(cmdOptions, parentOptions) {
-  const {
-    address: scriptAddress,
-    redeemScript,
-    privateKey,
-    to: destinationAddress,
-    afterDeadline,
-    priority: priorityStr = "medium",
-    dryRun,
-  } = cmdOptions;
+  let scriptAddress = cmdOptions.address;
+  let redeemScript = cmdOptions.redeemScript;
+  let privateKey = cmdOptions.privateKey;
+  let destinationAddress = cmdOptions.to;
+  let afterDeadline = cmdOptions.afterDeadline;
+  const priorityStr = cmdOptions.priority || "medium";
+  const dryRun = cmdOptions.dryRun;
 
-  let subjectId = cmdOptions.subjectId;
+  let subjectId = cmdOptions.depositId;
   let providerPubkey = KeyUtils.toXOnly(cmdOptions.providerPubkey);
   const flags = cmdOptions.flags ? parseInt(cmdOptions.flags) : 0;
+  const providerId = cmdOptions.providerId;
 
   const priority = parsePriority(priorityStr);
 
@@ -2029,100 +2208,167 @@ async function handleClaimCommand(cmdOptions, parentOptions) {
   const locker = await initLocker(parentOptions);
 
   try {
-    // Interactive prompts if options not provided
-    if (!scriptAddress || !redeemScript || !privateKey || !destinationAddress) {
-      const answers = await inquirer.prompt([
-        {
-          type: "input",
-          name: "scriptAddress",
-          message: "Enter escrow script address:",
-          when: !scriptAddress,
-          validate: (input) => {
-            try {
-              bitcoin.address.toOutputScript(input, locker.network);
-              return true;
-            } catch {
-              return "Invalid Bitcoin address";
-            }
-          },
-        },
-        {
-          type: "input",
-          name: "redeemScript",
-          message: "Enter redeem script (hex):",
-          when: !redeemScript,
-          validate: (input) =>
-            /^[0-9a-fA-F]+$/.test(input) || "Invalid hex string",
-        },
-        {
-          type: "input",
-          name: "privateKey",
-          message: "Enter private key (hex):",
-          when: !privateKey,
-          validate: (input) =>
-            ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
-        },
-        {
-          type: "input",
-          name: "destinationAddress",
-          message: "Enter destination address:",
-          when: !destinationAddress,
-          validate: (input) => {
-            try {
-              bitcoin.address.toOutputScript(input, locker.network);
-              return true;
-            } catch {
-              return "Invalid Bitcoin address";
-            }
-          },
-        },
-        {
-          type: "confirm",
-          name: "afterDeadline",
-          message: "Spend after deadline? (No = spend before deadline)",
-          default: false,
-          when: afterDeadline === undefined,
-        },
-        {
-          type: "input",
-          name: "providerPubkey",
-          message:
-            "Enter yield-provider x-only public key (64 hex chars, press enter to skip):",
-          when: () => !providerPubkey,
-          validate: (input) => {
-            if (!input) return true;
-            return (
-              /^[0-9a-fA-F]{64}$/.test(input) ||
-              "Must be a 64-character hex string (32-byte x-only pubkey)"
-            );
-          },
-        },
-        {
-          type: "input",
-          name: "subjectId",
-          message: "Enter deposit ID (UUID v4) for Sundial metadata:",
-          when: (answers) => answers.providerPubkey || providerPubkey,
-          validate: (input) => {
-            if (!input)
-              return "Deposit ID is required when provider pubkey is given";
-            return (
-              /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(
-                input,
-              ) || "Must be a valid UUID v4"
-            );
-          },
-        },
-      ]);
+    // --- Step 1: Auto-populate from server whenever --provider-id is given ---
+    if (providerId) {
+      const serverUrl = parentOptions.serverUrl || process.env.BTC_LOCKER_SERVER || "http://localhost:8080";
+      try {
+        console.log(chalk.gray("Fetching claimable deposits..."));
+        const claimable = await getProviderClaimable(providerId, serverUrl);
+        if (!claimable || claimable.length === 0) {
+          console.log(chalk.yellow("⚠️  No claimable deposits found for this provider"));
+          return;
+        }
 
+        let deposit;
+        if (subjectId) {
+          deposit = claimable.find((d) => d.deposit_id === subjectId);
+          if (!deposit) {
+            console.warn(chalk.yellow(`⚠️  Deposit ${subjectId} not found in claimable list`));
+          }
+        } else if (claimable.length === 1) {
+          deposit = claimable[0];
+          console.log(chalk.gray(`Auto-selected deposit: ${deposit.deposit_id}`));
+        } else {
+          const { selectedDepositId } = await inquirer.prompt([{
+            type: "list",
+            name: "selectedDepositId",
+            message: "Select deposit to claim:",
+            choices: claimable.map((d) => ({
+              name: `${d.deposit_id}  (${d.escrow_amount_sats} sats, vault: ${d.program_vault})`,
+              value: d.deposit_id,
+            })),
+          }]);
+          deposit = claimable.find((d) => d.deposit_id === selectedDepositId);
+        }
+
+        if (deposit) {
+          if (!redeemScript && deposit.escrow_script) {
+            redeemScript = deposit.escrow_script;
+            console.log(chalk.gray("Auto-populated redeem script"));
+          }
+          if (!scriptAddress && deposit.program_vault_address) {
+            scriptAddress = deposit.program_vault_address;
+            console.log(chalk.gray(`Auto-populated escrow address: ${scriptAddress}`));
+          }
+          if (!subjectId && deposit.deposit_id) {
+            subjectId = deposit.deposit_id;
+          }
+        }
+      } catch (claimableErr) {
+        console.warn(chalk.yellow(`⚠️  Could not fetch provider-claimable: ${claimableErr.message}`));
+      }
+    }
+
+    // --- Step 2: Extract providerPubkey from escrow script (beforePublicKey = second 33-byte pubkey) ---
+    if (redeemScript && !providerPubkey) {
+      try {
+        const ops = bitcoin.script.decompile(Buffer.from(redeemScript, "hex"));
+        const pubkeys = ops ? ops.filter((op) => Buffer.isBuffer(op) && op.length === 33) : [];
+        if (pubkeys.length >= 2) {
+          providerPubkey = KeyUtils.toXOnly(pubkeys[1].toString("hex"));
+          console.log(chalk.gray(`Auto-extracted provider pubkey: ${providerPubkey}`));
+        }
+      } catch { /* non-fatal */ }
+    }
+
+    // --- Step 3: Prompt for private key first so we can derive the destination address ---
+    if (!privateKey) {
+      const { pk } = await inquirer.prompt([{
+        type: "input",
+        name: "pk",
+        message: "Enter private key (hex):",
+        validate: (input) => ScriptUtils.isValidPrivateKey(input) || "Invalid private key",
+      }]);
+      privateKey = pk;
+    }
+
+    // --- Step 4: Derive destination address from private key ---
+    if (!destinationAddress) {
+      try {
+        const kp = await locker.generateKeyPairFromPrivateKey(privateKey);
+        destinationAddress = kp.address;
+        console.log(chalk.gray(`Auto-derived destination address: ${destinationAddress}`));
+      } catch { /* will be caught by validation below */ }
+    }
+
+    // --- Step 5: Prompt only for fields that are still missing ---
+    const remainingPrompts = [];
+    if (!scriptAddress) {
+      remainingPrompts.push({
+        type: "input",
+        name: "scriptAddress",
+        message: "Enter escrow script address:",
+        validate: (input) => {
+          try { bitcoin.address.toOutputScript(input, locker.network); return true; }
+          catch { return "Invalid Bitcoin address"; }
+        },
+      });
+    }
+    if (!redeemScript) {
+      remainingPrompts.push({
+        type: "input",
+        name: "redeemScript",
+        message: "Enter redeem script (hex):",
+        validate: (input) => /^[0-9a-fA-F]+$/.test(input) || "Invalid hex string",
+      });
+    }
+    if (!destinationAddress) {
+      remainingPrompts.push({
+        type: "input",
+        name: "destinationAddress",
+        message: "Enter destination address:",
+        validate: (input) => {
+          try { bitcoin.address.toOutputScript(input, locker.network); return true; }
+          catch { return "Invalid Bitcoin address"; }
+        },
+      });
+    }
+    // For provider flow, default to before-deadline without asking
+    if (afterDeadline === undefined && !providerId) {
+      remainingPrompts.push({
+        type: "confirm",
+        name: "afterDeadline",
+        message: "Spend after deadline? (No = spend before deadline)",
+        default: false,
+      });
+    }
+    if (!providerPubkey) {
+      remainingPrompts.push({
+        type: "input",
+        name: "providerPubkey",
+        message: "Enter yield-provider x-only public key (64 hex chars, press enter to skip):",
+        validate: (input) => {
+          if (!input) return true;
+          return /^[0-9a-fA-F]{64}$/.test(input) || "Must be a 64-character hex string";
+        },
+      });
+    }
+    if (providerPubkey && !subjectId) {
+      remainingPrompts.push({
+        type: "input",
+        name: "subjectId",
+        message: "Enter deposit ID (UUID v4) for Sundial metadata:",
+        validate: (input) => {
+          if (!input) return "Deposit ID is required when provider pubkey is given";
+          return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(input) || "Must be a valid UUID v4";
+        },
+      });
+    }
+
+    if (remainingPrompts.length > 0) {
+      const answers = await inquirer.prompt(remainingPrompts);
       scriptAddress = scriptAddress || answers.scriptAddress;
       redeemScript = redeemScript || answers.redeemScript;
-      privateKey = privateKey || answers.privateKey;
       destinationAddress = destinationAddress || answers.destinationAddress;
-      afterDeadline =
-        afterDeadline !== undefined ? afterDeadline : answers.afterDeadline;
       providerPubkey = providerPubkey || answers.providerPubkey || undefined;
       subjectId = subjectId || answers.subjectId || undefined;
+      if (afterDeadline === undefined) {
+        afterDeadline = answers.afterDeadline ?? false;
+      }
     }
+
+    // Final default for afterDeadline
+    if (afterDeadline === undefined) afterDeadline = false;
 
     // Build Sundial metadata if provider pubkey and deposit ID are available
     let metadata;
@@ -2310,6 +2556,11 @@ async function handleClaimCommand(cmdOptions, parentOptions) {
                 `   Flags: 0x${metadata.flags.toString(16).padStart(4, "0")}`,
               ),
             );
+        }
+
+        console.log(chalk.gray(`ℹ️  Provider claim is tracked automatically by the indexer.`));
+        if (metadata?.subjectId) {
+          console.log(chalk.gray(`   Poll deposit status: btc-locker backend deposit-status ${metadata.subjectId}`));
         }
 
         if (parentOptions.network === "testnet") {

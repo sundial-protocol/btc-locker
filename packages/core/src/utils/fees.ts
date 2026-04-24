@@ -1,4 +1,4 @@
-import BitcoinAPI, { type ApiProvider } from "../bitcoin-api.js";
+import BitcoinAPI, { type ApiProvider } from "../bitcoin-api/index.js";
 import { type NetworkType, NETWORKS } from "./network.js";
 
 /**

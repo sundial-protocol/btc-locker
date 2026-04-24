@@ -11,6 +11,8 @@ import {
   ValidationUtils,
 } from "../../../utils/index.js";
 import { FeePriorities } from "../../../utils/fees.js";
+import type { NetworkType } from "../../../utils/network.js";
+import { NETWORKS } from "../../../utils/network.js";
 import { TxType } from "../../../utils/metadata.js";
 import type { LockerContext } from "../../core.js";
 
@@ -64,7 +66,12 @@ export async function createDepositTransaction(
   ValidationUtils.assertProtocolFeeParams(feeAddress, protocolFeeAmount);
 
   let inputs: UTXO[];
-  const feeRate = await FeeUtils.queryChainFeeRates(priority);
+  const btcNetwork: NetworkType = ctx.network === bitcoin.networks.testnet ? NETWORKS.testnet : NETWORKS.bitcoin;
+  const feeRate = await FeeUtils.queryChainFeeRates(
+    priority,
+    btcNetwork,
+    ctx.api.apiProvider,
+  );
 
   if (providedInputs) {
     inputs = providedInputs;

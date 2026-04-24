@@ -21,7 +21,7 @@ import {
   Utils,
 } from "./utils/index.js";
 import { BTCLockerError, ValidationError, TimelockError } from "./errors.js";
-import BitcoinAPI from "./bitcoin-api.js";
+import BitcoinAPI from "./bitcoin-api/index.js";
 
 // Export all types and interfaces
 export type {
@@ -76,7 +76,7 @@ export type {
   ApiUTXO,
   FeeEstimates,
   BroadcastResult,
-} from "./bitcoin-api.js";
+} from "./bitcoin-api/index.js";
 
 import { NETWORKS } from "./utils/network.js";
 
