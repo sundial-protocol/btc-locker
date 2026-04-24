@@ -125,6 +125,25 @@ npm run demo
 npm run demo:dev
 ```
 
+## Versioning & Publishing
+
+This repo uses [Changesets](https://github.com/changesets/changesets) to manage versions and changelogs across packages. `@sundial-protocol/btc-locker` and `@sundial-protocol/btc-locker-cli` are **linked** — they always share the same version number. The demo package is excluded from publishing.
+
+### Workflow
+
+```bash
+# 1. After making changes, create a changeset to describe them
+npx changeset
+
+# 2. When ready to release, bump versions and update changelogs
+npm run version
+
+# 3. Build and publish to the registry
+npm run release
+```
+
+`npm run version` runs `changeset version`, which consumes all pending changeset files and updates `package.json` versions and `CHANGELOG.md` files. `npm run release` builds all packages and then runs `changeset publish`.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
