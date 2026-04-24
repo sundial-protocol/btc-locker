@@ -2,23 +2,25 @@
 
 ## BTC Locker
 
-A comprehensive Bitcoin staking library for Sundial Protocol, enabling the creation of various timelock scripts to securely lock Bitcoin funds for yield generation, as well yield calculation and distribution utlities for our yield providers.
+A comprehensive Bitcoin staking library for Sundial Protocol, enabling the creation of various timelock scripts to securely lock Bitcoin funds for yield generation, as well as yield calculation and distribution utilities for our yield providers.
 
-This library has two main interfaces:
+This is a **Turborepo monorepo** containing the following packages under `packages/`:
 
-1. **JavaScript/TypeScript Library (`/src`)**: For integration into web applications, Node.js backends, or any JavaScript/TypeScript environment.
+1. **`packages/core` (`@sundial-protocol/btc-locker`)**: The core TypeScript library for integration into web applications, Node.js backends, or any JavaScript/TypeScript environment.
 
-2. **Command Line Interface (`/bin`)**: A user-friendly CLI tool built in Javascript for interacting with the Javascript library directly from the terminal.
+2. **`packages/cli` (`@sundial-protocol/btc-locker-cli`)**: A user-friendly CLI tool for interacting with the core library directly from the terminal.
+
+3. **`packages/demo` (`@sundial-protocol/btc-locker-demo`)**: A multipurpose demo server used for running interactive documentation locally and demonstrating how to use the library.
+
+4. **`packages/btc-api`**: Bitcoin API integration package.
 
 And several auxiliary tools to help test & demonstrate usage:
 
-1. **Javascript unit tests (`/tests`)**: Vitest unit tests used to verify the correctness & stability of the Javascript Library.
+1. **Vitest unit tests (`packages/core/tests/`)**: Unit tests used to verify the correctness & stability of the core library.
 
-2. **Demo server (`/demo`)**: A multipurpose demo server that is used for validating bundle testing,  running interactive documentation locally, and demonstrating how to use the Javascript library in a browser environment.
+2. **JSDocs (`packages/core/docs/`)**: A .gitignored folder that includes all generated JSDocs. Run `npm run docs` to generate the latest documentation for your local demo.
 
-3. **JSDocs (`/docs`)**: A .gitignored folder that includes all generated JSDocs. Run `npm run docs` to generate the latest documentation for your local demo.
-
-4. **Test Coverage (`/coverage`)**: Another .gitignored folder. If you're looking for a full report on test coverage here is where to go. Run `npm run test:coverage`. 
+3. **Test Coverage (`coverage/`)**: Another .gitignored folder. If you're looking for a full report on test coverage here is where to go. Run `npm run test:coverage`.
 
 ## Features
 
@@ -71,27 +73,27 @@ console.log("Funds locked until:", new Date(locktime * 1000));
 
 ## Architecture
 
-The library is organized into standalone per-file functions grouped under `src/locker/scripts/` and `src/locker/transactions/`, with thin facade classes (`ScriptManager`, `SundialTransactionManager`) that can be used independently or through the combined `BTCLocker` class.
+The core library (`packages/core`) is organized into standalone per-file functions grouped under `src/locker/scripts/` and `src/locker/transactions/`, with thin facade classes (`ScriptManager`, `SundialTransactionManager`) that can be used independently or through the combined `BTCLocker` class.
 
-See [src/locker/README.md](src/locker/README.md) for a full breakdown of the internal structure, the `LockerContext` pattern, and examples of using individual managers or standalone functions directly.
+See [packages/core/src/locker/README.md](packages/core/src/locker/README.md) for a full breakdown of the internal structure, the `LockerContext` pattern, and examples of using individual managers or standalone functions directly.
 
 ## API Documentation
 
-Detailed API documentation is available in the [Docs Directory](docs/). You can generate the latest docs by running:
+Detailed API documentation is available in the [Docs Directory](packages/core/docs/). You can generate the latest docs by running:
 
 ```bash
 npm run docs
 ```
 
-You can also run a documentation server for them at `http://localhost:3000/docs` with:
+You can also run the demo server at `http://localhost:3000` with:
 
 ```bash
-npm start
+npm run demo
 ```
 
 ## Command Line Interface (CLI)
 
-The package includes a CLI tool for interacting with the same endpoints exposed in the JS library.
+The package includes a CLI tool (`packages/cli`) for interacting with the same endpoints exposed in the core library.
 
 More details can be found in the [CLI Documentation](CLI.md), including a full E2E walkthrough of a staking flow.
 
@@ -107,7 +109,7 @@ npm test
 # Install dependencies
 npm install
 
-# Build for browser
+# Build all packages
 npm run build
 
 # Run linting
@@ -116,8 +118,11 @@ npm run lint
 # Generate documentation
 npm run docs
 
-# Run documentation server / browser tests
-npm start
+# Run demo server
+npm run demo
+
+# Run demo server in watch mode
+npm run demo:dev
 ```
 
 ## Contributing
