@@ -12,10 +12,6 @@ This is a **Turborepo monorepo** containing the following packages under `packag
 
 3. **`packages/demo` (`@sundial-protocol/btc-locker-demo`)**: A multipurpose demo server used for running interactive documentation locally and demonstrating how to use the library.
 
-4. **`packages/btc-api`**: Bitcoin API integration package.
-
-And several auxiliary tools to help test & demonstrate usage:
-
 1. **Vitest unit tests (`packages/core/tests/`)**: Unit tests used to verify the correctness & stability of the core library.
 
 2. **JSDocs (`packages/core/docs/`)**: A .gitignored folder that includes all generated JSDocs. Run `npm run docs` to generate the latest documentation for your local demo.

@@ -83,16 +83,22 @@ import { NETWORKS } from "./utils/network.js";
 /**
  * Factory function to create an initialized BTCLocker instance
  * @param network - Network ('bitcoin', 'testnet', 'regtest')
+ * @param api - Optional pre-configured BitcoinAPI instance
  * @returns Initialized BTCLocker instance
  * @example
  * // Using string network name
  * const locker = await createBTCLocker('testnet');
+ *
+ * // With a custom API instance
+ * const api = new BitcoinAPI('testnet', 'mempool');
+ * const locker = await createBTCLocker('testnet', api);
  */
 export async function createBTCLocker(
   network: string = "testnet",
+  api?: BitcoinAPI,
 ): Promise<BTCLocker> {
   const networkType = NETWORKS[network] || NETWORKS.testnet;
-  const locker = new BTCLocker(networkType);
+  const locker = new BTCLocker(networkType, api);
   await locker.init();
   return locker;
 }

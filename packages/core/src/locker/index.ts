@@ -41,7 +41,7 @@ export class BTCLocker extends BTCLockerCore {
   public readonly transactionManager: TransactionManager;
   public readonly scriptManager: ScriptManager;
 
-  constructor(network?: NetworkType | string) {
+  constructor(network?: NetworkType | string, api?: BitcoinAPI) {
     if (typeof network === "string" && NETWORKS[network]) {
       network = NETWORKS[network];
     } else if (!network) {
@@ -52,7 +52,7 @@ export class BTCLocker extends BTCLockerCore {
       throw new Error(`Unknown network: ${network}`);
     }
 
-    super(network);
+    super(network, api);
 
     // Initialize component instances with the converted network object from parent
     this.keyPairGenerator = new KeyPairGenerator(network);

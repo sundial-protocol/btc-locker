@@ -2,18 +2,20 @@
  * Shared utilities for CLI commands
  */
 
-import * as bitcoin from "bitcoinjs-lib";
 import chalk from "chalk";
-import { createBTCLocker } from "@sundial-protocol/btc-locker";
+import { createBTCLocker, BitcoinAPI, NETWORKS } from "@sundial-protocol/btc-locker";
 
 /**
  * Initialize BTCLocker instance based on network option
+ * @param {object} options
  */
 export async function initLocker(options) {
   // Convert 'mainnet' to 'bitcoin' for consistency with NetworkType names
   const networkName =
     options.network === "mainnet" ? "bitcoin" : options.network;
-  return await createBTCLocker(networkName);
+  const networkType = NETWORKS[networkName] || NETWORKS.testnet;
+  const api = new BitcoinAPI(networkType);
+  return await createBTCLocker(networkName, api);
 }
 
 /**
