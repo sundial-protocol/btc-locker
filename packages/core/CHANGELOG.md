@@ -1,5 +1,11 @@
 # @sundial-protocol/btc-locker
 
+## 2.0.4
+
+### Patch Changes
+
+- set api in Locker
+
 ## 2.0.3
 
 ### Patch Changes
