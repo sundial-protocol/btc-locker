@@ -127,7 +127,7 @@ export async function createClaimTransaction(
       },
     });
 
-    const feeRate = await FeeUtils.queryChainFeeRates(priority);
+    const feeRate = await FeeUtils.queryChainFeeRates(priority, ctx.api.networkType, ctx.api.provider);
     const estimatedFee = FeeUtils.estimateFee(1, 1, feeRate);
     const outputAmount = amount - estimatedFee;
 

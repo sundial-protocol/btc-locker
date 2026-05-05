@@ -64,7 +64,7 @@ export async function createDepositTransaction(
   ValidationUtils.assertProtocolFeeParams(feeAddress, protocolFeeAmount);
 
   let inputs: UTXO[];
-  const feeRate = await FeeUtils.queryChainFeeRates(priority);
+  const feeRate = await FeeUtils.queryChainFeeRates(priority, ctx.api.networkType, ctx.api.provider);
 
   if (providedInputs) {
     inputs = providedInputs;

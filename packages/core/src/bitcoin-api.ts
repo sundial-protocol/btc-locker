@@ -58,6 +58,14 @@ export interface BroadcastResult {
 export default class BitcoinAPI {
   private network: NetworkType;
   private apiProvider: ApiProvider;
+
+  get provider(): ApiProvider {
+    return this.apiProvider;
+  }
+
+  get networkType(): NetworkType {
+    return this.network;
+  }
   private baseUrls: ApiUrls;
   private baseUrl: string;
 
