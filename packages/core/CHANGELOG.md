@@ -1,5 +1,11 @@
 # @sundial-protocol/btc-locker
 
+## 2.0.5
+
+### Patch Changes
+
+- select api for fee query
+
 ## 2.0.4
 
 ### Patch Changes
