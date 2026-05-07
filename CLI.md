@@ -14,7 +14,7 @@
    - https://bitcoinfaucet.uo1.net/
    - https://testnet-faucet.mempool.co/
 
-### Complete Testnet Workflow
+### Setting up a testnet wallet
 
 1. **Generate a new key pair:**
 
@@ -32,26 +32,6 @@ btc-locker keygen
 
 ```bash
 btc-locker inspect address -a YOUR_ADDRESS
-```
-
-4. **Create a timelock script:**
-
-```bash
-# Lock for 1 hour from now
-FUTURE_TIME=$(node -e "console.log(Math.floor(Date.now()/1000) + 3600)")
-btc-locker timelock --time $FUTURE_TIME --pubkey YOUR_PUBLIC_KEY
-# Save the script address!
-```
-
-5. **Send coins to timelock script:**
-   - Use any Bitcoin wallet to send testnet coins to the script address
-   - Or use a testnet faucet with the script address
-
-6. **Monitor the timelock:**
-
-```bash
-btc-locker inspect time -t $FUTURE_TIME
-btc-locker inspect address -a SCRIPT_ADDRESS
 ```
 
 ## Installation
@@ -84,69 +64,12 @@ btc-locker --version
 npm run cli
 ```
 
-## Key Generation
+### Connecting to a Custom API Server
 
-```bash
-# Testnet (default)
-btc-locker keygen
+Users can configure BTC_LOCKER_SERVER via:
 
-# Mainnet
-btc-locker --network mainnet keygen
+1. Environment variable — set before running the CLI
+2. --server-url flag — passed at runtime
+3. .env in their cwd — optional convenience
 
-# JSON output
-btc-locker --json keygen
-```
-
-## Create Timelock Scripts
-
-### Simple Timelock
-
-```bash
-# Using Unix timestamp
-btc-locker scripts timelock --time 1765064511 --pubkey 02eb121c6fc425e894a936c87367c3f1871170af9e131cc2aa598d6ae4ee4a1cbe
-
-# Using relative time (requires interactive input due to PowerShell parsing)
-btc-locker scripts timelock
-# Then enter: "1 week" when prompted
-```
-
-## Utilities
-
-```bash
-# Check if timelock expired
-btc-locker inspect time -t 1765064511
-
-# Validate keys
-btc-locker utils validate-key 02eb121c6fc425e894a936c87367c3f1871170af9e131cc2aa598d6ae4ee4a1cbe
-
-# Convert time formats
-btc-locker utils time 1765064511
-```
-
-## Interactive Mode
-
-```bash
-btc-locker interactive
-```
-
-## Real-World Example
-
-1. Generate a key pair:
-
-```bash
-KEY_DATA=$(btc-locker --json keygen)
-PUBKEY=$(echo $KEY_DATA | jq -r .publicKey)
-```
-
-2. Create a 1-week timelock:
-
-```bash
-FUTURE_TIME=$(($(date +%s) + 604800))  # Current time + 1 week
-btc-locker timelock --time $FUTURE_TIME --pubkey $PUBKEY
-```
-
-3. Check status later:
-
-```bash
-btc-locker check --time $FUTURE_TIME
-```
+The default "https://api.testnet.sundialprotocol.com" in the --server-url option also serves as a fallback if nothing is set.

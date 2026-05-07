@@ -128,7 +128,7 @@ program
   .option(
     "--server-url <url>",
     "Sundial API server URL (overrides BTC_LOCKER_SERVER env var)",
-    process.env.BTC_LOCKER_SERVER || "http://localhost:8080"
+    process.env.BTC_LOCKER_SERVER || "https://api.testnet.sundialprotocol.com"
   );
 
 // Setup command groups
