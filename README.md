@@ -1,5 +1,38 @@
 ![](readme-header.jpg)
 
+<table>
+  <tr>
+    <td>
+      <!-- badge:build:start -->
+<img alt="Build" src="https://img.shields.io/badge/build-passing-brightgreen?style=flat-square" />
+<!-- badge:build:end -->
+    </td>
+    <td>
+      <!-- badge:type-check:start -->
+<img alt="Type Check" src="https://img.shields.io/badge/type%20check-passing-brightgreen?style=flat-square" />
+<!-- badge:type-check:end -->
+    </td>
+    <td>
+      <!-- badge:lint:start -->
+<img alt="Lint" src="https://img.shields.io/badge/lint-passing-brightgreen?style=flat-square" />
+<!-- badge:lint:end -->
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <!-- badge:tests:start -->
+<img alt="Tests" src="https://img.shields.io/badge/tests-passing-brightgreen?style=flat-square" />
+<!-- badge:tests:end -->
+    </td>
+    <td>
+      <!-- badge:coverage:start -->
+<img alt="Coverage" src="https://img.shields.io/badge/coverage-88.9%25-yellowgreen?style=flat-square" />
+<!-- badge:coverage:end -->
+    </td>
+    <td>&nbsp;</td>
+  </tr>
+</table>
+
 ## BTC Locker
 
 A comprehensive Bitcoin staking library for Sundial Protocol, enabling the creation of various timelock scripts to securely lock Bitcoin funds for yield generation, as well as yield calculation and distribution utilities for our yield providers.

@@ -6,11 +6,11 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "test:coverage": "turbo run test:coverage",
-    "lint": "turbo run lint",
-    "type-check": "turbo run type-check",
+    "build": "node scripts/readme/run-badged-command.mjs build \"turbo run build\"",
+    "test": "node scripts/readme/run-badged-command.mjs tests \"turbo run test\"",
+    "test:coverage": "node scripts/readme/run-badged-command.mjs coverage \"turbo run test:coverage\"",
+    "lint": "node scripts/readme/run-badged-command.mjs lint \"turbo run lint\"",
+    "type-check": "node scripts/readme/run-badged-command.mjs type-check \"turbo run type-check\"",
     "cli": "npm run start --workspace=packages/cli",
     "cli-link": "npm link --workspace=packages/cli",
     "docs": "npm run docs --workspace=packages/core",
@@ -18,7 +18,7 @@
     "demo:dev": "npm run dev --workspace=packages/demo",
     "version": "changeset version",
     "release": "npm run build && changeset publish",
-    "test-all": "npm run type-check && npm run lint && npm run build && npm run test"
+    "test-all": "npm run type-check && npm run lint && npm run build && npm run test:coverage"
   },
   "devDependencies": {
     "@changesets/cli": "^2.30.0",
