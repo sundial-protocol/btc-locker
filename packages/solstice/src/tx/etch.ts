@@ -16,8 +16,7 @@ import {
   TransactionUtils,
   type UTXO,
 } from "@sundial-protocol/btc-locker";
-import type { ReceiptRune } from "../receipt/receipt-rune.js";
-import { receiptEtching } from "../receipt/receipt-rune.js";
+import { receiptEtching, type ReceiptRune } from "../receipt/receipt-rune.js";
 import type { RunestoneCodec } from "../runes/codec.js";
 import { nativeRunestoneCodec } from "../runes/native-codec.js";
 import { encipherGuarded } from "../runes/guard.js";

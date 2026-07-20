@@ -13,7 +13,7 @@ const codec = new NativeRunestoneCodec();
 describe("NativeRunestoneCodec", () => {
   test("enciphered script begins OP_RETURN OP_13", () => {
     const script = codec.encipher({ edicts: [{ id: { block: 1n, tx: 1n }, amount: 5n, output: 0 }] });
-    const chunks = bitcoin.script.decompile(script)!;
+    const chunks = bitcoin.script.decompile(script) ?? [];
     expect(chunks[0]).toBe(bitcoin.opcodes.OP_RETURN);
     expect(chunks[1]).toBe(RUNESTONE_MAGIC);
   });

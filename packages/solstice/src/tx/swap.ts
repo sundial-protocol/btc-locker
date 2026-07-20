@@ -23,8 +23,11 @@ import {
   TransactionUtils,
   type UTXO,
 } from "@sundial-protocol/btc-locker";
-import type { ReceiptRune } from "../receipt/receipt-rune.js";
-import { receiptEdict, requireEtched } from "../receipt/receipt-rune.js";
+import {
+  receiptEdict,
+  requireEtched,
+  type ReceiptRune,
+} from "../receipt/receipt-rune.js";
 import type { RunestoneCodec } from "../runes/codec.js";
 import { nativeRunestoneCodec } from "../runes/native-codec.js";
 import { encipherGuarded } from "../runes/guard.js";
@@ -125,8 +128,9 @@ export function buildSwapTransaction(params: SwapParams): SwapResult {
   // ── Output indices (fixed order) ───────────────────────────────────────────
   const idxRtRecipient = 0;
   const idxRtChange = hasRuneChange ? 1 : -1;
-  const idxBtcRecipient = hasRuneChange ? 2 : 1;
-  // runestone follows the BTC recipient; BTC change (if any) comes after it.
+  // BTC recipient follows the rune outputs; the runestone follows the BTC
+  // recipient; BTC change (if any) comes last. Those outputs are appended in
+  // order below, so their indices are implicit.
 
   // Unallocated runes (the change) follow the pointer; the edict delivers the
   // requested amount to the recipient output.
