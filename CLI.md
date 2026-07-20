@@ -166,8 +166,8 @@ elsewhere).
 # Dry run first — builds + prints the PSBT and runestone, broadcasts nothing
 btc-locker solstice etch \
   --from-key YOUR_PRIVATE_KEY \
-  --name SUNDIALQBTC \
-  --ticker qBTC \
+  --name EXAMPLERUNE \
+  --ticker RT \
   --supply 2100000000000000 \
   --divisibility 8 \
   --symbol q \

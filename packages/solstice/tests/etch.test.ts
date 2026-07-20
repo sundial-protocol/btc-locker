@@ -7,11 +7,11 @@ import type { ReceiptRune } from "../src/receipt/receipt-rune";
 import { NETWORK, p2wpkh, txid } from "./helpers";
 
 const rune: ReceiptRune = {
-  name: "SUNDIALQBTC",
-  displayTicker: "qBTC",
+  name: "EXAMPLERUNE",
+  displayTicker: "RT",
   id: { block: 840000n, tx: 7n },
   divisibility: 8,
-  symbol: 0x71,
+  symbol: 0x24,
   totalSupply: 2_100_000_000_000_000n,
 };
 
@@ -39,7 +39,7 @@ describe("buildEtchTransaction (C0)", () => {
     // Runestone decodes to the etching with the full premine and pointer 0.
     const decoded = nativeRunestoneCodec.decipher(Buffer.from(res.runestoneScriptHex, "hex"));
     expect(decoded.cenotaph).toBe(false);
-    expect(decoded.runestone.etching?.rune).toBe(runeNameToNumber("SUNDIALQBTC"));
+    expect(decoded.runestone.etching?.rune).toBe(runeNameToNumber("EXAMPLERUNE"));
     expect(decoded.runestone.etching?.premine).toBe(rune.totalSupply);
     expect(decoded.runestone.pointer).toBe(0);
 

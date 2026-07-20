@@ -15,14 +15,14 @@ describe("rune name codec (modified base-26)", () => {
   });
 
   test("round-trips real Solstice instance names", () => {
-    for (const name of ["SOLSTICERECEIPT", "SUNDIALQBTC", "A", "Z", "ZZZZZZZZ"]) {
+    for (const name of ["SOLSTICERECEIPT", "EXAMPLERUNE", "A", "Z", "ZZZZZZZZ"]) {
       expect(numberToRuneName(runeNameToNumber(name))).toBe(name);
     }
   });
 
   test("rejects non A–Z input", () => {
     expect(() => runeNameToNumber("")).toThrow(/empty/);
-    expect(() => runeNameToNumber("qbtc")).toThrow(/A–Z/);
+    expect(() => runeNameToNumber("example")).toThrow(/A–Z/);
     expect(() => runeNameToNumber("AB1")).toThrow(/A–Z/);
   });
 });

@@ -21,9 +21,9 @@ describe("NativeRunestoneCodec", () => {
   test("round-trips a full etching", () => {
     const runestone: Runestone = {
       etching: {
-        rune: runeNameToNumber("SUNDIALQBTC"),
+        rune: runeNameToNumber("EXAMPLERUNE"),
         divisibility: 8,
-        symbol: 0x71, // 'q'
+        symbol: 0x24, // '$'
         spacers: 0,
         premine: 2_100_000_000_000_000n,
         turbo: true,

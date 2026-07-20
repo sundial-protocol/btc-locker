@@ -116,7 +116,7 @@ export function setupSolsticeCommands(program) {
     .option("--name <RUNENAME>", "Rune name, A–Z only (no spacers)")
     .option("--supply <int>", "Total premined supply (integer, base units)")
     .option("--vault <address>", "Vault address to hold the premine (default: from-key address)")
-    .option("--ticker <ticker>", "Display ticker (UX only), e.g. qBTC")
+    .option("--ticker <ticker>", "Display ticker (UX only), e.g. RT")
     .option("--symbol <char>", "Single display glyph")
     .option("--divisibility <n>", "Decimal places (0–38)", "8")
     .option("--vault-value <sats>", "Sats attached to the vault output", "546")
@@ -209,7 +209,7 @@ async function handleEtch(cmd, parentOptions) {
         {
           type: "input",
           name: "ticker",
-          message: "Display ticker (optional, e.g. qBTC):",
+          message: "Display ticker (optional, e.g. RT):",
           when: () => !ticker,
         },
         {

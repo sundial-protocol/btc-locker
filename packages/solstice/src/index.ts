@@ -13,8 +13,8 @@
  *   • Cenotaph guard (Runes record) → {@link encipherGuarded}
  *
  * Multi-instance: every builder is parameterized by a {@link ReceiptRune}, so one
- * code path serves every YP instance (Caladan `SOLSTICE•RECEIPT`, the 3iQ fund
- * `qBTC`, …). YP type (BTC-returning vs asset-backed) does not reach this layer —
+ * code path serves every YP instance (each brands its own receipt Rune). YP type
+ * (BTC-returning vs asset-backed) does not reach this layer —
  * it only changes the BTC deployment destination, which is a plain parameter.
  */
 

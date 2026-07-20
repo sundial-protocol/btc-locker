@@ -17,7 +17,7 @@ btc-locker does not have: a Runes receipt token and an atomic BTC⇄RT swap.
 | Generic swap | `buildSwapTransaction` | The single builder behind both C1 and C2. |
 | Cenotaph guard | `encipherGuarded` | Round-trips every runestone before signing (Runes decision record requirement). |
 | Runestone codec | `RunestoneCodec` / `NativeRunestoneCodec` | Pluggable; native reference impl included. |
-| Receipt rune (per-instance) | `ReceiptRune` | One per Solstice instance (Caladan `SOLSTICE•RECEIPT`, 3iQ fund `qBTC`, …). |
+| Receipt rune (per-instance) | `ReceiptRune` | One per Solstice instance; each brands its own receipt Rune. |
 
 ## Design decisions
 
@@ -29,7 +29,7 @@ transaction shape — move BTC one way and receipt tokens the other, atomically.
 deployment destination, which is a plain address parameter.
 
 **Multi-instance by construction.** Every builder takes a `ReceiptRune`, so a
-single code path serves every instance. Nothing here is Caladan- or qBTC-specific.
+single code path serves every instance. Nothing here is instance-specific.
 
 **Pluggable runestone codec.** The Runes decision record leaves the production
 encode/decode library an open item (security review of
@@ -49,18 +49,18 @@ import {
   type ReceiptRune,
 } from "@sundial-protocol/solstice";
 
-const qbtc: ReceiptRune = {
-  name: "SUNDIALQBTC",          // on-chain A–Z name (no spacers)
-  displayTicker: "qBTC",        // UX only
+const exampleRune: ReceiptRune = {
+  name: "EXAMPLERUNE",          // on-chain A–Z name (no spacers)
+  displayTicker: "RT",          // UX only
   divisibility: 8,
-  symbol: 0x71,
+  symbol: 0x24,
   totalSupply: 2_100_000_000_000_000n,
   // `id` is assigned by the C0 etch and frozen thereafter.
 };
 
 // C0 — etch (premine → Vault)
 const etch = buildEtchTransaction({
-  rune: qbtc,
+  rune: exampleRune,
   vaultAddress,
   inputs: fundingUtxos,
   changeAddress,
@@ -69,11 +69,11 @@ const etch = buildEtchTransaction({
 });
 // → sign with the Vault admin/multisig signer (btc-locker), then broadcast.
 
-// After the etch confirms, set qbtc.id = { block, tx } from the etching tx.
+// After the etch confirms, set exampleRune.id = { block, tx } from the etching tx.
 
 // C1 — invest (priced by the caller: rtAmount = BTC / ClaimRatio)
 const invest = buildInvestTransaction({
-  rune: { ...qbtc, id: etchedId },
+  rune: { ...exampleRune, id: etchedId },
   vaultRtInputs, rtAmount, investorRtAddress, vaultRtChangeAddress,
   investorBtcInputs, btcAmount, ypDeploymentAddress, investorBtcChangeAddress,
   feeRate, network: bitcoin.networks.bitcoin,
@@ -81,7 +81,7 @@ const invest = buildInvestTransaction({
 
 // C2 — withdraw (priced by the caller: btcAmount = RT × ClaimRatio − fees)
 const withdraw = buildWithdrawTransaction({
-  rune: { ...qbtc, id: etchedId },
+  rune: { ...exampleRune, id: etchedId },
   userRtInputs, rtAmount, vaultRtAddress, userRtChangeAddress,
   bufferBtcInputs, btcAmount, userBtcAddress, bufferBtcChangeAddress,
   feeRate, network: bitcoin.networks.bitcoin,

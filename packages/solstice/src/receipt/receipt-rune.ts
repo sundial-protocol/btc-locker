@@ -3,8 +3,8 @@
  * fixed-supply Rune, fully premined into the Receipt Vault at launch.
  *
  * Solstice is a multi-instance engine: every instance brands its own receipt Rune
- * (e.g. `SOLSTICE•RECEIPT` for the Caladan instance, `SUNDIAL•QBTC` / display
- * ticker `qBTC` for the 3iQ Bitcoin Fund instance). All builders in this package
+ * (each instance brands its own receipt Rune, e.g. `EXAMPLE•RUNE`). All builders
+ * in this package
  * are parameterized by a `ReceiptRune`; nothing here is instance-specific, which
  * is what lets one code path serve every YP instance.
  *
@@ -18,9 +18,9 @@ import type { RuneId } from "../runes/rune-id.js";
 import type { Edict, Etching } from "../runes/types.js";
 
 export interface ReceiptRune {
-  /** On-chain rune name (A–Z, no spacers), e.g. `"SUNDIALQBTC"`. */
+  /** On-chain rune name (A–Z, no spacers), e.g. `"EXAMPLERUNE"`. */
   name: string;
-  /** Human display ticker, e.g. `"qBTC"` or `"RT"` — UX only, not on-chain. */
+  /** Human display ticker, e.g. `"RT"` — UX only, not on-chain. */
   displayTicker: string;
   /**
    * Rune id (`block:tx`) assigned at etch time (C0) and then frozen. Undefined

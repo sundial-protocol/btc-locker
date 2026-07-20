@@ -10,11 +10,11 @@ import type { RuneUtxo } from "../src/tx/types";
 import { NETWORK, p2wpkh, txid } from "./helpers";
 
 const rune: ReceiptRune = {
-  name: "SUNDIALQBTC",
-  displayTicker: "qBTC",
+  name: "EXAMPLERUNE",
+  displayTicker: "RT",
   id: { block: 840000n, tx: 7n },
   divisibility: 8,
-  symbol: 0x71,
+  symbol: 0x24,
   totalSupply: 2_100_000_000_000_000n,
 };
 
