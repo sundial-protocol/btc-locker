@@ -205,7 +205,7 @@ export class BTCLockerCore {
         const witnessScript = input.witnessScript;
 
         // Find the key whose public key appears in this input's witnessScript
-        let keyPair = keyPairs[0]; // safe default
+        let keyPair = keyPairs[i] || keyPairs[0];
         if (witnessScript) {
           const matchedKey = keyPairs.find((kp) =>
             Buffer.from(witnessScript).includes(kp.publicKey),

@@ -159,8 +159,16 @@ export default class FeeUtils {
         default:
           return result.medium;
       }
-    } catch (error) {
-      throw new Error(`Failed to query fee rates: ${(error as Error).message}`);
+    } catch {
+      switch (priority) {
+        case FeePriorities.HIGH:
+          return 20;
+        case FeePriorities.LOW:
+          return 5;
+        case FeePriorities.MEDIUM:
+        default:
+          return 10;
+      }
     }
   }
 }
