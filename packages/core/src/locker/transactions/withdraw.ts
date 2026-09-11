@@ -54,11 +54,17 @@ export async function createWithdrawalTransaction(
     destination,
     priority = FeePriorities.MEDIUM,
     feeAddress,
-    protocolFeeAmount,
     metadata,
   } = params;
 
-  ValidationUtils.assertProtocolFeeParams(feeAddress, protocolFeeAmount);
+  ValidationUtils.assertProtocolFeeParams(feeAddress, params.protocolFeeAmount);
+  const protocolFeeAmount =
+    params.protocolFeeAmount != null
+      ? ValidationUtils.validateAmount(
+          params.protocolFeeAmount,
+          "protocolFeeAmount",
+        )
+      : 0;
 
   let maxLocktime = 0;
   const currentTime = Math.floor(Date.now() / 1000);
