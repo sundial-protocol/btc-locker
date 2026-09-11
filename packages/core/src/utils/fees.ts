@@ -28,6 +28,18 @@ export default class FeeUtils {
   static readonly DEFAULT_FEE = 1000;
 
   /**
+   * Fallback chain fee rates (sat/vB) used when a fee estimation API is unavailable.
+   * Shared so all fallbacks (core and consumers) stay in sync.
+   */
+  static readonly DEFAULT_CHAIN_FEE_RATES = {
+    fastestFee: 20,
+    halfHourFee: 15,
+    hourFee: 10,
+    economyFee: 5,
+    minimumFee: 1,
+  };
+
+  /**
    * Assert that an amount is above the dust threshold
    * @param amount - Amount in satoshis
    * @param label - Human-readable label for the amount (e.g. "Escrow amount")
@@ -128,7 +140,7 @@ export default class FeeUtils {
       result.high =
         feeEstimates[1] || feeEstimates[2] || blockTargets[0]
           ? feeEstimates[blockTargets[0]]
-          : 20;
+          : this.DEFAULT_CHAIN_FEE_RATES.fastestFee;
 
       // Medium priority: 3-6 blocks
       const mediumTarget = blockTargets.find(
@@ -162,12 +174,12 @@ export default class FeeUtils {
     } catch {
       switch (priority) {
         case FeePriorities.HIGH:
-          return 20;
+          return this.DEFAULT_CHAIN_FEE_RATES.fastestFee;
         case FeePriorities.LOW:
-          return 5;
+          return this.DEFAULT_CHAIN_FEE_RATES.economyFee;
         case FeePriorities.MEDIUM:
         default:
-          return 10;
+          return this.DEFAULT_CHAIN_FEE_RATES.hourFee;
       }
     }
   }

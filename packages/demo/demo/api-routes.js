@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 
 // Import the BTC Locker library with proper fallback
 let BTCLocker;
+let FeeUtils;
 
 async function loadBTCLocker() {
   try {
@@ -16,6 +17,7 @@ async function loadBTCLocker() {
     const srcModule = await import("@sundial-protocol/btc-locker");
     BTCLocker =
       srcModule.BTCLocker || srcModule.default?.BTCLocker || srcModule.default;
+    FeeUtils = srcModule.FeeUtils || srcModule.default?.FeeUtils;
   } catch (error) {
     try {
       // Fallback to CommonJS version
@@ -24,6 +26,7 @@ async function loadBTCLocker() {
       const bundle = require("@sundial-protocol/btc-locker");
       BTCLocker =
         bundle.BTCLocker || bundle.default?.BTCLocker || bundle.default;
+      FeeUtils = bundle.FeeUtils || bundle.default?.FeeUtils;
     } catch (srcError) {
       console.error("Failed to load BTCLocker:", srcError);
       throw new Error("Could not load BTCLocker module");
@@ -1621,13 +1624,7 @@ router.get(
         feeEstimates = await locker.api.getFeeEstimates();
       } catch (error) {
         // Fallback to default estimates if API fails
-        feeEstimates = {
-          fastestFee: 20,
-          halfHourFee: 15,
-          hourFee: 10,
-          economyFee: 5,
-          minimumFee: 1,
-        };
+        feeEstimates = FeeUtils.DEFAULT_CHAIN_FEE_RATES;
       }
 
       res.json({
