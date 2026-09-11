@@ -13,7 +13,7 @@
     "type-check": "node scripts/readme/run-badged-command.mjs type-check \"turbo run type-check\"",
     "cli": "npm run start --workspace=packages/cli",
     "cli-link": "npm link --workspace=packages/cli",
-    "docs": "npm run docs --workspace=packages/core",
+    "docs": "typedoc",
     "demo": "npm run start --workspace=packages/demo",
     "demo:dev": "npm run dev --workspace=packages/demo",
     "version": "changeset version",
@@ -27,6 +27,7 @@
     "@typescript-eslint/parser": "^8.56.1",
     "eslint": "^10.0.2",
     "turbo": "^2.0.0",
+    "typedoc": "^0.25.0",
     "typescript": "^5.3.0"
   },
   "engines": {
