@@ -59,7 +59,7 @@
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "type-check": "tsc --noEmit",
-    "docs": "typedoc --tsconfig tsconfig.docs.json src/index.ts",
+    "docs": "typedoc",
     "example": "node examples/basic-usage.js"
   },
   "keywords": [

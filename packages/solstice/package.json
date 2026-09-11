@@ -1,0 +1,54 @@
+{
+  "name": "@sundial-protocol/solstice",
+  "version": "0.0.1",
+  "description": "Solstice receipt-token (Runes) + atomic-swap layer for the Solstice value-accrual vault. Reuses @sundial-protocol/btc-locker script/PSBT/signing primitives.",
+  "main": "dist/cjs/index.js",
+  "types": "dist/cjs/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.build.json --module commonjs --outDir dist/cjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "bitcoin",
+    "runes",
+    "runestone",
+    "solstice",
+    "receipt-token",
+    "atomic-swap"
+  ],
+  "author": "Sundial Protocol",
+  "license": "MIT",
+  "dependencies": {
+    "@sundial-protocol/btc-locker": "*",
+    "bitcoinjs-lib": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "typescript": "^5.3.0",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

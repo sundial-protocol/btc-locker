@@ -150,3 +150,73 @@ btc-locker timelock --time $FUTURE_TIME --pubkey $PUBKEY
 ```bash
 btc-locker check --time $FUTURE_TIME
 ```
+
+## Solstice (Runes receipt token)
+
+Commands for the Solstice value-accrual vault's receipt-token + atomic-swap layer
+(`@sundial-protocol/solstice`). Testnet by default.
+
+### Etch a receipt rune (C0)
+
+Premines the full fixed supply into a vault address. The signer of `--from-key`
+funds the transaction and receives the premine (or pass `--vault` to send it
+elsewhere).
+
+```bash
+# Dry run first — builds + prints the PSBT and runestone, broadcasts nothing
+btc-locker solstice etch \
+  --from-key YOUR_PRIVATE_KEY \
+  --name EXAMPLERUNE \
+  --ticker RT \
+  --supply 2100000000000000 \
+  --divisibility 8 \
+  --symbol q \
+  --dry-run
+
+# Drop --dry-run to sign and broadcast (asks for confirmation)
+```
+
+Rune names are `A–Z` only (no spacers). After the etch confirms, its **rune id**
+is `<blockHeight>:<txIndexInBlock>` — read it from a Runes explorer and pass it to
+`solstice swap --rune-id`.
+
+### Atomic swap — invest (C1) / withdraw (C2)
+
+One builder handles both directions; roles are just which side supplies RT vs BTC.
+Because rune balances need an indexer to read, you pass the rune-carrying UTXO(s)
+explicitly as `txid:vout:value:runeAmount`.
+
+```bash
+# Invest: RT Vault→investor, BTC investor→YP
+btc-locker solstice swap \
+  --rune-id 840000:1 \
+  --rt-utxo <vaultRtTxid>:0:1000:1000000 \
+  --rt-amount 400000 \
+  --rt-to <investorAddress> \
+  --rt-change <vaultAddress> \
+  --rt-key VAULT_PRIVATE_KEY \
+  --btc-utxo <investorBtcTxid>:1:100000 \
+  --btc-amount 90000 \
+  --btc-to <ypDeploymentAddress> \
+  --btc-change <investorAddress> \
+  --btc-key INVESTOR_PRIVATE_KEY \
+  --dry-run
+```
+
+For withdrawal, swap the roles: RT comes from the user, BTC comes from the Buffer.
+Provide `--rt-owner` / `--btc-owner` (instead of the keys) to build an unsigned
+PSBT for a counterparty to co-sign — the server-submit model. Drop `--dry-run` to
+sign (with the provided keys) and broadcast.
+
+### Decode a runestone
+
+Inspect any runestone `OP_RETURN` scriptPubKey and check whether it is a cenotaph:
+
+```bash
+btc-locker solstice decode -s 6a5d0b160100c0a2330180b51800
+```
+
+### JSON output
+
+All three support the global `--json` flag for machine-readable output, e.g.
+`btc-locker --json solstice decode -s <hex>`.
