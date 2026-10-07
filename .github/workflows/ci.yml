@@ -38,3 +38,41 @@ jobs:
 
       - name: Build project
         run: npm run build
+
+  # Builds the Solstice transactions, broadcasts them on a local bitcoind regtest
+  # and checks what ord (the Runes reference indexer) reports. Kept out of the
+  # matrix above: it does not depend on the Node version, so it runs once.
+  regtest:
+    name: Solstice regtest (bitcoind + ord)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm i
+
+      # The suite imports the built core and solstice packages.
+      - name: Build solstice and what it depends on
+        run: npx turbo run build --filter=@sundial-protocol/solstice
+
+      # Bitcoin Core and ord release binaries, pinned by SHA-256 in regtest.sh.
+      - name: Cache bitcoind and ord
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/solstice-regtest/bin
+          key: solstice-regtest-${{ runner.os }}-${{ hashFiles('packages/solstice/regtest/regtest.sh') }}
+
+      - name: Run the regtest suite
+        run: bash packages/solstice/regtest/regtest.sh run
+
+      - name: Show bitcoind and ord logs
+        if: failure()
+        run: bash packages/solstice/regtest/regtest.sh logs

@@ -170,6 +170,8 @@ npm run test:regtest            # builds, then runs. Once per `up`: the names ar
 bash regtest/regtest.sh down
 ```
 
+CI runs `regtest.sh run` as its own job (`regtest` in `.github/workflows/ci.yml`).
+
 Linux x86_64 and macOS. On Windows run the script inside WSL; the suite reaches
 the daemons on localhost with either the Windows or a Linux node. If the ord
 release binary does not run (it needs OpenSSL 3, so Ubuntu 22.04 or later), the
