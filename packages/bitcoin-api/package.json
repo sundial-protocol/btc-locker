@@ -1,0 +1,66 @@
+{
+  "name": "@sundial-protocol/bitcoin-api",
+  "version": "1.0.0",
+  "description": "Client for public Bitcoin HTTP APIs (mempool.space, Blockstream, BlockCypher) with provider switching",
+  "main": "dist/cjs/index.js",
+  "types": "dist/cjs/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.build.json --module commonjs --outDir dist/cjs && node ../../scripts/mark-cjs.mjs dist/cjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "bitcoin",
+    "mempool",
+    "esplora",
+    "blockstream",
+    "api"
+  ],
+  "author": "Sundial Protocol",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sundial-protocol/btc-locker.git",
+    "directory": "packages/bitcoin-api"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "bugs": {
+    "url": "https://github.com/sundial-protocol/btc-locker/issues"
+  },
+  "homepage": "https://github.com/sundial-protocol/btc-locker#readme",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "typescript": "^5.3.0",
+    "vitest": "^4.0.18"
+  },
+  "files": [
+    "src/",
+    "dist/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
