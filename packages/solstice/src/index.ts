@@ -7,7 +7,8 @@
  * atomic BTC⇄RT swap that btc-locker does not provide.
  *
  * Spec component coverage (Solstice Technical Specification):
- *   • C0  Token Inscription  → {@link buildEtchTransaction}
+ *   • C0  Token Inscription  → {@link buildEtchCommitTransaction}, then
+ *                              {@link buildEtchTransaction} six blocks later
  *   • C1  Investment         → {@link buildInvestTransaction}   (generic swap)
  *   • C2  Standard Withdrawal→ {@link buildWithdrawTransaction} (generic swap)
  *   • Cenotaph guard (Runes record) → {@link encipherGuarded}
@@ -26,7 +27,13 @@ export {
   U128_MAX,
   type DecodedVarint,
 } from "./runes/varint.js";
-export { runeNameToNumber, numberToRuneName } from "./runes/rune-name.js";
+export {
+  runeNameToNumber,
+  numberToRuneName,
+  runeCommitment,
+  parseSpacedRune,
+  formatSpacedRune,
+} from "./runes/rune-name.js";
 export {
   RUNE_ID_ZERO,
   formatRuneId,
@@ -42,6 +49,10 @@ export {
   Flag,
   flagMask,
   RUNESTONE_MAGIC,
+  MAX_DIVISIBILITY,
+  MAX_SPACERS,
+  type Flaw,
+  type DecipherContext,
   type Terms,
   type Etching,
   type Edict,
@@ -71,7 +82,16 @@ export {
   type BuiltOutput,
 } from "./tx/types.js";
 export {
+  ETCH_COMMIT_CONFIRMATIONS,
+  createEtchCommitment,
+  buildEtchCommitTransaction,
+  type EtchCommitment,
+  type EtchCommitParams,
+  type EtchCommitResult,
+} from "./tx/etch-commit.js";
+export {
   buildEtchTransaction,
+  type EtchCommitInput,
   type EtchParams,
   type EtchResult,
 } from "./tx/etch.js";

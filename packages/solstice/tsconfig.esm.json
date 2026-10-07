@@ -11,5 +11,5 @@
     "preserveConstEnums": true,
     "moduleDetection": "force"
   },
-  "exclude": ["**/*.test.ts", "**/*.spec.ts", "tests/**/*"]
+  "exclude": ["**/*.test.ts", "**/*.spec.ts", "tests/**/*", "regtest/**/*"]
 }

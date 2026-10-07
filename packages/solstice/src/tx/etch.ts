@@ -1,13 +1,18 @@
 /**
- * C0 — Token Inscription (etching).
+ * C0, step 2 — Token Inscription (etching).
  *
  * Builds the one-time launch transaction that premines a receipt rune's entire
  * supply into the Receipt Vault. Output 0 is the vault-holding output and the
  * runestone's pointer targets it, so the full premine lands in the Vault. This is
  * a privileged operation guarded by the instance's admin/multisig signers.
  *
- * Reuses `@sundial-protocol/btc-locker` fee/UTXO/PSBT helpers; the only new
- * surface is the runestone OP_RETURN.
+ * Input 0 spends the commit output built by `buildEtchCommitTransaction`, by
+ * script path, which reveals the commitment to the rune name. Indexers ignore the
+ * etching unless the commit transaction has {@link ETCH_COMMIT_CONFIRMATIONS}
+ * confirmations by the time this one confirms, so broadcast it no earlier than
+ * five blocks after the commit confirmed.
+ *
+ * Reuses `@sundial-protocol/btc-locker` fee/UTXO/PSBT helpers.
  */
 
 import * as bitcoin from "bitcoinjs-lib";
@@ -21,7 +26,21 @@ import type { RunestoneCodec } from "../runes/codec.js";
 import { nativeRunestoneCodec } from "../runes/native-codec.js";
 import { encipherGuarded } from "../runes/guard.js";
 import type { Runestone } from "../runes/types.js";
+import { createEtchCommitment } from "./etch-commit.js";
 import { DEFAULT_RUNE_OUTPUT_VALUE, type BuiltOutput } from "./types.js";
+
+/** BIP-342 tapscript leaf version. */
+const TAPSCRIPT_LEAF_VERSION = 0xc0;
+
+/** The confirmed commit output the etching spends. */
+export interface EtchCommitInput {
+  txid: string;
+  vout: number;
+  /** Sats in the commit output. */
+  value: number;
+  /** The key the commitment was created for (x-only or compressed). */
+  revealPublicKey: Uint8Array | string;
+}
 
 export interface EtchParams {
   /** The receipt rune to etch (its `id` is assigned by this transaction). */
@@ -30,8 +49,16 @@ export interface EtchParams {
   vaultAddress: string;
   /** Sats attached to the vault-holding output (default 546). */
   vaultOutputValue?: number;
-  /** BTC-funding inputs (pay the vault output + fee + change). */
-  inputs: UTXO[];
+  /**
+   * The commit output for this rune, from `buildEtchCommitTransaction`. It must
+   * have 6 confirmations when the etching confirms.
+   */
+  commit: EtchCommitInput;
+  /**
+   * Extra BTC-funding inputs, if the commit output does not cover the vault
+   * output and the fee. Not needed with the default commit output value.
+   */
+  inputs?: UTXO[];
   /** Fallback scriptPubKey for inputs lacking their own `scriptPubKey`. */
   sourceScript?: Buffer;
   /** Where BTC change is returned. */
@@ -52,13 +79,17 @@ export interface EtchResult {
   outputs: BuiltOutput[];
 }
 
-/** Build the C0 etching PSBT. */
+/**
+ * Build the C0 etching PSBT. Input 0 is the commit output and needs a Schnorr
+ * signature for the tapscript leaf from the reveal key; any extra inputs follow.
+ */
 export function buildEtchTransaction(params: EtchParams): EtchResult {
   const {
     rune,
     vaultAddress,
     vaultOutputValue = DEFAULT_RUNE_OUTPUT_VALUE,
-    inputs,
+    commit,
+    inputs = [],
     sourceScript,
     changeAddress,
     feeRate,
@@ -66,36 +97,53 @@ export function buildEtchTransaction(params: EtchParams): EtchResult {
     codec = nativeRunestoneCodec,
   } = params;
 
-  if (inputs.length === 0) {
-    throw new Error("etch: at least one funding input is required");
-  }
   FeeUtils.assertAboveDust(vaultOutputValue, "Vault output value");
+
+  // Recomputed from the rune and the key, so the leaf revealed here always
+  // commits to the name being etched.
+  const commitment = createEtchCommitment(rune, commit.revealPublicKey, network);
 
   // Premine → output 0; pointer targets output 0 so the Vault receives all supply.
   const runestone: Runestone = { etching: receiptEtching(rune), pointer: 0 };
-  const runestoneScript = encipherGuarded(runestone, codec);
+  const runestoneScript = encipherGuarded(runestone, codec, { outputCount: 2 });
 
-  const totalIn = sumValues(inputs);
+  const totalIn = sumValues([commit, ...inputs]);
+  const inputCount = 1 + inputs.length;
   // Outputs: vault (0), runestone (1), optional change (2).
-  const outputCountWithChange = 3;
-  let fee = FeeUtils.estimateFee(inputs.length, outputCountWithChange, feeRate);
+  let fee = FeeUtils.estimateFee(inputCount, 3, feeRate);
   let changeSats = totalIn - vaultOutputValue - fee;
 
-  if (changeSats < 0) {
-    throw new Error(
-      `etch: insufficient funds. inputs=${totalIn}, vault=${vaultOutputValue}, fee=${fee}, short=${-changeSats}`,
-    );
-  }
-
-  const emitChange =
-    !!changeAddress && changeSats >= FeeUtils.DUST_THRESHOLD;
+  const emitChange = !!changeAddress && changeSats >= FeeUtils.DUST_THRESHOLD;
   if (!emitChange) {
-    // Recompute fee without a change output; any sub-dust remainder goes to miner.
-    fee = FeeUtils.estimateFee(inputs.length, 2, feeRate);
+    // No change output: everything above the vault output is the fee.
+    fee = totalIn - vaultOutputValue;
     changeSats = 0;
+    const needed = FeeUtils.estimateFee(inputCount, 2, feeRate);
+    if (fee < needed) {
+      throw new Error(
+        `etch: insufficient funds. inputs=${totalIn}, vault=${vaultOutputValue}, fee=${needed}, short=${needed - fee}`,
+      );
+    }
   }
 
   const psbt = new bitcoin.Psbt({ network });
+  const revealKey = Buffer.from(commitment.revealPublicKey, "hex");
+  psbt.addInput({
+    hash: commit.txid,
+    index: commit.vout,
+    witnessUtxo: {
+      script: Buffer.from(commitment.scriptPubKeyHex, "hex"),
+      value: BigInt(commit.value),
+    },
+    tapInternalKey: revealKey,
+    tapLeafScript: [
+      {
+        leafVersion: TAPSCRIPT_LEAF_VERSION,
+        script: Buffer.from(commitment.tapLeafScriptHex, "hex"),
+        controlBlock: Buffer.from(commitment.controlBlockHex, "hex"),
+      },
+    ],
+  });
   TransactionUtils.addWitnessInputs(psbt, inputs, sourceScript);
 
   const outputs: BuiltOutput[] = [];
@@ -121,7 +169,7 @@ export function buildEtchTransaction(params: EtchParams): EtchResult {
   };
 }
 
-function sumValues(utxos: UTXO[]): number {
+function sumValues(utxos: Array<{ value: number }>): number {
   return utxos.reduce((sum, u) => {
     if (!Number.isInteger(u.value) || u.value <= 0) {
       throw new Error("all input values must be positive integers");

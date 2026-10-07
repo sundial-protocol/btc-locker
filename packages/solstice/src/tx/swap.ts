@@ -166,7 +166,8 @@ export function buildSwapTransaction(params: SwapParams): SwapResult {
   const emitBtcChange =
     !!btc.changeAddress && btcChangeSats >= FeeUtils.DUST_THRESHOLD;
   if (!emitBtcChange) {
-    fee = FeeUtils.estimateFee(totalInputCount, outputCountWithChange - 1, feeRate);
+    // No change output: whatever is left over is paid as fee, so report that.
+    fee = satsIn - runeOutputsSats - btc.amount;
     btcChangeSats = 0;
   }
 
