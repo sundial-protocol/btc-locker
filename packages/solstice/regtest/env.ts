@@ -142,3 +142,30 @@ export async function runeBalances(txid: string, vout: number): Promise<Record<s
     Object.entries(output.runes ?? {}).map(([name, pile]) => [name, BigInt(pile.amount)]),
   );
 }
+
+/**
+ * The parts of btc-locker's `BitcoinAPI` that the CLI's etch steps use, served
+ * from bitcoind. `BitcoinAPI` itself has no regtest endpoint.
+ */
+export const esploraOverRpc = {
+  async getAddressUtxos(address: string) {
+    const height = await rpc<number>("getblockcount");
+    return (await utxosOf(address)).map((u) => ({
+      ...u,
+      status: { confirmed: true, block_height: height },
+    }));
+  },
+  getTransaction: (txid: string) => rpc<string>("getrawtransaction", txid),
+  getBlockHeight: () => rpc<number>("getblockcount"),
+  async broadcastTransaction(hex: string) {
+    return { txid: await rpc<string>("sendrawtransaction", hex) };
+  },
+  async makeRequest(endpoint: string) {
+    const match = /^\/tx\/([0-9a-f]{64})\/status$/.exec(endpoint);
+    if (!match) throw new Error(`esploraOverRpc: unsupported endpoint ${endpoint}`);
+    const tx = await rpc<{ blockhash?: string }>("getrawtransaction", match[1], true);
+    if (!tx.blockhash) return { confirmed: false };
+    const header = await rpc<{ height: number }>("getblockheader", tx.blockhash);
+    return { confirmed: true, block_height: header.height };
+  },
+};

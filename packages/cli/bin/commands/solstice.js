@@ -3,7 +3,8 @@
  *
  * Exercises the @sundial-protocol/solstice Runes receipt-token + atomic-swap
  * layer against a live network (testnet by default):
- *   • solstice etch    — C0: premine a receipt rune into a vault address.
+ *   • solstice etch    — C0: premine a receipt rune into a vault address. Two
+ *                        transactions: a commit, then the etching 5 blocks later.
  *   • solstice swap     — C1/C2: atomic BTC⇄RT swap from explicit UTXOs.
  *   • solstice decode   — inspect any runestone scriptPubKey (offline).
  */
@@ -15,10 +16,15 @@ import { FeeUtils, ScriptUtils } from "@sundial-protocol/btc-locker";
 import BitcoinAPI from "@sundial-protocol/btc-locker/bitcoin-api";
 import { NETWORKS } from "@sundial-protocol/btc-locker/utils/network";
 import {
+  ETCH_COMMIT_CONFIRMATIONS,
+  buildEtchCommitTransaction,
   buildEtchTransaction,
   buildSwapTransaction,
+  createEtchCommitment,
+  formatSpacedRune,
   nativeRunestoneCodec,
   parseRuneId,
+  parseSpacedRune,
 } from "@sundial-protocol/solstice";
 import { initLocker, displayResult } from "./shared.js";
 
@@ -111,9 +117,13 @@ export function setupSolsticeCommands(program) {
 
   solstice
     .command("etch")
-    .description("C0: etch a receipt rune, premining full supply into a vault address")
-    .option("-k, --from-key <hex>", "Funding + etch signer private key (hex)")
-    .option("--name <RUNENAME>", "Rune name, A–Z only (no spacers)")
+    .description(
+      "C0: etch a receipt rune, premining full supply into a vault address. Step 1 (no --commit) broadcasts the commitment; step 2 (--commit <txid>, 5 confirmations later) broadcasts the etching.",
+    )
+    .option("-k, --from-key <hex>", "Funding, commit and etch signer private key (hex)")
+    .option("--name <RUNENAME>", "Rune name, A–Z; spacers as • or . (e.g. SOLSTICE.RECEIPT)")
+    .option("--commit <txid>", "Step 2: txid of the confirmed commit transaction from step 1")
+    .option("--wait", "After step 1, wait for 5 confirmations and run step 2 in the same call")
     .option("--supply <int>", "Total premined supply (integer, base units)")
     .option("--vault <address>", "Vault address to hold the premine (default: from-key address)")
     .option("--ticker <ticker>", "Display ticker (UX only), e.g. RT")
@@ -122,7 +132,7 @@ export function setupSolsticeCommands(program) {
     .option("--vault-value <sats>", "Sats attached to the vault output", "546")
     .option("-p, --priority <level>", "Fee priority: high, medium, low", "medium")
     .option("--fee-rate <satvb>", "Override fee rate in sat/vByte")
-    .option("--dry-run", "Build and print the PSBT but do not sign/broadcast")
+    .option("--dry-run", "Build and print the PSBT of the current step but do not sign/broadcast")
     .action(async (cmd) => {
       await handleEtch(cmd, program.opts());
     });
@@ -160,6 +170,108 @@ export function setupSolsticeCommands(program) {
     });
 }
 
+// ── etch steps (exported so the regtest suite can drive them without prompts) ──
+
+/** Confirmations of a transaction: 0 while unconfirmed. */
+export async function confirmationsOf(api, txid) {
+  const status = await api.makeRequest(`/tx/${txid}/status`);
+  if (!status?.confirmed) return 0;
+  return (await api.getBlockHeight()) - status.block_height + 1;
+}
+
+/** Confirmed UTXOs of an address, as builder inputs. */
+async function confirmedInputs(api, address) {
+  return (await api.getAddressUtxos(address))
+    .filter((u) => u.status?.confirmed)
+    .map((u) => ({ txid: u.txid, vout: u.vout, value: u.value }));
+}
+
+/**
+ * Etch step 1: build the commit transaction, funded from the key's own address.
+ * `ctx` is `{ api, locker, network }`.
+ */
+export async function buildEtchCommit(ctx, { rune, fromKey, feeRate, vaultOutputValue }) {
+  const keyPair = await ctx.locker.keyPairGenerator.generateKeyPairFromPrivateKey(fromKey);
+  const inputs = await confirmedInputs(ctx.api, keyPair.address);
+  if (inputs.length === 0) {
+    throw new Error(`no confirmed UTXOs at the funding address ${keyPair.address}`);
+  }
+  return buildEtchCommitTransaction({
+    rune,
+    revealPublicKey: keyPair.publicKey,
+    vaultOutputValue,
+    inputs,
+    sourceScript: bitcoin.address.toOutputScript(keyPair.address, ctx.network),
+    changeAddress: keyPair.address,
+    feeRate,
+    network: ctx.network,
+  });
+}
+
+/**
+ * Etch step 2: build the etching, which spends the commit output. Refuses when
+ * the output does not commit to this rune with this key, or when the commit is
+ * too young: an etching that confirms before the commit has 6 confirmations is
+ * ignored by indexers, and the commit output is spent for nothing.
+ */
+export async function buildEtchReveal(
+  ctx,
+  { rune, fromKey, vaultAddress, vaultOutputValue, commitTxid, commitVout = 0, feeRate },
+) {
+  const keyPair = await ctx.locker.keyPairGenerator.generateKeyPairFromPrivateKey(fromKey);
+  const commitment = createEtchCommitment(rune, keyPair.publicKey, ctx.network);
+
+  const commitTx = bitcoin.Transaction.fromHex(await ctx.api.getTransaction(commitTxid));
+  const commitOut = commitTx.outs[commitVout];
+  if (!commitOut || Buffer.from(commitOut.script).toString("hex") !== commitment.scriptPubKeyHex) {
+    throw new Error(
+      `${commitTxid}:${commitVout} does not commit to ${rune.name} with this key. Use the same name and key as in step 1.`,
+    );
+  }
+
+  const needed = ETCH_COMMIT_CONFIRMATIONS - 1;
+  const confirmations = await confirmationsOf(ctx.api, commitTxid);
+  if (confirmations < needed) {
+    throw new Error(
+      `the commit has ${confirmations} confirmation(s); wait for ${needed} before etching (the etching must confirm at ${ETCH_COMMIT_CONFIRMATIONS} or later)`,
+    );
+  }
+
+  const params = {
+    rune,
+    vaultAddress: vaultAddress || keyPair.address,
+    vaultOutputValue,
+    commit: {
+      txid: commitTxid,
+      vout: commitVout,
+      value: Number(commitOut.value),
+      revealPublicKey: keyPair.publicKey,
+    },
+    feeRate,
+    network: ctx.network,
+  };
+  try {
+    return buildEtchTransaction(params);
+  } catch (error) {
+    if (!/insufficient/.test(error.message)) throw error;
+    // Fees rose since the commit: top up from the funding address.
+    return buildEtchTransaction({
+      ...params,
+      inputs: await confirmedInputs(ctx.api, keyPair.address),
+      sourceScript: bitcoin.address.toOutputScript(keyPair.address, ctx.network),
+      changeAddress: keyPair.address,
+    });
+  }
+}
+
+/** Sign every input with `fromKey`, broadcast, return the txid. */
+export async function signAndBroadcast(ctx, psbtBase64, fromKey) {
+  const signedHex = await ctx.locker.signTransaction(psbtBase64, fromKey);
+  const txid = bitcoin.Transaction.fromHex(signedHex).getId();
+  const broadcast = await ctx.api.broadcastTransaction(signedHex);
+  return broadcast?.txid || txid;
+}
+
 // ── handlers ─────────────────────────────────────────────────────────────────
 
 async function handleEtch(cmd, parentOptions) {
@@ -167,6 +279,7 @@ async function handleEtch(cmd, parentOptions) {
 
   try {
     const locker = await initLocker(parentOptions);
+    const ctx = { api, locker, network };
 
     let fromKey = cmd.fromKey;
     let name = cmd.name;
@@ -188,9 +301,16 @@ async function handleEtch(cmd, parentOptions) {
         {
           type: "input",
           name: "name",
-          message: "Rune name (A–Z letters only, no spacers):",
+          message: "Rune name (A–Z, spacers as • or . allowed, e.g. SOLSTICE.RECEIPT):",
           when: () => !name,
-          validate: (v) => /^[A-Za-z]+$/.test(v) || "Letters A–Z only",
+          validate: (v) => {
+            try {
+              parseSpacedRune(v.toUpperCase());
+              return true;
+            } catch (e) {
+              return e.message;
+            }
+          },
         },
         {
           type: "input",
@@ -227,56 +347,108 @@ async function handleEtch(cmd, parentOptions) {
       symbol = symbol || a.symbol || undefined;
     }
 
-    const keyPair = await locker.keyPairGenerator.generateKeyPairFromPrivateKey(fromKey);
-    const fromAddress = keyPair.address;
-    const vaultAddress = vault || fromAddress;
-
+    const spaced = parseSpacedRune(name.toUpperCase());
     const rune = {
-      name: name.toUpperCase(),
-      displayTicker: ticker || name.toUpperCase(),
+      name: spaced.name,
+      spacers: spaced.spacers || undefined,
+      displayTicker: ticker || spaced.name,
       divisibility: parseInt(cmd.divisibility, 10),
       symbol: symbol ? symbol.codePointAt(0) : undefined,
       totalSupply: BigInt(supply),
     };
+    const displayName = formatSpacedRune(rune.name, rune.spacers);
+    const vaultOutputValue = parseInt(cmd.vaultValue, 10);
+    const feeRate = async () =>
+      cmd.feeRate
+        ? parseInt(cmd.feeRate, 10)
+        : await FeeUtils.queryChainFeeRates(cmd.priority, networkType);
 
-    console.log(chalk.blue(`Fetching confirmed UTXOs for ${fromAddress}...`));
-    const utxos = (await api.getAddressUtxos(fromAddress)).filter((u) => u.status?.confirmed);
-    if (utxos.length === 0) {
-      console.log(chalk.yellow("⚠️  No confirmed UTXOs at the funding address."));
-      if (networkName === "testnet") {
-        console.log(chalk.blue("Fund it via https://coinfaucet.eu/en/btc-testnet/"));
+    const needed = ETCH_COMMIT_CONFIRMATIONS - 1;
+    let commitTxid = cmd.commit;
+
+    // ── Step 1: commit ───────────────────────────────────────────────────────
+    if (!commitTxid) {
+      const rate = await feeRate();
+      const res = await buildEtchCommit(ctx, { rune, fromKey, feeRate: rate, vaultOutputValue });
+
+      displayResult(
+        jsonSafe({
+          rune: displayName,
+          commitAddress: res.commitment.address,
+          commitOutputValue: res.commitOutputValue,
+          feeRateSatVb: rate,
+          estimatedFee: res.fee,
+          change: res.changeSats,
+          outputs: res.outputs,
+        }),
+        parentOptions,
+        "Solstice Etch (C0) step 1 of 2: commit, built",
+      );
+      console.log(
+        chalk.gray(
+          "The commit output can only be spent by this key. The same key signs step 2 and so decides where the premine goes.",
+        ),
+      );
+
+      if (cmd.dryRun) {
+        console.log(chalk.yellow("🔍 Dry run — not broadcast."));
+        console.log(chalk.blue(`PSBT (base64): ${res.psbtBase64}`));
+        return;
       }
-      return;
+
+      const { confirm } = await inquirer.prompt([
+        { type: "confirm", name: "confirm", message: `Commit to ${displayName} on ${networkName}?`, default: false },
+      ]);
+      if (!confirm) return console.log(chalk.yellow("⏹️  Cancelled."));
+
+      console.log(chalk.blue("Broadcasting..."));
+      commitTxid = await signAndBroadcast(ctx, res.psbtBase64, fromKey);
+      console.log(chalk.green("✅ Commit broadcast."));
+      console.log(chalk.blue(`Commit txid: ${commitTxid}`));
+      console.log(chalk.blue(`Explorer: ${explorerTxUrl(networkName, commitTxid)}`));
+
+      if (!cmd.wait) {
+        console.log(
+          chalk.yellow(
+            `Step 2: once the commit has ${needed} confirmations, run the same command again with --commit ${commitTxid}`,
+          ),
+        );
+        return;
+      }
+
+      console.log(chalk.blue(`Waiting for ${needed} confirmations...`));
+      for (;;) {
+        const confirmations = await confirmationsOf(api, commitTxid);
+        if (confirmations >= needed) break;
+        console.log(chalk.gray(`  ${confirmations}/${needed}`));
+        await new Promise((resolve) => setTimeout(resolve, 60_000));
+      }
     }
-    const inputs = utxos.map((u) => ({ txid: u.txid, vout: u.vout, value: u.value }));
 
-    const feeRate = cmd.feeRate
-      ? parseInt(cmd.feeRate, 10)
-      : await FeeUtils.queryChainFeeRates(cmd.priority, networkType);
-
-    const res = buildEtchTransaction({
+    // ── Step 2: reveal (the etching itself) ──────────────────────────────────
+    const rate = await feeRate();
+    const res = await buildEtchReveal(ctx, {
       rune,
-      vaultAddress,
-      inputs,
-      sourceScript: bitcoin.address.toOutputScript(fromAddress, network),
-      changeAddress: fromAddress,
-      vaultOutputValue: parseInt(cmd.vaultValue, 10),
-      feeRate,
-      network,
+      fromKey,
+      vaultAddress: vault,
+      vaultOutputValue,
+      commitTxid,
+      feeRate: rate,
     });
 
     displayResult(
       jsonSafe({
-        rune: { name: rune.name, ticker: rune.displayTicker, divisibility: rune.divisibility, supply: rune.totalSupply },
-        vaultAddress,
-        feeRateSatVb: feeRate,
-        estimatedFee: res.fee,
+        rune: { name: displayName, ticker: rune.displayTicker, divisibility: rune.divisibility, supply: rune.totalSupply },
+        commit: `${commitTxid}:0`,
+        vaultAddress: res.outputs[0].address,
+        feeRateSatVb: rate,
+        fee: res.fee,
         change: res.changeSats,
         runestoneScriptHex: res.runestoneScriptHex,
         outputs: res.outputs,
       }),
       parentOptions,
-      "Solstice Etch (C0) — built",
+      "Solstice Etch (C0) step 2 of 2: etch, built",
     );
 
     if (cmd.dryRun) {
@@ -286,15 +458,12 @@ async function handleEtch(cmd, parentOptions) {
     }
 
     const { confirm } = await inquirer.prompt([
-      { type: "confirm", name: "confirm", message: `Etch ${rune.name} (supply ${supply}) on ${networkName}?`, default: false },
+      { type: "confirm", name: "confirm", message: `Etch ${displayName} (supply ${supply}) on ${networkName}?`, default: false },
     ]);
     if (!confirm) return console.log(chalk.yellow("⏹️  Cancelled."));
 
-    const signedHex = await locker.signTransaction(res.psbtBase64, fromKey);
-    const txid = bitcoin.Transaction.fromHex(signedHex).getId();
     console.log(chalk.blue("Broadcasting..."));
-    const broadcast = await api.broadcastTransaction(signedHex);
-    const finalTxid = broadcast.txid || txid;
+    const finalTxid = await signAndBroadcast(ctx, res.psbtBase64, fromKey);
 
     console.log(chalk.green("✅ Etch broadcast."));
     console.log(chalk.blue(`Txid: ${finalTxid}`));

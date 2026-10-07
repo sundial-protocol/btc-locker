@@ -158,27 +158,53 @@ Commands for the Solstice value-accrual vault's receipt-token + atomic-swap laye
 
 ### Etch a receipt rune (C0)
 
-Premines the full fixed supply into a vault address. The signer of `--from-key`
-funds the transaction and receives the premine (or pass `--vault` to send it
-elsewhere).
+Premines the full fixed supply into a vault address. An etching takes **two
+transactions**: a commit to the rune name, and the etching itself, which has to
+confirm when the commit has 6 confirmations or more. Without the commit, Runes
+indexers ignore the etching.
+
+`--from-key` funds both transactions, owns the commit output and signs the
+etching. The premine goes to `--vault` (default: the key's own address).
 
 ```bash
-# Dry run first — builds + prints the PSBT and runestone, broadcasts nothing
+# Step 1: commit. Add --dry-run first to see the PSBT without broadcasting.
 btc-locker solstice etch \
   --from-key YOUR_PRIVATE_KEY \
-  --name EXAMPLERUNE \
+  --name SOLSTICE.RECEIPT \
+  --ticker RT \
+  --supply 2100000000000000 \
+  --divisibility 8 \
+  --symbol q
+# prints the commit txid
+
+# Step 2: once the commit has 5 confirmations, the same command plus --commit.
+btc-locker solstice etch \
+  --from-key YOUR_PRIVATE_KEY \
+  --name SOLSTICE.RECEIPT \
   --ticker RT \
   --supply 2100000000000000 \
   --divisibility 8 \
   --symbol q \
-  --dry-run
-
-# Drop --dry-run to sign and broadcast (asks for confirmation)
+  --vault VAULT_ADDRESS \
+  --commit COMMIT_TXID
 ```
 
-Rune names are `A–Z` only (no spacers). After the etch confirms, its **rune id**
-is `<blockHeight>:<txIndexInBlock>` — read it from a Runes explorer and pass it to
-`solstice swap --rune-id`.
+Or pass `--wait` in step 1 to keep the command running until the commit has 5
+confirmations and then go straight to step 2 (about 50 minutes on mainnet).
+
+Step 2 refuses to build if the commit output does not match the name and key, or
+if the commit has fewer than 5 confirmations. An etching that confirms too early
+is ignored by indexers and the commit output is spent for nothing.
+
+**Custody.** The key that makes the commit is the only key that can etch: the
+commit output is a taproot output locked to it, and the etching decides where the
+premine goes. This command takes one private key, so it suits testing. A vault
+whose admin is a multisig needs that group to produce one Schnorr signature for
+the etching (see `packages/solstice/README.md`).
+
+Rune names are `A–Z`; spacers can be written as `•` or `.` and are display only.
+After the etch confirms, its **rune id** is `<blockHeight>:<txIndexInBlock>` —
+read it from a Runes explorer and pass it to `solstice swap --rune-id`.
 
 ### Atomic swap — invest (C1) / withdraw (C2)
 

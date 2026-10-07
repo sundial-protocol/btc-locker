@@ -45,8 +45,24 @@ unless the etching transaction spends, by taproot script path, an output whose
 tapscript contains the rune name's commitment bytes, and that output's
 transaction has 6 confirmations by the time the etching confirms.
 `buildEtchCommitTransaction` creates that output; `buildEtchTransaction` spends it.
-The reveal key is also the taproot internal key, so its holder can sweep an unused
-commit output. Whoever holds the reveal key decides where the premine goes.
+
+**Custody: the etch signer controls the commit output.** The commit output is a
+taproot output locked to one key, the reveal key (`revealPublicKey`), which is
+both its internal key and the key in its only script leaf. That has three
+consequences for the vault's admin and multisig model:
+
+- Only the reveal key can etch the name it committed to, and its signature covers
+  the etching's outputs. So the reveal key, not the vault's own signers, decides
+  which address receives the entire premine.
+- The premine destination is not fixed at commit time. `vaultAddress` is chosen
+  when the etching is built.
+- The leaf is `<key> OP_CHECKSIG`: one Schnorr signature. A multisig admin has to
+  use an aggregated key (MuSig2 or FROST) or an MPC signer for it. A script
+  multisig (`OP_CHECKSIGADD`) would need a different leaf, which this package
+  does not build.
+
+After the etching the reveal key has no further power: the supply sits at
+`vaultAddress` and moves only with that address's signatures.
 
 ## Usage
 
@@ -150,7 +166,7 @@ or, to keep the daemons up and look around afterwards:
 
 ```
 bash regtest/regtest.sh up      # every `up` starts an empty chain
-npm run test:regtest            # once per `up`: the suite etches fixed names
+npm run test:regtest            # builds, then runs. Once per `up`: the names are fixed
 bash regtest/regtest.sh down
 ```
 
@@ -172,9 +188,16 @@ starts empty, so the transaction ids are the same on every run:
 | Invest, 1.5 RT | `880cfa51…290a7cbd` | Investor output 150000000, vault change output 2099999850000000, BTC outputs none. |
 | Withdraw, 0.5 RT | `902a0c50…7dbce39e` | Vault output 50000000, investor change output 100000000. |
 | Withdraw the rest, no rune change | `ee7c9284…cef64ccc` | Vault output 100000000. Rune `burned` 0, `mints` 0. |
+| CLI etch steps: commit, then etch | `0dd6c5df…2a17e19d`, then `bde62890…3356a85e` | Rune `SOLSTICE•CLIRUNE`, id `236:1`, premine 2100000000000000 at the `--vault` address. Before 5 confirmations, and with another rune name, the etch step refuses to build. |
 
 In every swap the balances `ord` reports per output equal the builder's output
 plan (`SwapResult.outputs`, `runeChange`).
+
+The CLI row runs the functions behind `btc-locker solstice etch` (the commit
+step, the etch step, and signing through btc-locker's `signTransaction`), without
+the prompts. btc-locker's `BitcoinAPI` has no regtest endpoint, so the suite hands
+those functions an adapter over bitcoind's RPC; the command itself has not been
+run against testnet or mainnet.
 
 ## Scope / not done
 
@@ -191,8 +214,12 @@ plan (`SwapResult.outputs`, `runeChange`).
 - On mainnet a rune name has a minimum length that falls over time, and someone
   else can etch the name between commit and reveal. The builders check neither;
   the caller has to check the name against an indexer first.
-- The commit leaf is single-key (`<key> OP_CHECKSIG`). A multisig or MPC admin
-  needs a key that can produce one Schnorr signature, or a different leaf.
+- The commit leaf is single-key (`<key> OP_CHECKSIG`), and the premine
+  destination is not bound at commit time. See the custody note under Design
+  decisions.
+- `btc-locker solstice etch` takes one private key for funding, commit and etch.
+  It has only been run on regtest, through an RPC adapter, and its `--wait` loop
+  and prompts are not covered by a test.
 - Rune inputs are trusted: the swap builder takes `runeAmount` from the caller and
   does not look up balances. If an input carries more than stated, or another
   rune, the difference goes to the pointer output.

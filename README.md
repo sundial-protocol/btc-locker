@@ -115,14 +115,18 @@ See [packages/core/src/locker/README.md](packages/core/src/locker/README.md) for
 
 | Spec component | Export |
 | --- | --- |
-| **C0** Token Inscription | `buildEtchTransaction` |
+| **C0** Token Inscription | `buildEtchCommitTransaction`, then `buildEtchTransaction` |
 | **C1** Investment | `buildInvestTransaction` |
 | **C2** Standard Withdrawal | `buildWithdrawTransaction` |
 | Generic swap (behind C1 and C2) | `buildSwapTransaction` |
 | Cenotaph guard | `encipherGuarded` |
 
 ```ts
-import { buildEtchTransaction, type ReceiptRune } from "@sundial-protocol/solstice";
+import {
+  buildEtchCommitTransaction,
+  buildEtchTransaction,
+  type ReceiptRune,
+} from "@sundial-protocol/solstice";
 
 const rune: ReceiptRune = {
   name: "EXAMPLERUNE",
@@ -132,8 +136,20 @@ const rune: ReceiptRune = {
   totalSupply: 2_100_000_000_000_000n,
 };
 
-// C0 — premine the full supply into the Vault; returns an unsigned psbtBase64
-const etch = buildEtchTransaction({ rune, vaultAddress, inputs, changeAddress, feeRate, network });
+// C0, step 1 — commit to the rune name; returns an unsigned psbtBase64
+const commit = buildEtchCommitTransaction({
+  rune, revealPublicKey, inputs, changeAddress, feeRate, network,
+});
+
+// C0, step 2 — five blocks after the commit confirmed, premine the full supply
+// into the Vault. The reveal key signs input 0.
+const etch = buildEtchTransaction({
+  rune,
+  vaultAddress,
+  commit: { txid: commitTxid, vout: commit.commitVout, value: commit.commitOutputValue, revealPublicKey },
+  feeRate,
+  network,
+});
 ```
 
 See [packages/solstice/README.md](packages/solstice/README.md) for the design decisions, full invest/withdraw examples and current scope. The same flows are available from the CLI under `btc-locker solstice` (see [CLI Documentation](CLI.md)).

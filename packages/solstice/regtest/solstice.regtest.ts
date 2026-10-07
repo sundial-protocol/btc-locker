@@ -24,8 +24,12 @@ import {
   type RuneId,
   type SwapResult,
 } from "../src/index";
+// @ts-expect-error the CLI is plain JavaScript with no type declarations
+import * as cli from "../../cli/bin/commands/solstice.js";
+import { createBTCLocker } from "@sundial-protocol/btc-locker";
 import {
   NETWORK,
+  esploraOverRpc,
   mine,
   ord,
   party,
@@ -321,5 +325,58 @@ describe("Solstice receipt rune on regtest, as indexed by ord", () => {
     expect(BigInt(indexed!.entry.burned)).toBe(0n);
     expect(BigInt(indexed!.entry.mints)).toBe(0n);
     console.log(`withdraw-all ${txid}: vault ${investorRt.runeAmount}, burned ${indexed!.entry.burned}`);
+  });
+});
+
+describe("the CLI's `solstice etch` steps on regtest", () => {
+  // The functions `btc-locker solstice etch` runs, without its prompts. They
+  // import the built package, so `npm run test:regtest` builds first.
+  test("commit, refuse to etch early, etch: ord shows the full premine at the vault", async () => {
+    const cliAdmin = party("cli admin");
+    const cliVault = party("cli vault");
+    const fromKey = Buffer.from(cliAdmin.key.privateKey!).toString("hex");
+    await rpc("generatetoaddress", 2, cliAdmin.address);
+    await mine(100, miner);
+
+    // btc-locker's BitcoinAPI rejects regtest, so the locker is created for
+    // testnet and pointed at regtest: only its key and signing code is used here.
+    const locker = await createBTCLocker("testnet");
+    for (const part of [locker, locker.keyPairGenerator] as unknown as Array<{ network: unknown }>) {
+      part.network = NETWORK;
+    }
+    const ctx = { api: esploraOverRpc, locker, network: NETWORK };
+    const rune = receiptRune("SOLSTICECLIRUNE", 0b1000_0000);
+    const step2 = { rune, fromKey, vaultAddress: cliVault.address, feeRate: FEE_RATE };
+
+    const commitPlan = await cli.buildEtchCommit(ctx, { rune, fromKey, feeRate: FEE_RATE });
+    const commitTxid: string = await cli.signAndBroadcast(ctx, commitPlan.psbtBase64, fromKey);
+    await mine(1, miner);
+
+    await expect(cli.buildEtchReveal(ctx, { ...step2, commitTxid })).rejects.toThrow(
+      /1 confirmation\(s\); wait for 5/,
+    );
+    await mine(4, miner);
+    await expect(
+      cli.buildEtchReveal(ctx, { ...step2, commitTxid, rune: receiptRune("SOLSTICEOTHERNAME") }),
+    ).rejects.toThrow(/does not commit to SOLSTICEOTHERNAME/);
+
+    const etchPlan = await cli.buildEtchReveal(ctx, { ...step2, commitTxid });
+    const etchTxid: string = await cli.signAndBroadcast(ctx, etchPlan.psbtBase64, fromKey);
+    await mine(1, miner);
+
+    const indexed = await ord<OrdRune>(`/rune/${rune.name}`);
+    expect(indexed?.entry.etching).toBe(etchTxid);
+    expect(BigInt(indexed!.entry.premine)).toBe(SUPPLY);
+    const vaultOutput = await ord<{ address: string }>(`/output/${etchTxid}:0`);
+    expect(vaultOutput?.address).toBe(cliVault.address);
+    expect(await runeBalances(etchTxid, 0)).toEqual({
+      [formatSpacedRune(rune.name, rune.spacers)]: SUPPLY,
+    });
+    console.log(
+      `CLI commit ${commitTxid}
+CLI etch   ${etchTxid}
+` +
+        `ord: rune ${indexed!.entry.spaced_rune}, id ${indexed!.id}, premine ${indexed!.entry.premine} at ${vaultOutput!.address}`,
+    );
   });
 });
