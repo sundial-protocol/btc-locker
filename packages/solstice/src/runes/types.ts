@@ -34,6 +34,12 @@ export enum Tag {
   Symbol = 5,
 }
 
+/** Largest divisibility ord accepts in an etching. */
+export const MAX_DIVISIBILITY = 38;
+
+/** Largest spacer bitmask ord accepts: one bit per gap in a 28-letter name. */
+export const MAX_SPACERS = 0b0000_0111_1111_1111_1111_1111_1111_1111;
+
 /** Bit positions within the {@link Tag.Flags} value. */
 export enum Flag {
   /** Set when the runestone etches a new rune. */
@@ -93,12 +99,43 @@ export interface Runestone {
   pointer?: number;
 }
 
+/**
+ * Why a runestone is a cenotaph. The names are ord's (`ordinals::Flaw`,
+ * serialized in kebab-case).
+ */
+export type Flaw =
+  | "edict-output"
+  | "edict-rune-id"
+  | "invalid-script"
+  | "opcode"
+  | "supply-overflow"
+  | "trailing-integers"
+  | "truncated-field"
+  | "unrecognized-even-tag"
+  | "unrecognized-flag"
+  | "varint";
+
+/** What the decoder may know about the transaction around the scriptPubKey. */
+export interface DecipherContext {
+  /**
+   * Number of outputs in the transaction. Two cenotaph rules need it: an edict
+   * output above it, and a pointer at or above it. They are skipped when it is
+   * not given.
+   */
+  outputCount?: number;
+}
+
 /** Result of deciphering a scriptPubKey. */
 export interface DecipherResult {
   /** The decoded runestone, present even for cenotaphs (best-effort). */
   runestone: Runestone;
-  /** True when the payload is malformed per the Runes cenotaph rules we check. */
+  /**
+   * True when ord would treat the runestone as a cenotaph, and also when the
+   * script is not a runestone at all (then `flaw` is undefined).
+   */
   cenotaph: boolean;
+  /** The flaw ord would report: the first one found, in ord's order. */
+  flaw?: Flaw;
   /** Human-readable reasons the runestone was flagged a cenotaph. */
   flaws: string[];
 }

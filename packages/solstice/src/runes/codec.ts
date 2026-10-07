@@ -13,11 +13,11 @@
  * functional and testable today. See its doc comment for scope/limitations.
  */
 
-import type { DecipherResult, Runestone } from "./types.js";
+import type { DecipherContext, DecipherResult, Runestone } from "./types.js";
 
 export interface RunestoneCodec {
   /** Encode a runestone to its `OP_RETURN` scriptPubKey. */
   encipher(runestone: Runestone): Buffer;
   /** Decode a scriptPubKey to a runestone, flagging cenotaphs. */
-  decipher(scriptPubKey: Buffer): DecipherResult;
+  decipher(scriptPubKey: Buffer, context?: DecipherContext): DecipherResult;
 }

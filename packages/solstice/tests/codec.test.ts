@@ -73,7 +73,7 @@ describe("NativeRunestoneCodec", () => {
     ]);
     const decoded = codec.decipher(Buffer.from(bad));
     expect(decoded.cenotaph).toBe(true);
-    expect(decoded.flaws.join(" ")).toMatch(/multiple of 4/);
+    expect(decoded.flaw).toBe("trailing-integers");
   });
 });
 

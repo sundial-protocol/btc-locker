@@ -14,7 +14,7 @@
  */
 
 import type { RunestoneCodec } from "./codec.js";
-import type { Runestone } from "./types.js";
+import type { DecipherContext, Runestone } from "./types.js";
 
 /** Error thrown when a runestone fails the pre-sign cenotaph guard. */
 export class CenotaphError extends Error {
@@ -26,6 +26,8 @@ export class CenotaphError extends Error {
 
 /**
  * Encipher a runestone and prove it round-trips to a non-cenotaph.
+ * @param context - pass `outputCount` (the transaction's output count) so the
+ * edict-output and pointer rules are checked as well.
  * @returns the validated `OP_RETURN` scriptPubKey.
  * @throws {CenotaphError} if the runestone deciphers to a cenotaph or does not
  * re-encipher to identical bytes.
@@ -33,10 +35,11 @@ export class CenotaphError extends Error {
 export function encipherGuarded(
   runestone: Runestone,
   codec: RunestoneCodec,
+  context?: DecipherContext,
 ): Buffer {
   const script = codec.encipher(runestone);
 
-  const decoded = codec.decipher(script);
+  const decoded = codec.decipher(script, context);
   if (decoded.cenotaph) {
     throw new CenotaphError(
       `runestone would be a cenotaph: ${decoded.flaws.join("; ")}`,

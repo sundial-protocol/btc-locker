@@ -138,10 +138,14 @@ export function buildSwapTransaction(params: SwapParams): SwapResult {
     edicts: [receiptEdict(rune, rt.amount, idxRtRecipient)],
     pointer: hasRuneChange ? idxRtChange : idxRtRecipient,
   };
-  const runestoneScript = encipherGuarded(runestone, codec);
+  // Output count without the optional BTC change: the indices used above must
+  // exist either way.
+  const numRuneOutputs = hasRuneChange ? 2 : 1;
+  const runestoneScript = encipherGuarded(runestone, codec, {
+    outputCount: numRuneOutputs + 2,
+  });
 
   // ── Sats accounting ────────────────────────────────────────────────────────
-  const numRuneOutputs = hasRuneChange ? 2 : 1;
   const satsIn =
     sumValues(rt.inputs) + sumValues(btc.inputs);
   const runeOutputsSats = runeOutputValue * numRuneOutputs;

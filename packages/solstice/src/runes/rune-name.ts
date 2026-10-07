@@ -44,3 +44,68 @@ export function numberToRuneName(n: bigint): string {
   }
   return name;
 }
+
+/**
+ * The commitment to a rune name that an etching's reveal must carry: the rune
+ * number as little-endian bytes with trailing zero bytes removed (ord's
+ * `Rune::commitment`). It has to appear as a data push in a tapscript spent by
+ * the etching transaction, or indexers ignore the etching.
+ */
+export function runeCommitment(rune: bigint): Buffer {
+  if (rune < 0n || rune >= 1n << 128n) {
+    throw new Error(`rune number out of u128 range: ${rune}`);
+  }
+  const bytes: number[] = [];
+  for (let x = rune; x > 0n; x >>= 8n) {
+    bytes.push(Number(x & 0xffn));
+  }
+  return Buffer.from(bytes);
+}
+
+/** The spacer ord displays and accepts; `.` is accepted as an alternative. */
+const SPACER = "•";
+
+/**
+ * Split a spaced rune name such as `SOLSTICE•RECEIPT` into its on-chain name and
+ * spacer bitmask (bit `i` set means a spacer after letter `i`).
+ */
+export function parseSpacedRune(spaced: string): { name: string; spacers: number } {
+  let name = "";
+  let spacers = 0;
+  for (const c of spaced) {
+    if (c >= "A" && c <= "Z") {
+      name += c;
+    } else if (c === SPACER || c === ".") {
+      if (name.length === 0) {
+        throw new Error(`spaced rune "${spaced}": leading spacer`);
+      }
+      const flag = 2 ** (name.length - 1);
+      if (Math.floor(spacers / flag) % 2 === 1) {
+        throw new Error(`spaced rune "${spaced}": double spacer`);
+      }
+      spacers += flag;
+    } else {
+      throw new Error(`spaced rune "${spaced}": invalid character "${c}"`);
+    }
+  }
+  if (name.length === 0) {
+    throw new Error("rune name must not be empty");
+  }
+  if (spacers >= 2 ** (name.length - 1)) {
+    throw new Error(`spaced rune "${spaced}": trailing spacer`);
+  }
+  runeNameToNumber(name);
+  return { name, spacers };
+}
+
+/** Inverse of {@link parseSpacedRune}: render a name with its spacers. */
+export function formatSpacedRune(name: string, spacers = 0): string {
+  let out = "";
+  for (let i = 0; i < name.length; i++) {
+    out += name[i];
+    if (i < name.length - 1 && Math.floor(spacers / 2 ** i) % 2 === 1) {
+      out += SPACER;
+    }
+  }
+  return out;
+}
