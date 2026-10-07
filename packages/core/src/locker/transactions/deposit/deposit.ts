@@ -52,7 +52,6 @@ export async function createDepositTransaction(
     changeAddress,
     priority = FeePriorities.MEDIUM,
     feeAddress,
-    protocolFeeAmount,
     metadata,
   } = params;
 
@@ -61,10 +60,21 @@ export async function createDepositTransaction(
       (Array.isArray(providedInputs) && providedInputs.length > 0),
     "inputs must be a non-empty array when provided",
   );
-  ValidationUtils.assertProtocolFeeParams(feeAddress, protocolFeeAmount);
+  ValidationUtils.assertProtocolFeeParams(feeAddress, params.protocolFeeAmount);
+  const protocolFeeAmount =
+    params.protocolFeeAmount != null
+      ? ValidationUtils.validateAmount(
+          params.protocolFeeAmount,
+          "protocolFeeAmount",
+        )
+      : 0;
 
   let inputs: UTXO[];
-  const feeRate = await FeeUtils.queryChainFeeRates(priority, ctx.api.networkType, ctx.api.provider);
+  const feeRate = await FeeUtils.queryChainFeeRates(
+    priority,
+    ctx.api.networkType,
+    ctx.api.provider,
+  );
 
   if (providedInputs) {
     inputs = providedInputs;

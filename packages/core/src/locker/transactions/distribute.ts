@@ -52,14 +52,20 @@ export async function createDistributionTransaction(
     metadata,
     priority = FeePriorities.MEDIUM,
     feeAddress,
-    protocolFeeAmount,
   } = params;
 
   assert(
     !!providedInputs || (!!sourceAddress && !!api),
     "Either inputs or both sourceAddress and api must be provided",
   );
-  ValidationUtils.assertProtocolFeeParams(feeAddress, protocolFeeAmount);
+  ValidationUtils.assertProtocolFeeParams(feeAddress, params.protocolFeeAmount);
+  const protocolFeeAmount =
+    params.protocolFeeAmount != null
+      ? ValidationUtils.validateAmount(
+          params.protocolFeeAmount,
+          "protocolFeeAmount",
+        )
+      : 0;
 
   let inputs: UTXO[] = [];
 

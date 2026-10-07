@@ -201,8 +201,17 @@ export class BTCLockerCore {
 
       // Sign each input with appropriate key
       for (let i = 0; i < psbt.inputCount; i++) {
-        const keyPair = keyPairs[i] || keyPairs[0]; // Use per-input key or default to first key
         const input = psbt.data.inputs[i];
+        const witnessScript = input.witnessScript;
+
+        // Find the key whose public key appears in this input's witnessScript
+        let keyPair = keyPairs[i] || keyPairs[0];
+        if (witnessScript) {
+          const matchedKey = keyPairs.find((kp) =>
+            Buffer.from(witnessScript).includes(kp.publicKey),
+          );
+          if (matchedKey) keyPair = matchedKey;
+        }
 
         // Update witnessUtxo if needed for P2WPKH inputs
         if (
@@ -223,9 +232,11 @@ export class BTCLockerCore {
 
         try {
           psbt.signInput(i, keyPair);
-        } catch (error) {
+        } catch (err) {
           throw new Error(
-            `Failed to sign input ${i}: ${(error as Error).message}`,
+            `Failed to sign input ${i}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
           );
         }
       }
@@ -268,7 +279,7 @@ export class BTCLockerCore {
               signature,
               spendAfterDeadline
                 ? Buffer.from([0x01]) // OP_TRUE branch
-                : Buffer.alloc(0),    // OP_FALSE branch (empty = falsy)
+                : Buffer.alloc(0), // OP_FALSE branch (empty = falsy)
               witnessScript,
             ];
 
@@ -381,8 +392,9 @@ export class BTCLockerCore {
       // Broadcast via API if available
       if (apiToUse && typeof apiToUse.broadcastTransaction === "function") {
         try {
-          const broadcastResult =
-            await apiToUse.broadcastTransaction(transactionHex);
+          const broadcastResult = await apiToUse.broadcastTransaction(
+            transactionHex,
+          );
           return broadcastResult.txid || txid;
         } catch (error) {
           throw new Error(
