@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll } from "vitest";
 import { BTCLocker } from "../src/locker/index";
 import { NETWORKS } from "../src/utils/network";
+import BitcoinAPI from "../src/bitcoin-api";
 import * as bitcoin from "bitcoinjs-lib";
 
 describe("BTCLocker (index)", () => {
@@ -30,6 +31,26 @@ describe("BTCLocker (index)", () => {
     test("should default to testnet when no network given", () => {
       const l = new BTCLocker();
       expect(l.network).toBe(bitcoin.networks.testnet);
+    });
+
+    test("should hand a supplied API to every component", () => {
+      const api = new BitcoinAPI(NETWORKS.testnet, "blockstream");
+      const l = new BTCLocker("testnet", api);
+      expect(l.api).toBe(api);
+      expect(l.transactionManager.api).toBe(api);
+      expect(l.scriptManager.api).toBe(api);
+      expect(l.keyPairGenerator.api).toBe(api);
+    });
+
+    test("should accept regtest when an API is supplied", () => {
+      // BitcoinAPI has no regtest endpoint, so the default one cannot be built.
+      expect(() => new BTCLocker("regtest")).toThrow(
+        "Regtest network is not supported",
+      );
+      const api = {} as BitcoinAPI;
+      const l = new BTCLocker("regtest", api);
+      expect(l.network).toEqual(bitcoin.networks.regtest);
+      expect(l.transactionManager.api).toBe(api);
     });
 
     test("should throw for unknown string network", () => {
