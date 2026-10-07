@@ -9,6 +9,8 @@
   },
   "scripts": {
     "start": "node bin/btc-locker",
+    "test:regtest": "vitest run --config vitest.regtest.config.ts",
+    "regtest": "btc-regtest run --ord",
     "lint": "eslint bin/**/*.js"
   },
   "dependencies": {
@@ -18,6 +20,10 @@
     "chalk": "^5.6.2",
     "commander": "^11.1.0",
     "inquirer": "^8.2.6"
+  },
+  "devDependencies": {
+    "@sundial-protocol/btc-regtest": "*",
+    "vitest": "^4.0.18"
   },
   "files": [
     "bin/"

@@ -1,37 +1,52 @@
 #!/usr/bin/env bash
-# Bitcoin Core regtest + ord (runes index) for the Solstice regtest suite.
+# Bitcoin Core regtest for test suites, with ord (runes index) on request.
 #
-#   regtest.sh run     start both, run `npm run test:regtest`, stop both
-#   regtest.sh up      download (first time), start bitcoind and ord
-#   regtest.sh down    stop both and delete the chain and the index
-#   regtest.sh status  show what is running
-#   regtest.sh logs    print the tail of both logs
+#   btc-regtest run [--ord] [-- command...]
+#                           start, run the command in the current directory
+#                           (default: npm run test:regtest), stop
+#   btc-regtest up [--ord]  download (first time) and start bitcoind; with
+#                           --ord also start `ord --index-runes server`
+#   btc-regtest down        stop everything and delete the chain and the index
+#   btc-regtest status      show what is running
+#   btc-regtest logs        print the tail of the logs
+#
+# BTC_REGTEST_ORD=1 is the same as --ord. Without it ord is never downloaded.
 #
 # Runs on Linux x86_64 and macOS. On Windows run it inside WSL: the daemons run
 # in WSL and the test suite reaches them on localhost, with either a Linux node
-# or the Windows one (run `npm run test:regtest` from Windows, or let `run` find
-# npm through cmd.exe).
+# or the Windows one (`run` finds npm through cmd.exe when WSL has no node).
 #
 # Binaries are official release archives, checked against the SHA-256 values
-# below, kept in $SOLSTICE_REGTEST_HOME (default ~/.cache/solstice-regtest).
+# below, kept in $BTC_REGTEST_HOME (default ~/.cache/btc-regtest).
 # Every `up` starts from an empty chain.
 set -euo pipefail
 
 BITCOIN_VERSION=29.0
-ORD_VERSION=0.29.0 # commit 7e37a3bd, the same one tests/vectors/ord-oracle pins
+ORD_VERSION=0.29.0 # commit 7e37a3bd, the one Solstice's ord reference vectors pin
 
-HOME_DIR="${SOLSTICE_REGTEST_HOME:-${XDG_CACHE_HOME:-$HOME/.cache}/solstice-regtest}"
+HOME_DIR="${BTC_REGTEST_HOME:-${XDG_CACHE_HOME:-$HOME/.cache}/btc-regtest}"
 BIN_DIR="$HOME_DIR/bin"
 DATA_DIR="$HOME_DIR/data"
-RPC_PORT="${SOLSTICE_REGTEST_RPC_PORT:-18543}"
-ORD_PORT="${SOLSTICE_REGTEST_ORD_PORT:-18580}"
-# Regtest only. The suite reads the same defaults (regtest/env.ts).
-RPC_USER=solstice
-RPC_PASS=solstice
+RPC_PORT="${BTC_REGTEST_RPC_PORT:-18543}"
+ORD_PORT="${BTC_REGTEST_ORD_PORT:-18580}"
+# Regtest only. The helpers read the same defaults (index.js).
+RPC_USER=regtest
+RPC_PASS=regtest
 
-PACKAGE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+COMMAND="${1:-}"
+[ $# -gt 0 ] && shift
+WITH_ORD="${BTC_REGTEST_ORD:-}"
+[ "$WITH_ORD" = 0 ] && WITH_ORD=
+SUITE=(npm run test:regtest)
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ord) WITH_ORD=1; shift ;;
+    --) shift; SUITE=("$@"); break ;;
+    *) echo "btc-regtest: unknown argument $1" >&2; exit 2 ;;
+  esac
+done
 
-die() { echo "regtest.sh: $*" >&2; exit 1; }
+die() { echo "btc-regtest: $*" >&2; exit 1; }
 
 sha256_of() {
   if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1
@@ -51,7 +66,7 @@ fetch() {
 }
 
 install_binaries() {
-  local os arch bitcoin_target bitcoin_sha ord_target ord_sha
+  local os arch bitcoin_target bitcoin_sha ord_target ord_sha archive
   os=$(uname -s) arch=$(uname -m)
   case "$os-$arch" in
     Linux-x86_64)
@@ -69,20 +84,22 @@ install_binaries() {
       bitcoin_sha=5bb824fc86a15318d6a83a1b821ff4cd4b3d3d0e1ec3d162b805ccf7cae6fca8
       ord_target=x86_64-apple-darwin
       ord_sha=a0085f296057563a31258402437c1182fc13bb9559826d1f5490feb4be6dbb75 ;;
-    *) die "no pinned binaries for $os $arch; put bitcoind $BITCOIN_VERSION and ord $ORD_VERSION in $BIN_DIR yourself" ;;
+    *) die "no pinned binaries for $os $arch; put bitcoind $BITCOIN_VERSION (and ord $ORD_VERSION, for --ord) in $BIN_DIR yourself" ;;
   esac
 
   mkdir -p "$BIN_DIR" "$HOME_DIR/downloads"
 
   if [ ! -x "$BIN_DIR/bitcoind" ]; then
-    local archive="$HOME_DIR/downloads/bitcoin-$BITCOIN_VERSION-$bitcoin_target.tar.gz"
+    archive="$HOME_DIR/downloads/bitcoin-$BITCOIN_VERSION-$bitcoin_target.tar.gz"
     fetch "https://bitcoincore.org/bin/bitcoin-core-$BITCOIN_VERSION/bitcoin-$BITCOIN_VERSION-$bitcoin_target.tar.gz" "$bitcoin_sha" "$archive"
     tar -xzf "$archive" -C "$HOME_DIR/downloads"
     cp "$HOME_DIR/downloads/bitcoin-$BITCOIN_VERSION/bin/bitcoind" "$HOME_DIR/downloads/bitcoin-$BITCOIN_VERSION/bin/bitcoin-cli" "$BIN_DIR/"
   fi
 
+  [ -n "$WITH_ORD" ] || return 0
+
   if [ ! -x "$BIN_DIR/ord" ]; then
-    local archive="$HOME_DIR/downloads/ord-$ORD_VERSION-$ord_target.tar.gz"
+    archive="$HOME_DIR/downloads/ord-$ORD_VERSION-$ord_target.tar.gz"
     fetch "https://github.com/ordinals/ord/releases/download/$ORD_VERSION/ord-$ORD_VERSION-$ord_target.tar.gz" "$ord_sha" "$archive"
     mkdir -p "$HOME_DIR/downloads/ord-$ORD_VERSION"
     tar -xzf "$archive" -C "$HOME_DIR/downloads/ord-$ORD_VERSION"
@@ -130,11 +147,15 @@ down() {
 up() {
   install_binaries
   down
-  mkdir -p "$DATA_DIR/bitcoin" "$DATA_DIR/ord"
+  rm -f "$HOME_DIR/ord.log"
+  mkdir -p "$DATA_DIR/bitcoin"
 
-  # -txindex: ord looks up the commit transaction of every etching.
+  # -txindex: the helpers look up confirmed transactions by id, and ord looks up
+  # the commit transaction of every etching.
+  # -acceptnonstdtxn=0: regtest relays non-standard transactions by default.
+  # Turned off so the mempool applies the policy mainnet nodes apply.
   nohup ${DETACH[@]+"${DETACH[@]}"} "$BIN_DIR/bitcoind" -regtest -datadir="$DATA_DIR/bitcoin" \
-    -server -txindex=1 -listen=0 -fallbackfee=0.0001 \
+    -server -txindex=1 -listen=0 -fallbackfee=0.0001 -acceptnonstdtxn=0 \
     -rpcbind=127.0.0.1 -rpcallowip=127.0.0.1 -rpcport="$RPC_PORT" \
     -rpcuser="$RPC_USER" -rpcpassword="$RPC_PASS" \
     >"$HOME_DIR/bitcoind.log" 2>&1 &
@@ -142,7 +163,11 @@ up() {
 
   for _ in $(seq 1 100); do cli getblockcount >/dev/null 2>&1 && break; sleep 0.2; done
   cli getblockcount >/dev/null || { tail -n 20 "$HOME_DIR/bitcoind.log" >&2; die "bitcoind did not start"; }
+  echo "bitcoind $("$BIN_DIR/bitcoind" --version | head -n 1 | sed 's/.*version //') rpc 127.0.0.1:$RPC_PORT"
 
+  [ -n "$WITH_ORD" ] || return 0
+
+  mkdir -p "$DATA_DIR/ord"
   nohup ${DETACH[@]+"${DETACH[@]}"} "$BIN_DIR/ord" --regtest --index-runes \
     --bitcoin-rpc-url "127.0.0.1:$RPC_PORT" \
     --bitcoin-rpc-username "$RPC_USER" --bitcoin-rpc-password "$RPC_PASS" \
@@ -157,8 +182,6 @@ up() {
   done
   curl --silent --fail "http://127.0.0.1:$ORD_PORT/blockheight" >/dev/null \
     || { tail -n 20 "$HOME_DIR/ord.log" >&2; die "ord did not start"; }
-
-  echo "bitcoind $("$BIN_DIR/bitcoind" --version | head -n 1 | sed 's/.*version //') rpc 127.0.0.1:$RPC_PORT"
   echo "$("$BIN_DIR/ord" --version) http://127.0.0.1:$ORD_PORT"
 }
 
@@ -167,26 +190,35 @@ status() {
   running "$HOME_DIR/ord.pid" && echo "ord: height $(curl --silent "http://127.0.0.1:$ORD_PORT/blockheight")" || echo "ord: not running"
 }
 
+logs() {
+  local log
+  for log in "$HOME_DIR/bitcoind.log" "$HOME_DIR/ord.log"; do
+    if [ -f "$log" ]; then echo "==> $log <=="; tail -n 40 "$log"; fi
+  done
+}
+
 run_suite() {
-  cd "$PACKAGE_DIR"
-  if command -v npm >/dev/null && ! command -v npm | grep -q '^/mnt/'; then
-    npm run test:regtest
+  # Runs in the directory btc-regtest was called from: the package under test.
+  if [ "${SUITE[0]}" != npm ]; then
+    "${SUITE[@]}"
+  elif command -v npm >/dev/null && ! command -v npm | grep -q '^/mnt/'; then
+    "${SUITE[@]}"
   elif command -v cmd.exe >/dev/null; then
     # WSL without a Linux node: use the Windows one.
-    cmd.exe /c "npm run test:regtest"
+    cmd.exe /c "${SUITE[*]}"
   else
     die "npm not found"
   fi
 }
 
-case "${1:-}" in
+case "$COMMAND" in
   up) up ;;
   down) down ;;
   status) status ;;
-  logs) tail -n 40 "$HOME_DIR/bitcoind.log" "$HOME_DIR/ord.log" ;;
+  logs) logs ;;
   run)
     up
     trap down EXIT
     run_suite ;;
-  *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

@@ -1,0 +1,37 @@
+{
+  "name": "@sundial-protocol/btc-regtest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local Bitcoin Core regtest (ord optional) and test helpers for Sundial packages",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./ord": {
+      "types": "./ord.d.ts",
+      "default": "./ord.js"
+    }
+  },
+  "bin": {
+    "btc-regtest": "./regtest.sh"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "ord.js",
+    "ord.d.ts",
+    "regtest.sh"
+  ],
+  "dependencies": {
+    "@bitcoinerlab/secp256k1": "^1.2.0",
+    "bitcoinjs-lib": "^7.0.0",
+    "ecpair": "^2.1.0"
+  },
+  "author": "Sundial Protocol",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

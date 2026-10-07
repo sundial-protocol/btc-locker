@@ -24,7 +24,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:regtest": "npm run build && vitest run --config vitest.regtest.config.ts",
+    "test:regtest": "vitest run --config vitest.regtest.config.ts",
+    "regtest": "btc-regtest run --ord",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "type-check": "tsc --noEmit"
@@ -45,6 +46,7 @@
     "bitcoinjs-lib": "^7.0.0"
   },
   "devDependencies": {
+    "@sundial-protocol/btc-regtest": "*",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^4.0.18",
     "ecpair": "^2.1.0",
