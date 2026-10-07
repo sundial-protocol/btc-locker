@@ -4,14 +4,7 @@
  */
 
 import https from "https";
-
-/**
- * The network a {@link BitcoinAPI} talks to. Any object with a `name` works, so
- * the locker's network objects (which also carry a bitcoinjs-lib network) pass as is.
- */
-export interface BitcoinNetwork {
-  name: "bitcoin" | "testnet" | "regtest";
-}
+import type { BitcoinNetwork } from "./network.js";
 
 /**
  * Bitcoin UTXO with API status information

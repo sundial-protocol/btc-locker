@@ -12,10 +12,17 @@ export type {
   ApiUrls,
   AddressInfo,
   ApiUTXO,
-  BitcoinNetwork,
   FeeEstimates,
   BroadcastResult,
 } from "./bitcoin-api.js";
+
+export {
+  NETWORKS,
+  type BitcoinNetwork,
+  type Network,
+  type NetworkName,
+  type NetworkType,
+} from "./network.js";
 
 export { BitcoinAPI };
 export default BitcoinAPI;

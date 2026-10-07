@@ -14,22 +14,22 @@ describe("BTCLocker (index)", () => {
   describe("constructor", () => {
     test("should accept string network name 'testnet'", () => {
       const l = new BTCLocker("testnet");
-      expect(l.network).toBe(bitcoin.networks.testnet);
+      expect(l.network).toEqual(bitcoin.networks.testnet);
     });
 
     test("should accept string network name 'bitcoin'", () => {
       const l = new BTCLocker("bitcoin");
-      expect(l.network).toBe(bitcoin.networks.bitcoin);
+      expect(l.network).toEqual(bitcoin.networks.bitcoin);
     });
 
     test("should accept NetworkType object", () => {
       const l = new BTCLocker(NETWORKS.testnet);
-      expect(l.network).toBe(bitcoin.networks.testnet);
+      expect(l.network).toEqual(bitcoin.networks.testnet);
     });
 
     test("should default to testnet when no network given", () => {
       const l = new BTCLocker();
-      expect(l.network).toBe(bitcoin.networks.testnet);
+      expect(l.network).toEqual(bitcoin.networks.testnet);
     });
 
     test("should throw for unknown string network", () => {

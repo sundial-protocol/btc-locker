@@ -21,18 +21,18 @@ describe("BTCLocker", () => {
       // Test testnet string
       const testnetLocker = new BTCLocker("testnet");
       await testnetLocker.init();
-      expect(testnetLocker.network).toBe(bitcoin.networks.testnet);
+      expect(testnetLocker.network).toEqual(bitcoin.networks.testnet);
 
       // Test mainnet string
       const mainnetLocker = new BTCLocker("bitcoin");
       await mainnetLocker.init();
-      expect(mainnetLocker.network).toBe(bitcoin.networks.bitcoin);
+      expect(mainnetLocker.network).toEqual(bitcoin.networks.bitcoin);
     });
 
     test("should accept network objects", async () => {
       const networkLocker = new BTCLocker("testnet");
       await networkLocker.init();
-      expect(networkLocker.network).toBe(bitcoin.networks.testnet);
+      expect(networkLocker.network).toEqual(bitcoin.networks.testnet);
     });
 
     test("should throw error for invalid network string", () => {
