@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import https from "https";
 import BitcoinAPI from "../src/bitcoin-api";
-import { NETWORKS } from "../src/utils/network";
+import { NETWORKS } from "../src/network";
 
 vi.mock("https", () => ({
   default: { request: vi.fn() },
