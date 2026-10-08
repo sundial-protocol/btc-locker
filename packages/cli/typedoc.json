@@ -1,0 +1,8 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["bin/commands/*.js", "bin/locktime.js"],
+  "tsconfig": "tsconfig.docs.json",
+  "readme": "../../CLI.md",
+  "includeVersion": true,
+  "skipErrorChecking": true
+}

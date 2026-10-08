@@ -1,0 +1,16 @@
+# Generates ../ord-runestones.json: reference vectors for the native runestone
+# codec, produced by ord's own `ordinals` crate. Not part of the npm build.
+# Regenerate with ./generate.sh (needs Rust >= 1.89).
+[package]
+name = "ord-oracle"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+# ord 0.29.0
+ordinals = { git = "https://github.com/ordinals/ord", rev = "7e37a3bd3391044b39f5f11f20dfdb8b3764cd0e" }
+bitcoin = "0.32.5"
+serde_json = { version = "1", features = ["preserve_order"] }
