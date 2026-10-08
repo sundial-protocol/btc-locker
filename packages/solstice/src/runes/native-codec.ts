@@ -32,11 +32,9 @@ import {
 } from "./types.js";
 import { RUNE_ID_ZERO, runeIdDelta, compareRuneId, type RuneId } from "./rune-id.js";
 import { encodeVarint, decodeAllVarints, U128_MAX } from "./varint.js";
+import { OP_PUSHDATA1, OP_PUSHDATA2, OP_PUSHDATA4, pushBytes } from "./script.js";
 
 const OP_RETURN = 0x6a;
-const OP_PUSHDATA1 = 0x4c;
-const OP_PUSHDATA2 = 0x4d;
-const OP_PUSHDATA4 = 0x4e;
 
 const U32_MAX = 0xffff_ffffn;
 const U64_MAX = (1n << 64n) - 1n;
@@ -53,26 +51,6 @@ const FLAW_TEXT: Record<Flaw, string> = {
   "unrecognized-flag": "unrecognized flag",
   varint: "invalid varint",
 };
-
-/** A data push, with the length prefix rust-bitcoin's `push_slice` would write. */
-function pushBytes(data: Buffer): Buffer {
-  const n = data.length;
-  let prefix: Buffer;
-  if (n < OP_PUSHDATA1) {
-    prefix = Buffer.from([n]);
-  } else if (n <= 0xff) {
-    prefix = Buffer.from([OP_PUSHDATA1, n]);
-  } else if (n <= 0xffff) {
-    prefix = Buffer.alloc(3);
-    prefix[0] = OP_PUSHDATA2;
-    prefix.writeUInt16LE(n, 1);
-  } else {
-    prefix = Buffer.alloc(5);
-    prefix[0] = OP_PUSHDATA4;
-    prefix.writeUInt32LE(n, 1);
-  }
-  return Buffer.concat([prefix, data]);
-}
 
 type Payload = { payload: Buffer } | { flaw: Flaw } | undefined;
 

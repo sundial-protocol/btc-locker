@@ -5,6 +5,7 @@ import ecc from "@bitcoinerlab/secp256k1";
 import {
   ETCH_COMMIT_CONFIRMATIONS,
   buildEtchCommitTransaction,
+  commitmentLeafScript,
   createEtchCommitment,
 } from "../src/tx/etch-commit";
 import { buildEtchTransaction } from "../src/tx/etch";
@@ -81,6 +82,30 @@ describe("createEtchCommitment", () => {
     const c = createEtchCommitment({ name: "F" }, adminXOnly, NETWORK);
     expect(runeCommitment(runeNameToNumber("F")).toString("hex")).toBe("05");
     expect(c.tapLeafScriptHex.endsWith("ac0063010568")).toBe(true);
+  });
+
+  test("writes 0x81 as a data push, not OP_1NEGATE", () => {
+    const leaf = commitmentLeafScript(adminXOnly, Buffer.from([0x81]));
+    expect(leaf.toString("hex").endsWith("ac0063018168")).toBe(true);
+  });
+
+  test("the longest name has a 16-byte commitment, the largest allowed", () => {
+    const longest = vectors.runeNames.find((v) => v.commitment.length === 32)!;
+    const c = createEtchCommitment({ name: longest.name }, adminXOnly, NETWORK);
+    expect(c.tapLeafScriptHex.endsWith(`ac006310${longest.commitment}68`)).toBe(true);
+  });
+
+  test("an empty commitment (rune A) is pushed as a zero byte", () => {
+    const c = createEtchCommitment({ name: "A" }, adminXOnly, NETWORK);
+    expect(c.tapLeafScriptHex.endsWith("ac00630068")).toBe(true);
+  });
+
+  test("refuses a commitment longer than 16 bytes", () => {
+    expect(() => commitmentLeafScript(adminXOnly, Buffer.alloc(17))).toThrow(/at most 16 bytes/);
+  });
+
+  test("refuses a leaf key that is not x-only", () => {
+    expect(() => commitmentLeafScript(Buffer.alloc(33, 2), Buffer.alloc(4))).toThrow(/x-only/);
   });
 
   test("rejects a key of the wrong length", () => {
