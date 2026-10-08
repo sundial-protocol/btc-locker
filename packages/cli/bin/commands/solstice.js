@@ -108,6 +108,41 @@ function explorerTxUrl(network, txid) {
     : `https://mempool.space/tx/${txid}`;
 }
 
+/**
+ * Output for one command run. Normally it prints as it goes. With the global
+ * `--json` flag it prints nothing until the end and then writes exactly one JSON
+ * document to stdout: status lines are dropped, prompts and errors go to stderr.
+ */
+function makeReporter(parentOptions) {
+  const json = !!parentOptions.json;
+  const doc = {};
+  const target = (key) => (key ? (doc[key] ??= {}) : doc);
+  return {
+    /** A result block: printed with a title, or stored under `key` in JSON mode. */
+    show(data, title, key) {
+      if (json) Object.assign(target(key), data);
+      else displayResult(data, parentOptions, title);
+    },
+    /** Extra fields that only the JSON document carries. */
+    add(fields, key) {
+      if (json) Object.assign(target(key), fields);
+    },
+    /** A human-readable status line. */
+    note(message) {
+      if (!json) console.log(message);
+    },
+    prompt: json ? inquirer.createPromptModule({ output: process.stderr }) : inquirer.prompt,
+    fail(error) {
+      if (json) doc.error = error.message;
+      console.error(chalk.red(`Error: ${error.message}`));
+      if (parentOptions.verbose) console.error(error.stack);
+    },
+    flush() {
+      if (json) console.log(JSON.stringify(doc, null, 2));
+    },
+  };
+}
+
 // ── command wiring ───────────────────────────────────────────────────────────
 
 export function setupSolsticeCommands(program) {
@@ -276,6 +311,7 @@ export async function signAndBroadcast(ctx, psbtBase64, fromKey) {
 
 async function handleEtch(cmd, parentOptions) {
   const { networkName, networkType, network, api } = resolveNetwork(parentOptions);
+  const r = makeReporter(parentOptions);
 
   try {
     const locker = await initLocker(parentOptions);
@@ -290,7 +326,7 @@ async function handleEtch(cmd, parentOptions) {
 
     // Interactive: prompt for whatever the essential flags didn't provide.
     if (!fromKey || !name || !supply) {
-      const a = await inquirer.prompt([
+      const a = await r.prompt([
         {
           type: "input",
           name: "fromKey",
@@ -371,7 +407,7 @@ async function handleEtch(cmd, parentOptions) {
       const rate = await feeRate();
       const res = await buildEtchCommit(ctx, { rune, fromKey, feeRate: rate, vaultOutputValue });
 
-      displayResult(
+      r.show(
         jsonSafe({
           rune: displayName,
           commitAddress: res.commitment.address,
@@ -381,34 +417,39 @@ async function handleEtch(cmd, parentOptions) {
           change: res.changeSats,
           outputs: res.outputs,
         }),
-        parentOptions,
         "Solstice Etch (C0) step 1 of 2: commit, built",
+        "commit",
       );
-      console.log(
+      r.add({ psbtBase64: res.psbtBase64 }, "commit");
+      r.note(
         chalk.gray(
           "The commit output can only be spent by this key. The same key signs step 2 and so decides where the premine goes.",
         ),
       );
 
       if (cmd.dryRun) {
-        console.log(chalk.yellow("🔍 Dry run — not broadcast."));
-        console.log(chalk.blue(`PSBT (base64): ${res.psbtBase64}`));
+        r.note(chalk.yellow("🔍 Dry run — not broadcast."));
+        r.note(chalk.blue(`PSBT (base64): ${res.psbtBase64}`));
         return;
       }
 
-      const { confirm } = await inquirer.prompt([
+      const { confirm } = await r.prompt([
         { type: "confirm", name: "confirm", message: `Commit to ${displayName} on ${networkName}?`, default: false },
       ]);
-      if (!confirm) return console.log(chalk.yellow("⏹️  Cancelled."));
+      if (!confirm) {
+        r.add({ cancelled: true });
+        return r.note(chalk.yellow("⏹️  Cancelled."));
+      }
 
-      console.log(chalk.blue("Broadcasting..."));
+      r.note(chalk.blue("Broadcasting..."));
       commitTxid = await signAndBroadcast(ctx, res.psbtBase64, fromKey);
-      console.log(chalk.green("✅ Commit broadcast."));
-      console.log(chalk.blue(`Commit txid: ${commitTxid}`));
-      console.log(chalk.blue(`Explorer: ${explorerTxUrl(networkName, commitTxid)}`));
+      r.add({ txid: commitTxid }, "commit");
+      r.note(chalk.green("✅ Commit broadcast."));
+      r.note(chalk.blue(`Commit txid: ${commitTxid}`));
+      r.note(chalk.blue(`Explorer: ${explorerTxUrl(networkName, commitTxid)}`));
 
       if (!cmd.wait) {
-        console.log(
+        r.note(
           chalk.yellow(
             `Step 2: once the commit has ${needed} confirmations, run the same command again with --commit ${commitTxid}`,
           ),
@@ -416,11 +457,11 @@ async function handleEtch(cmd, parentOptions) {
         return;
       }
 
-      console.log(chalk.blue(`Waiting for ${needed} confirmations...`));
+      r.note(chalk.blue(`Waiting for ${needed} confirmations...`));
       for (;;) {
         const confirmations = await confirmationsOf(api, commitTxid);
         if (confirmations >= needed) break;
-        console.log(chalk.gray(`  ${confirmations}/${needed}`));
+        r.note(chalk.gray(`  ${confirmations}/${needed}`));
         await new Promise((resolve) => setTimeout(resolve, 60_000));
       }
     }
@@ -436,7 +477,7 @@ async function handleEtch(cmd, parentOptions) {
       feeRate: rate,
     });
 
-    displayResult(
+    r.show(
       jsonSafe({
         rune: { name: displayName, ticker: rune.displayTicker, divisibility: rune.divisibility, supply: rune.totalSupply },
         commit: `${commitTxid}:0`,
@@ -447,40 +488,47 @@ async function handleEtch(cmd, parentOptions) {
         runestoneScriptHex: res.runestoneScriptHex,
         outputs: res.outputs,
       }),
-      parentOptions,
       "Solstice Etch (C0) step 2 of 2: etch, built",
+      "etch",
     );
+    r.add({ psbtBase64: res.psbtBase64 }, "etch");
 
     if (cmd.dryRun) {
-      console.log(chalk.yellow("🔍 Dry run — not broadcast."));
-      console.log(chalk.blue(`PSBT (base64): ${res.psbtBase64}`));
+      r.note(chalk.yellow("🔍 Dry run — not broadcast."));
+      r.note(chalk.blue(`PSBT (base64): ${res.psbtBase64}`));
       return;
     }
 
-    const { confirm } = await inquirer.prompt([
+    const { confirm } = await r.prompt([
       { type: "confirm", name: "confirm", message: `Etch ${displayName} (supply ${supply}) on ${networkName}?`, default: false },
     ]);
-    if (!confirm) return console.log(chalk.yellow("⏹️  Cancelled."));
+    if (!confirm) {
+      r.add({ cancelled: true });
+      return r.note(chalk.yellow("⏹️  Cancelled."));
+    }
 
-    console.log(chalk.blue("Broadcasting..."));
+    r.note(chalk.blue("Broadcasting..."));
     const finalTxid = await signAndBroadcast(ctx, res.psbtBase64, fromKey);
+    r.add({ txid: finalTxid }, "etch");
 
-    console.log(chalk.green("✅ Etch broadcast."));
-    console.log(chalk.blue(`Txid: ${finalTxid}`));
-    console.log(chalk.blue(`Explorer: ${explorerTxUrl(networkName, finalTxid)}`));
-    console.log(
+    r.note(chalk.green("✅ Etch broadcast."));
+    r.note(chalk.blue(`Txid: ${finalTxid}`));
+    r.note(chalk.blue(`Explorer: ${explorerTxUrl(networkName, finalTxid)}`));
+    r.note(
       chalk.gray(
         "Rune id is assigned on confirmation as <blockHeight>:<txIndexInBlock>; read it from a Runes explorer, then pass it to `solstice swap --rune-id`.",
       ),
     );
   } catch (error) {
-    console.error(chalk.red(`Error: ${error.message}`));
-    if (parentOptions.verbose) console.error(error.stack);
+    r.fail(error);
+  } finally {
+    r.flush();
   }
 }
 
 async function handleSwap(cmd, parentOptions) {
   const { networkName, networkType, network, api } = resolveNetwork(parentOptions);
+  const r = makeReporter(parentOptions);
 
   try {
     const locker = await initLocker(parentOptions);
@@ -508,7 +556,7 @@ async function handleSwap(cmd, parentOptions) {
       !runeId || rtUtxoSpecs.length === 0 || !rtAmount || !rtTo || !rtChange ||
       btcUtxoSpecs.length === 0 || !btcAmount || !btcTo
     ) {
-      const a = await inquirer.prompt([
+      const a = await r.prompt([
         { type: "input", name: "runeId", message: "Rune id (block:tx):", when: () => !runeId,
           validate: (v) => { try { parseRuneId(v); return true; } catch (e) { return e.message; } } },
         { type: "input", name: "rtUtxos", message: "RT input UTXO(s) — txid:vout:value:runeAmount (space-separated):", when: () => rtUtxoSpecs.length === 0,
@@ -591,7 +639,7 @@ async function handleSwap(cmd, parentOptions) {
       network,
     });
 
-    displayResult(
+    r.show(
       jsonSafe({
         runeId,
         feeRateSatVb: feeRate,
@@ -602,19 +650,19 @@ async function handleSwap(cmd, parentOptions) {
         runestoneScriptHex: res.runestoneScriptHex,
         outputs: res.outputs,
       }),
-      parentOptions,
       "Solstice Swap (C1/C2) — built",
     );
+    r.add({ psbtBase64: res.psbtBase64 });
 
     if (cmd.dryRun) {
-      console.log(chalk.yellow("🔍 Dry run — not broadcast."));
-      console.log(chalk.blue(`PSBT (base64): ${res.psbtBase64}`));
+      r.note(chalk.yellow("🔍 Dry run — not broadcast."));
+      r.note(chalk.blue(`PSBT (base64): ${res.psbtBase64}`));
       return;
     }
 
     if (!rtKey && !btcKey) {
-      console.log(chalk.yellow("No signing keys provided; the unsigned PSBT above can be co-signed by each party."));
-      console.log(chalk.blue(`PSBT (base64): ${res.psbtBase64}`));
+      r.note(chalk.yellow("No signing keys provided; the unsigned PSBT above can be co-signed by each party."));
+      r.note(chalk.blue(`PSBT (base64): ${res.psbtBase64}`));
       return;
     }
 
@@ -626,31 +674,37 @@ async function handleSwap(cmd, parentOptions) {
       ...btcInputs.map(() => signBtcKey),
     ];
 
-    const { confirm } = await inquirer.prompt([
+    const { confirm } = await r.prompt([
       { type: "confirm", name: "confirm", message: `Broadcast the swap on ${networkName}?`, default: false },
     ]);
-    if (!confirm) return console.log(chalk.yellow("⏹️  Cancelled."));
+    if (!confirm) {
+      r.add({ cancelled: true });
+      return r.note(chalk.yellow("⏹️  Cancelled."));
+    }
 
     const signedHex = await locker.signTransaction(res.psbtBase64, keys);
     const txid = bitcoin.Transaction.fromHex(signedHex).getId();
-    console.log(chalk.blue("Broadcasting..."));
+    r.note(chalk.blue("Broadcasting..."));
     const broadcast = await api.broadcastTransaction(signedHex);
     const finalTxid = broadcast.txid || txid;
+    r.add({ txid: finalTxid });
 
-    console.log(chalk.green("✅ Swap broadcast."));
-    console.log(chalk.blue(`Txid: ${finalTxid}`));
-    console.log(chalk.blue(`Explorer: ${explorerTxUrl(networkName, finalTxid)}`));
+    r.note(chalk.green("✅ Swap broadcast."));
+    r.note(chalk.blue(`Txid: ${finalTxid}`));
+    r.note(chalk.blue(`Explorer: ${explorerTxUrl(networkName, finalTxid)}`));
   } catch (error) {
-    console.error(chalk.red(`Error: ${error.message}`));
-    if (parentOptions.verbose) console.error(error.stack);
+    r.fail(error);
+  } finally {
+    r.flush();
   }
 }
 
 async function handleDecode(cmd, parentOptions) {
+  const r = makeReporter(parentOptions);
   try {
     let scriptHex = cmd.script;
     if (!scriptHex) {
-      const a = await inquirer.prompt([
+      const a = await r.prompt([
         {
           type: "input",
           name: "scriptHex",
@@ -662,20 +716,20 @@ async function handleDecode(cmd, parentOptions) {
     }
     const script = Buffer.from(scriptHex, "hex");
     const decoded = nativeRunestoneCodec.decipher(script);
-    displayResult(
+    r.show(
       jsonSafe({
         cenotaph: decoded.cenotaph,
         flaws: decoded.flaws,
         runestone: decoded.runestone,
       }),
-      parentOptions,
       "Runestone Decode",
     );
     if (decoded.cenotaph) {
-      console.log(chalk.red("⚠️  This scriptPubKey is a cenotaph (Runes indexers would burn affected runes)."));
+      r.note(chalk.red("⚠️  This scriptPubKey is a cenotaph (Runes indexers would burn affected runes)."));
     }
   } catch (error) {
-    console.error(chalk.red(`Error: ${error.message}`));
-    if (parentOptions.verbose) console.error(error.stack);
+    r.fail(error);
+  } finally {
+    r.flush();
   }
 }

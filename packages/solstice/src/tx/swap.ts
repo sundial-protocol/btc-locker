@@ -150,24 +150,31 @@ export function buildSwapTransaction(params: SwapParams): SwapResult {
     sumValues(rt.inputs) + sumValues(btc.inputs);
   const runeOutputsSats = runeOutputValue * numRuneOutputs;
 
-  // Estimate assuming a BTC change output exists, then drop it if sub-dust.
+  // The swap is affordable if it covers the fee without a BTC change output.
+  // Change is added only when what is left after the larger, with-change fee is
+  // above dust.
   const totalInputCount = rt.inputs.length + btc.inputs.length;
-  const outputCountWithChange =
-    numRuneOutputs + 1 /* btc recipient */ + 1 /* runestone */ + 1 /* btc change */;
-  let fee = FeeUtils.estimateFee(totalInputCount, outputCountWithChange, feeRate);
-  let btcChangeSats = satsIn - runeOutputsSats - btc.amount - fee;
-
-  if (btcChangeSats < 0) {
+  const outputCountWithoutChange =
+    numRuneOutputs + 1 /* btc recipient */ + 1 /* runestone */;
+  const remainder = satsIn - runeOutputsSats - btc.amount;
+  const feeWithoutChange = FeeUtils.estimateFee(
+    totalInputCount,
+    outputCountWithoutChange,
+    feeRate,
+  );
+  if (remainder < feeWithoutChange) {
     throw new Error(
-      `swap: insufficient BTC. in=${satsIn}, runeOutputs=${runeOutputsSats}, btcOut=${btc.amount}, fee=${fee}, short=${-btcChangeSats}`,
+      `swap: insufficient BTC. in=${satsIn}, runeOutputs=${runeOutputsSats}, btcOut=${btc.amount}, fee=${feeWithoutChange}, short=${feeWithoutChange - remainder}`,
     );
   }
 
+  let fee = FeeUtils.estimateFee(totalInputCount, outputCountWithoutChange + 1, feeRate);
+  let btcChangeSats = remainder - fee;
   const emitBtcChange =
     !!btc.changeAddress && btcChangeSats >= FeeUtils.DUST_THRESHOLD;
   if (!emitBtcChange) {
     // No change output: whatever is left over is paid as fee, so report that.
-    fee = satsIn - runeOutputsSats - btc.amount;
+    fee = remainder;
     btcChangeSats = 0;
   }
 

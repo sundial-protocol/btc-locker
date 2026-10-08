@@ -173,6 +173,26 @@ describe("buildEtchCommitTransaction (C0, commit)", () => {
     ).toThrow(/insufficient/);
   });
 
+  test("builds without change when funds cover the one-output fee only", () => {
+    // At 5 sat/vB the estimate is 970 with one output and 1,140 with two.
+    const params = {
+      rune,
+      revealPublicKey: adminXOnly,
+      commitOutputValue: 10_000,
+      changeAddress: funding.address,
+      feeRate: 5,
+      network: NETWORK,
+    };
+    const res = buildEtchCommitTransaction({ ...params, inputs: [{ ...inputs[0], value: 11_000 }] });
+    expect(res.outputs.map((o) => o.role)).toEqual(["etch commit"]);
+    expect(res.fee).toBe(1_000);
+    expect(res.changeSats).toBe(0);
+
+    expect(() =>
+      buildEtchCommitTransaction({ ...params, inputs: [{ ...inputs[0], value: 10_969 }] }),
+    ).toThrow(/insufficient funds.*fee=970, short=1$/);
+  });
+
   test("six confirmations, as ord requires", () => {
     expect(ETCH_COMMIT_CONFIRMATIONS).toBe(6);
   });

@@ -133,4 +133,31 @@ describe("buildWithdrawTransaction (C2)", () => {
       }),
     ).toThrow(/insufficient BTC/);
   });
+
+  test("builds without BTC change when funds cover the no-change fee only", () => {
+    // Two inputs, three outputs: 2,060 at 5 sat/vB. A change output makes it 2,230.
+    const params = {
+      rune,
+      userRtInputs: [{ txid: txid(2), vout: 0, value: 1_000, scriptPubKey: investor.scriptHex, runeAmount: 400_000n }],
+      rtAmount: 400_000n,
+      vaultRtAddress: vault.address,
+      userRtChangeAddress: investor.address,
+      btcAmount: 90_000,
+      userBtcAddress: investor.address,
+      bufferBtcChangeAddress: buffer.address,
+      feeRate: 5,
+      network: NETWORK,
+    };
+    const bufferInput = { txid: txid(4), vout: 2, scriptPubKey: buffer.scriptHex };
+
+    // in = 1,000 + 91,646; out = 546 + 90,000; 2,100 left.
+    const res = buildWithdrawTransaction({ ...params, bufferBtcInputs: [{ ...bufferInput, value: 91_646 }] });
+    expect(res.outputs.map((o) => o.role)).toEqual(["rt recipient", "btc recipient", "runestone"]);
+    expect(res.fee).toBe(2_100);
+    expect(res.btcChangeSats).toBe(0);
+
+    expect(() =>
+      buildWithdrawTransaction({ ...params, bufferBtcInputs: [{ ...bufferInput, value: 91_605 }] }),
+    ).toThrow(/insufficient BTC.*fee=2060, short=1$/);
+  });
 });

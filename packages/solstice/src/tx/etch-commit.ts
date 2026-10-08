@@ -201,18 +201,22 @@ export function buildEtchCommitTransaction(params: EtchCommitParams): EtchCommit
     return sum + u.value;
   }, 0);
 
-  // Outputs: commit (0), optional change (1).
-  let fee = FeeUtils.estimateFee(inputs.length, 2, feeRate);
-  let changeSats = totalIn - commitOutputValue - fee;
-  if (changeSats < 0) {
+  // Outputs: commit (0), optional change (1). The transaction is affordable if
+  // it covers the fee without a change output; change is added only when what
+  // is left after the larger, with-change fee is above dust.
+  const remainder = totalIn - commitOutputValue;
+  const feeWithoutChange = FeeUtils.estimateFee(inputs.length, 1, feeRate);
+  if (remainder < feeWithoutChange) {
     throw new Error(
-      `etch commit: insufficient funds. inputs=${totalIn}, commit=${commitOutputValue}, fee=${fee}, short=${-changeSats}`,
+      `etch commit: insufficient funds. inputs=${totalIn}, commit=${commitOutputValue}, fee=${feeWithoutChange}, short=${feeWithoutChange - remainder}`,
     );
   }
+  let fee = FeeUtils.estimateFee(inputs.length, 2, feeRate);
+  let changeSats = remainder - fee;
   const emitChange = !!changeAddress && changeSats >= FeeUtils.DUST_THRESHOLD;
   if (!emitChange) {
     // Whatever is left after the commit output goes to the miner.
-    fee = totalIn - commitOutputValue;
+    fee = remainder;
     changeSats = 0;
   }
 

@@ -9,7 +9,15 @@
  * separate display-only field (see {@link Etching.spacers}).
  */
 
-/** Encode an A–Z rune name to its `u128` number. */
+const U128_MAX = (1n << 128n) - 1n;
+
+/** The name of rune number `u128::MAX`. Longer or later names do not exist. */
+export const LARGEST_RUNE_NAME = "BCGDENLQRQWDSLRUGSNLBTMFIJAV";
+
+/**
+ * Encode an A–Z rune name to its `u128` number.
+ * @throws if the name is empty, has other characters, or is past the largest name.
+ */
 export function runeNameToNumber(name: string): bigint {
   if (name.length === 0) {
     throw new Error("rune name must not be empty");
@@ -26,6 +34,11 @@ export function runeNameToNumber(name: string): bigint {
       x += 1n;
     }
     x = x * 26n + BigInt(code - 65);
+    if (x > U128_MAX) {
+      throw new Error(
+        `rune name "${name}" is out of range: the largest name is ${LARGEST_RUNE_NAME}`,
+      );
+    }
   }
   return x;
 }

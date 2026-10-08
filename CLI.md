@@ -245,4 +245,8 @@ btc-locker solstice decode -s 6a5d0b160100c0a2330180b51800
 ### JSON output
 
 All three support the global `--json` flag for machine-readable output, e.g.
-`btc-locker --json solstice decode -s <hex>`.
+`btc-locker --json solstice decode -s <hex>`. In that mode stdout carries exactly
+one JSON document, written when the command ends; status lines are dropped, and
+prompts and errors go to stderr. `etch` nests its two steps under `commit` and
+`etch`. Each built transaction includes `psbtBase64`, and `txid` once it has been
+broadcast. A failed run has an `error` field.
