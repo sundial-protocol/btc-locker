@@ -7,7 +7,7 @@
     ["@sundial-protocol/btc-locker", "@sundial-protocol/btc-locker-cli"]
   ],
   "access": "public",
-  "baseBranch": "main",
+  "baseBranch": "master",
   "updateInternalDependencies": "patch",
   "ignore": ["@sundial-protocol/btc-locker-demo"]
 }
