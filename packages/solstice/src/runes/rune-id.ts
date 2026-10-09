@@ -8,6 +8,9 @@ export interface RuneId {
   tx: bigint;
 }
 
+const U64_MAX = (1n << 64n) - 1n;
+const U32_MAX = (1n << 32n) - 1n;
+
 /** The zero id `0:0`, used as the base for edict delta-encoding. */
 export const RUNE_ID_ZERO: RuneId = { block: 0n, tx: 0n };
 
@@ -16,16 +19,24 @@ export function formatRuneId(id: RuneId): string {
   return `${id.block}:${id.tx}`;
 }
 
-/** Parse a `block:tx` string into a {@link RuneId}. */
+/**
+ * Parse a `block:tx` string into a {@link RuneId}.
+ * @throws unless both parts are decimal digits forming an id ord accepts.
+ */
 export function parseRuneId(s: string): RuneId {
-  const parts = s.split(":");
-  if (parts.length !== 2) {
-    throw new Error(`invalid rune id "${s}": expected "block:tx"`);
+  // Decimal digits only. BigInt() alone would read "" as 0 and accept hex,
+  // whitespace and signs, so a typo could silently name another rune.
+  const match = /^(\d+):(\d+)$/.exec(s);
+  if (!match) {
+    throw new Error(`invalid rune id "${s}": expected "block:tx" in decimal digits`);
   }
-  const block = BigInt(parts[0]);
-  const tx = BigInt(parts[1]);
-  if (block < 0n || tx < 0n) {
-    throw new Error(`invalid rune id "${s}": components must be non-negative`);
+  const block = BigInt(match[1]);
+  const tx = BigInt(match[2]);
+  if (block > U64_MAX || tx > U32_MAX) {
+    throw new Error(`invalid rune id "${s}": block must fit in a u64 and tx in a u32`);
+  }
+  if (block === 0n && tx > 0n) {
+    throw new Error(`invalid rune id "${s}": block 0 is only valid with tx 0`);
   }
   return { block, tx };
 }

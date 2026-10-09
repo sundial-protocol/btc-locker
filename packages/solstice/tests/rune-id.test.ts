@@ -19,7 +19,25 @@ describe("RuneId", () => {
 
   test("parse rejects malformed ids", () => {
     expect(() => parseRuneId("840000")).toThrow();
-    expect(() => parseRuneId("-1:0")).toThrow(/non-negative/);
+    expect(() => parseRuneId("-1:0")).toThrow(/decimal digits/);
+  });
+
+  test("parse accepts decimal digits only", () => {
+    // BigInt("") is 0n, so each of these used to parse, some as 0:0.
+    for (const bad of [":", "840000:", ":7", " 12 : 3 ", "0x10:1", "1e3:1", "+1:2", "1:2:3", "1.0:2"]) {
+      expect(() => parseRuneId(bad), bad).toThrow(/invalid rune id/);
+    }
+  });
+
+  test("parse rejects ids ord would not accept", () => {
+    expect(parseRuneId("0:0")).toEqual({ block: 0n, tx: 0n });
+    expect(() => parseRuneId("0:1")).toThrow(/block 0/);
+    expect(parseRuneId("18446744073709551615:4294967295")).toEqual({
+      block: 18446744073709551615n,
+      tx: 4294967295n,
+    });
+    expect(() => parseRuneId("18446744073709551616:0")).toThrow(/u64/);
+    expect(() => parseRuneId("1:4294967296")).toThrow(/u32/);
   });
 
   test("delta encoding advances block then resets tx semantics", () => {

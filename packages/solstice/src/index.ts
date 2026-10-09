@@ -28,6 +28,7 @@ export {
   type DecodedVarint,
 } from "./runes/varint.js";
 export {
+  LARGEST_RUNE_NAME,
   runeNameToNumber,
   numberToRuneName,
   runeCommitment,

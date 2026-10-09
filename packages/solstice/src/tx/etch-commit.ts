@@ -24,6 +24,7 @@ import {
 } from "@sundial-protocol/btc-locker";
 import type { ReceiptRune } from "../receipt/receipt-rune.js";
 import { runeCommitment, runeNameToNumber } from "../runes/rune-name.js";
+import { pushBytes } from "../runes/script.js";
 import { DEFAULT_RUNE_OUTPUT_VALUE, type BuiltOutput } from "./types.js";
 
 /**
@@ -39,7 +40,6 @@ const OP_FALSE = 0x00;
 const OP_IF = 0x63;
 const OP_ENDIF = 0x68;
 const OP_CHECKSIG = 0xac;
-const OP_PUSHDATA1 = 0x4c;
 
 /** The taproot output that commits to a rune name ahead of its etching. */
 export interface EtchCommitment {
@@ -65,25 +65,35 @@ function xOnly(publicKey: Uint8Array | string): Buffer {
   );
 }
 
+/** A rune is a u128, so its commitment is at most 16 bytes. */
+const MAX_COMMITMENT_LENGTH = 16;
+
 /**
  * The leaf script: `<key> OP_CHECKSIG OP_FALSE OP_IF <commitment> OP_ENDIF`.
  *
  * The commitment sits in a branch that never runs, as in ord's own reveal
- * scripts. The push is written by hand: indexers look for a data push equal to
- * the commitment, and a script compiler would turn a one-byte commitment into
- * `OP_N`, which is not a push.
+ * scripts. Indexers look for a data push equal to the commitment, so it is
+ * written as a raw push: a script compiler would encode the one-byte values
+ * 1..16 and 0x81 as opcodes, which are not pushes.
+ *
+ * The rune `A` is number 0 and has an empty commitment, pushed as a single zero
+ * byte. The `OP_FALSE` before it is an empty push too, so for that one name the
+ * leaf would match even without the commitment. The name is still bound to this
+ * key and output, and `A` is far below any minimum name length.
  */
-function commitmentLeafScript(key: Buffer, commitment: Buffer): Buffer {
-  const push =
-    commitment.length < OP_PUSHDATA1
-      ? Buffer.from([commitment.length])
-      : Buffer.from([OP_PUSHDATA1, commitment.length]);
+export function commitmentLeafScript(key: Buffer, commitment: Buffer): Buffer {
+  if (key.length !== 32) {
+    throw new Error("etch commit: the leaf key must be a 32-byte x-only public key");
+  }
+  if (commitment.length > MAX_COMMITMENT_LENGTH) {
+    throw new Error(
+      `etch commit: a rune commitment is at most ${MAX_COMMITMENT_LENGTH} bytes, got ${commitment.length}`,
+    );
+  }
   return Buffer.concat([
-    Buffer.from([key.length]),
-    key,
+    pushBytes(key),
     Buffer.from([OP_CHECKSIG, OP_FALSE, OP_IF]),
-    push,
-    commitment,
+    pushBytes(commitment),
     Buffer.from([OP_ENDIF]),
   ]);
 }
@@ -191,18 +201,22 @@ export function buildEtchCommitTransaction(params: EtchCommitParams): EtchCommit
     return sum + u.value;
   }, 0);
 
-  // Outputs: commit (0), optional change (1).
-  let fee = FeeUtils.estimateFee(inputs.length, 2, feeRate);
-  let changeSats = totalIn - commitOutputValue - fee;
-  if (changeSats < 0) {
+  // Outputs: commit (0), optional change (1). The transaction is affordable if
+  // it covers the fee without a change output; change is added only when what
+  // is left after the larger, with-change fee is above dust.
+  const remainder = totalIn - commitOutputValue;
+  const feeWithoutChange = FeeUtils.estimateFee(inputs.length, 1, feeRate);
+  if (remainder < feeWithoutChange) {
     throw new Error(
-      `etch commit: insufficient funds. inputs=${totalIn}, commit=${commitOutputValue}, fee=${fee}, short=${-changeSats}`,
+      `etch commit: insufficient funds. inputs=${totalIn}, commit=${commitOutputValue}, fee=${feeWithoutChange}, short=${feeWithoutChange - remainder}`,
     );
   }
+  let fee = FeeUtils.estimateFee(inputs.length, 2, feeRate);
+  let changeSats = remainder - fee;
   const emitChange = !!changeAddress && changeSats >= FeeUtils.DUST_THRESHOLD;
   if (!emitChange) {
     // Whatever is left after the commit output goes to the miner.
-    fee = totalIn - commitOutputValue;
+    fee = remainder;
     changeSats = 0;
   }
 

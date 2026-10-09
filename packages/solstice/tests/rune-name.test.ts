@@ -1,7 +1,9 @@
 import { describe, test, expect } from "vitest";
 import {
+  LARGEST_RUNE_NAME,
   runeNameToNumber,
   numberToRuneName,
+  parseSpacedRune,
 } from "../src/runes/rune-name";
 
 describe("rune name codec (modified base-26)", () => {
@@ -24,5 +26,14 @@ describe("rune name codec (modified base-26)", () => {
     expect(() => runeNameToNumber("")).toThrow(/empty/);
     expect(() => runeNameToNumber("example")).toThrow(/A–Z/);
     expect(() => runeNameToNumber("AB1")).toThrow(/A–Z/);
+  });
+
+  test("rejects names past the largest rune", () => {
+    expect(runeNameToNumber(LARGEST_RUNE_NAME)).toBe((1n << 128n) - 1n);
+    // One past the largest, the same length; then anything longer.
+    expect(() => runeNameToNumber("BCGDENLQRQWDSLRUGSNLBTMFIJAW")).toThrow(/out of range/);
+    expect(() => runeNameToNumber("ZZZZZZZZZZZZZZZZZZZZZZZZZZZZ")).toThrow(/out of range/);
+    expect(() => runeNameToNumber("A".repeat(29))).toThrow(/out of range/);
+    expect(() => parseSpacedRune("Z".repeat(28))).toThrow(/out of range/);
   });
 });

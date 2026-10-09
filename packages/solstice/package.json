@@ -1,6 +1,6 @@
 {
   "name": "@sundial-protocol/solstice",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Solstice receipt-token (Runes) + atomic-swap layer for the Solstice value-accrual vault. Reuses @sundial-protocol/btc-locker script/PSBT/signing primitives.",
   "main": "dist/cjs/index.js",
   "types": "dist/cjs/index.d.ts",
@@ -53,6 +53,12 @@
     "typescript": "^5.3.0",
     "vitest": "^4.0.18"
   },
+  "files": [
+    "src/",
+    "dist/",
+    "!dist/.tsbuildinfo",
+    "README.md"
+  ],
   "engines": {
     "node": ">=18.0.0"
   }

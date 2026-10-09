@@ -5,6 +5,7 @@ import ecc from "@bitcoinerlab/secp256k1";
 import {
   ETCH_COMMIT_CONFIRMATIONS,
   buildEtchCommitTransaction,
+  commitmentLeafScript,
   createEtchCommitment,
 } from "../src/tx/etch-commit";
 import { buildEtchTransaction } from "../src/tx/etch";
@@ -83,6 +84,30 @@ describe("createEtchCommitment", () => {
     expect(c.tapLeafScriptHex.endsWith("ac0063010568")).toBe(true);
   });
 
+  test("writes 0x81 as a data push, not OP_1NEGATE", () => {
+    const leaf = commitmentLeafScript(adminXOnly, Buffer.from([0x81]));
+    expect(leaf.toString("hex").endsWith("ac0063018168")).toBe(true);
+  });
+
+  test("the longest name has a 16-byte commitment, the largest allowed", () => {
+    const longest = vectors.runeNames.find((v) => v.commitment.length === 32)!;
+    const c = createEtchCommitment({ name: longest.name }, adminXOnly, NETWORK);
+    expect(c.tapLeafScriptHex.endsWith(`ac006310${longest.commitment}68`)).toBe(true);
+  });
+
+  test("an empty commitment (rune A) is pushed as a zero byte", () => {
+    const c = createEtchCommitment({ name: "A" }, adminXOnly, NETWORK);
+    expect(c.tapLeafScriptHex.endsWith("ac00630068")).toBe(true);
+  });
+
+  test("refuses a commitment longer than 16 bytes", () => {
+    expect(() => commitmentLeafScript(adminXOnly, Buffer.alloc(17))).toThrow(/at most 16 bytes/);
+  });
+
+  test("refuses a leaf key that is not x-only", () => {
+    expect(() => commitmentLeafScript(Buffer.alloc(33, 2), Buffer.alloc(4))).toThrow(/x-only/);
+  });
+
   test("rejects a key of the wrong length", () => {
     expect(() => createEtchCommitment(rune, Buffer.alloc(20), NETWORK)).toThrow(/x-only/);
   });
@@ -146,6 +171,26 @@ describe("buildEtchCommitTransaction (C0, commit)", () => {
         network: NETWORK,
       }),
     ).toThrow(/insufficient/);
+  });
+
+  test("builds without change when funds cover the one-output fee only", () => {
+    // At 5 sat/vB the estimate is 970 with one output and 1,140 with two.
+    const params = {
+      rune,
+      revealPublicKey: adminXOnly,
+      commitOutputValue: 10_000,
+      changeAddress: funding.address,
+      feeRate: 5,
+      network: NETWORK,
+    };
+    const res = buildEtchCommitTransaction({ ...params, inputs: [{ ...inputs[0], value: 11_000 }] });
+    expect(res.outputs.map((o) => o.role)).toEqual(["etch commit"]);
+    expect(res.fee).toBe(1_000);
+    expect(res.changeSats).toBe(0);
+
+    expect(() =>
+      buildEtchCommitTransaction({ ...params, inputs: [{ ...inputs[0], value: 10_969 }] }),
+    ).toThrow(/insufficient funds.*fee=970, short=1$/);
   });
 
   test("six confirmations, as ord requires", () => {

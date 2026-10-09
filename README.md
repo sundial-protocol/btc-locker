@@ -1,4 +1,4 @@
-![](readme-header.jpg)
+![btc-locker: timelock scripts, transactions and yield distribution for Bitcoin staking](readme-header.png)
 
 <table>
   <tr>

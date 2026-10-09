@@ -237,7 +237,7 @@ been run against testnet or mainnet.
 ## Test & build
 
 ```
-npm test        --workspace @sundial-protocol/solstice   # 106 tests, includes the ord vectors
+npm test        --workspace @sundial-protocol/solstice   # 116 tests, includes the ord vectors
 npm run build   --workspace @sundial-protocol/solstice   # esm + cjs
 npm run type-check --workspace @sundial-protocol/solstice
 npm run regtest --workspace @sundial-protocol/solstice    # regtest suite: needs bash and curl

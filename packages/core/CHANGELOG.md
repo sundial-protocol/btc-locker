@@ -1,5 +1,11 @@
 # @sundial-protocol/btc-locker
 
+## 2.1.0
+
+### Patch Changes
+
+- receipt token library introduced
+
 ## 2.0.5
 
 ### Patch Changes
