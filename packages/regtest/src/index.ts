@@ -88,6 +88,8 @@ export interface Utxo {
   /** Satoshis. */
   value: number;
   scriptPubKey: string;
+  /** Height of the block that confirmed it. */
+  height: number;
 }
 
 /** Unspent outputs of an address, oldest first. Confirmed outputs only. */
@@ -102,6 +104,7 @@ export async function utxosOf(address: string): Promise<Utxo[]> {
       vout: u.vout,
       value: Math.round(u.amount * 1e8),
       scriptPubKey: u.scriptPubKey,
+      height: u.height,
     }));
 }
 
@@ -164,14 +167,14 @@ export async function signAndBroadcast(psbtBase64: string, signers: Party[]): Pr
 }
 
 export interface ApiUtxo extends Utxo {
+  /** `block_height` is the block that confirmed the output, as in Esplora. */
   status: { confirmed: boolean; block_height?: number };
 }
 
 async function addressUtxos(address: string): Promise<ApiUtxo[]> {
-  const height = await rpc<number>("getblockcount");
   return (await utxosOf(address)).map((u) => ({
     ...u,
-    status: { confirmed: true, block_height: height },
+    status: { confirmed: true, block_height: u.height },
   }));
 }
 

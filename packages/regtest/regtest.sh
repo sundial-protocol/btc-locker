@@ -84,12 +84,13 @@ install_binaries() {
       bitcoin_sha=5bb824fc86a15318d6a83a1b821ff4cd4b3d3d0e1ec3d162b805ccf7cae6fca8
       ord_target=x86_64-apple-darwin
       ord_sha=a0085f296057563a31258402437c1182fc13bb9559826d1f5490feb4be6dbb75 ;;
-    *) die "no pinned binaries for $os $arch; put bitcoind $BITCOIN_VERSION (and ord $ORD_VERSION, for --ord) in $BIN_DIR yourself" ;;
+    *) ;; # no pinned archive: the binaries have to be in $BIN_DIR already
   esac
 
   mkdir -p "$BIN_DIR" "$HOME_DIR/downloads"
 
   if [ ! -x "$BIN_DIR/bitcoind" ]; then
+    [ -n "${bitcoin_target:-}" ] || die "no pinned Bitcoin Core for $os $arch; put bitcoind and bitcoin-cli $BITCOIN_VERSION in $BIN_DIR yourself"
     archive="$HOME_DIR/downloads/bitcoin-$BITCOIN_VERSION-$bitcoin_target.tar.gz"
     fetch "https://bitcoincore.org/bin/bitcoin-core-$BITCOIN_VERSION/bitcoin-$BITCOIN_VERSION-$bitcoin_target.tar.gz" "$bitcoin_sha" "$archive"
     tar -xzf "$archive" -C "$HOME_DIR/downloads"
@@ -99,6 +100,7 @@ install_binaries() {
   [ -n "$WITH_ORD" ] || return 0
 
   if [ ! -x "$BIN_DIR/ord" ]; then
+    [ -n "${ord_target:-}" ] || die "no pinned ord for $os $arch; put ord $ORD_VERSION in $BIN_DIR yourself"
     archive="$HOME_DIR/downloads/ord-$ORD_VERSION-$ord_target.tar.gz"
     fetch "https://github.com/ordinals/ord/releases/download/$ORD_VERSION/ord-$ORD_VERSION-$ord_target.tar.gz" "$ord_sha" "$archive"
     mkdir -p "$HOME_DIR/downloads/ord-$ORD_VERSION"
