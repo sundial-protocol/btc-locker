@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-// The regtest suite needs bitcoind and ord running: `npm run regtest` starts them, runs
+// The regtest suite needs bitcoind running: `npm run regtest` starts it, runs
 // the suite and stops it. It is kept out of `npm test`.
 export default defineConfig({
   test: {

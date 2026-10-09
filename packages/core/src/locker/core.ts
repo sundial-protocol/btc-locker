@@ -355,9 +355,12 @@ export class BTCLockerCore {
    * Check if a redeem script has conditional logic (IF/ELSE)
    */
   private hasConditionalLogic(redeemScript: Buffer): boolean {
-    return (
-      redeemScript.includes(bitcoin.opcodes.OP_IF) ||
-      redeemScript.includes(bitcoin.opcodes.OP_NOTIF)
+    // Look at opcodes only. The same byte values (0x63, 0x64) also occur inside
+    // pushed data: about one public key in four contains one of them.
+    const ops = bitcoin.script.decompile(redeemScript);
+    if (!ops) return false;
+    return ops.some(
+      (op) => op === bitcoin.opcodes.OP_IF || op === bitcoin.opcodes.OP_NOTIF,
     );
   }
 

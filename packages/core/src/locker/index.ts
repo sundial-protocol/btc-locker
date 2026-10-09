@@ -54,10 +54,11 @@ export class BTCLocker extends BTCLockerCore {
 
     super(network, api);
 
-    // Initialize component instances with the converted network object from parent
-    this.keyPairGenerator = new KeyPairGenerator(network);
-    this.transactionManager = new TransactionManager(network);
-    this.scriptManager = new ScriptManager(network);
+    // The components share this locker's API, so a caller-supplied one reaches
+    // the transaction builders too.
+    this.keyPairGenerator = new KeyPairGenerator(network, this.api);
+    this.transactionManager = new TransactionManager(network, this.api);
+    this.scriptManager = new ScriptManager(network, this.api);
   }
 
   /**

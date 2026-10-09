@@ -397,6 +397,101 @@ describe("BTCLockerCore", () => {
     });
   });
 
+  describe("signTransaction: which scripts get a branch selector", () => {
+    const network = bitcoin.networks.testnet;
+
+    /** Sign a spend of one P2WSH output and return the witness it was given. */
+    async function witnessFor(
+      witnessScript: Uint8Array,
+      privateKey: Uint8Array,
+    ): Promise<Uint8Array[]> {
+      const core = new BTCLockerCore(NETWORKS.testnet);
+      await core.init();
+      const p2wsh = bitcoin.payments.p2wsh({
+        redeem: { output: witnessScript, network },
+        network,
+      });
+      const psbt = new bitcoin.Psbt({ network });
+      psbt.addInput({
+        hash: "a".repeat(64),
+        index: 0,
+        sequence: 0xfffffffe,
+        witnessScript,
+        witnessUtxo: { script: p2wsh.output!, value: BigInt(50000) },
+      });
+      psbt.addOutput({ address: p2wsh.address!, value: BigInt(45000) });
+      const hex = await core.signTransaction(
+        psbt.toBase64(),
+        Buffer.from(privateKey).toString("hex"),
+      );
+      return bitcoin.Transaction.fromHex(hex).ins[0].witness;
+    }
+
+    /** A key whose compressed public key does, or does not, contain `byte`. */
+    function keyWhere(byte: number, wanted: boolean) {
+      const ecc = (tinysecp as any).default || tinysecp;
+      const ECPair = ECPairFactory(ecc);
+      for (let i = 1; ; i++) {
+        const privateKey = Buffer.alloc(32);
+        privateKey.writeUInt32BE(i, 28);
+        const kp = ECPair.fromPrivateKey(privateKey, { network });
+        if (Buffer.from(kp.publicKey).includes(byte) === wanted) return kp;
+      }
+    }
+
+    function timelockScript(locktime: number, publicKey: Uint8Array) {
+      return bitcoin.script.compile([
+        bitcoin.script.number.encode(locktime),
+        bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
+        bitcoin.opcodes.OP_DROP,
+        publicKey,
+        bitcoin.opcodes.OP_CHECKSIG,
+      ]);
+    }
+
+    test.each([
+      ["OP_IF", bitcoin.opcodes.OP_IF],
+      ["OP_NOTIF", bitcoin.opcodes.OP_NOTIF],
+    ])(
+      "timelock script whose public key contains the %s byte: signature and script only",
+      async (_name, byte) => {
+        const kp = keyWhere(byte, true);
+        const script = timelockScript(500, kp.publicKey);
+        const witness = await witnessFor(script, kp.privateKey!);
+        expect(witness).toHaveLength(2);
+        expect(Buffer.from(witness[1])).toEqual(Buffer.from(script));
+      },
+    );
+
+    test("timelock script whose locktime contains the OP_IF byte: signature and script only", async () => {
+      const clean = keyWhere(bitcoin.opcodes.OP_IF, false);
+      expect(Buffer.from(clean.publicKey).includes(bitcoin.opcodes.OP_NOTIF)).toBe(false);
+      // 99 is 0x63, pushed as one byte of data.
+      const script = timelockScript(99, clean.publicKey);
+      expect(Buffer.from(script).includes(bitcoin.opcodes.OP_IF)).toBe(true);
+      expect(await witnessFor(script, clean.privateKey!)).toHaveLength(2);
+    });
+
+    test("escrow script: signature, branch selector and script", async () => {
+      const kp = keyWhere(bitcoin.opcodes.OP_IF, false);
+      const script = bitcoin.script.compile([
+        bitcoin.opcodes.OP_IF,
+        bitcoin.script.number.encode(500),
+        bitcoin.opcodes.OP_CHECKLOCKTIMEVERIFY,
+        bitcoin.opcodes.OP_DROP,
+        kp.publicKey,
+        bitcoin.opcodes.OP_CHECKSIG,
+        bitcoin.opcodes.OP_ELSE,
+        kp.publicKey,
+        bitcoin.opcodes.OP_CHECKSIG,
+        bitcoin.opcodes.OP_ENDIF,
+      ]);
+      const witness = await witnessFor(script, kp.privateKey!);
+      expect(witness).toHaveLength(3);
+      expect(witness[1]).toHaveLength(0);
+    });
+  });
+
   describe("submitTransaction", () => {
     test("should throw for empty transaction hex", async () => {
       const core = new BTCLockerCore(NETWORKS.testnet);

@@ -39,10 +39,48 @@ jobs:
       - name: Build project
         run: npm run build
 
-  # Builds the Solstice transactions, broadcasts them on a local bitcoind regtest
-  # and checks what ord (the Runes reference indexer) reports. Kept out of the
-  # matrix above: it does not depend on the Node version, so it runs once.
-  regtest:
+  # Regtest suites: each package broadcasts its own transactions on a local
+  # bitcoind and checks what the chain says. One job per package, each complete
+  # on its own, so a job can move with its package to another repository. They
+  # are kept out of the matrix above: they do not depend on the Node version.
+
+  # Timelock and escrow scripts, and the Dawn transaction builders.
+  regtest-core:
+    name: Core regtest (bitcoind)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm i
+
+      - name: Build the package and what it depends on
+        run: npx turbo run build --filter=@sundial-protocol/btc-locker
+
+      # Release binaries, pinned by SHA-256 in the harness's regtest.sh.
+      - name: Cache regtest binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/btc-regtest/bin
+          key: btc-regtest-${{ runner.os }}-${{ hashFiles('node_modules/@sundial-protocol/btc-regtest/regtest.sh') }}
+
+      - name: Run the regtest suite
+        run: npm run regtest --workspace=@sundial-protocol/btc-locker
+
+      - name: Show daemon logs
+        if: failure()
+        run: npx btc-regtest logs
+
+  # The receipt rune and the swaps, as indexed by ord.
+  regtest-solstice:
     name: Solstice regtest (bitcoind + ord)
     runs-on: ubuntu-latest
 
@@ -59,20 +97,54 @@ jobs:
       - name: Install dependencies
         run: npm i
 
-      # The suite imports the built core and solstice packages.
-      - name: Build solstice and what it depends on
+      - name: Build the package and what it depends on
         run: npx turbo run build --filter=@sundial-protocol/solstice
 
-      # Bitcoin Core and ord release binaries, pinned by SHA-256 in regtest.sh.
-      - name: Cache bitcoind and ord
+      # Release binaries, pinned by SHA-256 in the harness's regtest.sh.
+      - name: Cache regtest binaries
         uses: actions/cache@v4
         with:
-          path: ~/.cache/solstice-regtest/bin
-          key: solstice-regtest-${{ runner.os }}-${{ hashFiles('packages/solstice/regtest/regtest.sh') }}
+          path: ~/.cache/btc-regtest/bin
+          key: btc-regtest-ord-${{ runner.os }}-${{ hashFiles('node_modules/@sundial-protocol/btc-regtest/regtest.sh') }}
 
       - name: Run the regtest suite
-        run: bash packages/solstice/regtest/regtest.sh run
+        run: npm run regtest --workspace=@sundial-protocol/solstice
 
-      - name: Show bitcoind and ord logs
+      - name: Show daemon logs
         if: failure()
-        run: bash packages/solstice/regtest/regtest.sh logs
+        run: npx btc-regtest logs
+
+  # The steps behind `btc-locker solstice etch`. The CLI has no build of its own.
+  regtest-cli:
+    name: CLI regtest (bitcoind + ord)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm i
+
+      - name: Build the package and what it depends on
+        run: npx turbo run build --filter=@sundial-protocol/btc-locker-cli...
+
+      # Release binaries, pinned by SHA-256 in the harness's regtest.sh.
+      - name: Cache regtest binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/btc-regtest/bin
+          key: btc-regtest-ord-${{ runner.os }}-${{ hashFiles('node_modules/@sundial-protocol/btc-regtest/regtest.sh') }}
+
+      - name: Run the regtest suite
+        run: npm run regtest --workspace=@sundial-protocol/btc-locker-cli
+
+      - name: Show daemon logs
+        if: failure()
+        run: npx btc-regtest logs

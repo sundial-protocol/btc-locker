@@ -1,0 +1,59 @@
+{
+  "name": "@sundial-protocol/btc-regtest",
+  "version": "0.1.0",
+  "description": "Local Bitcoin Core regtest (ord optional) and test helpers for Sundial packages",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./ord": {
+      "types": "./dist/ord.d.ts",
+      "default": "./dist/ord.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "ord": [
+        "./dist/ord.d.ts"
+      ]
+    }
+  },
+  "bin": {
+    "btc-regtest": "./regtest.sh"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "files": [
+    "dist/",
+    "src/",
+    "regtest.sh"
+  ],
+  "dependencies": {
+    "@bitcoinerlab/secp256k1": "^1.2.0",
+    "bitcoinjs-lib": "^7.0.0",
+    "ecpair": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  },
+  "author": "Sundial Protocol",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sundial-protocol/btc-locker.git",
+    "directory": "packages/regtest"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

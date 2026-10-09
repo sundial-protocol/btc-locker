@@ -56,6 +56,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:regtest": "vitest run --config vitest.regtest.config.ts",
+    "regtest": "btc-regtest run",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "type-check": "tsc --noEmit",
@@ -93,6 +95,7 @@
   "devDependencies": {
     "@babel/core": "^7.23.0",
     "@babel/preset-env": "^7.23.0",
+    "@sundial-protocol/btc-regtest": "*",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^4.0.18",
     "babel-loader": "^9.1.3",

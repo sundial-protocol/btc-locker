@@ -152,30 +152,28 @@ or later):
 bash tests/vectors/ord-oracle/generate.sh
 ```
 
-**Regtest.** `regtest/regtest.sh` downloads Bitcoin Core 29.0 and ord 0.29.0
-(official release archives, SHA-256 pinned in the script), starts bitcoind on
-regtest with `ord --index-runes server` beside it, and runs
-`regtest/solstice.regtest.ts`. That suite builds every transaction with this
-package, signs, broadcasts and mines it, and checks what `ord` reports:
+**Regtest.** `npm run regtest` starts bitcoind on regtest with
+`ord --index-runes server` beside it and runs `regtest/solstice.regtest.ts`. The
+daemons come from the shared harness, `@sundial-protocol/btc-regtest`
+(`packages/regtest` in this repository), which downloads Bitcoin Core 29.0
+and ord 0.29.0 (official release archives, SHA-256 pinned). The suite builds
+every transaction with this package, signs, broadcasts and mines it, and checks
+what `ord` reports:
 
 ```
-bash regtest/regtest.sh run     # start, run the suite, stop
+npm run regtest                 # start, run the suite, stop
 ```
 
 or, to keep the daemons up and look around afterwards:
 
 ```
-bash regtest/regtest.sh up      # every `up` starts an empty chain
-npm run test:regtest            # builds, then runs. Once per `up`: the names are fixed
-bash regtest/regtest.sh down
+npx btc-regtest up --ord        # every `up` starts an empty chain
+npm run test:regtest            # once per `up`: the names are fixed
+npx btc-regtest down
 ```
 
-CI runs `regtest.sh run` as its own job (`regtest` in `.github/workflows/ci.yml`).
-
-Linux x86_64 and macOS. On Windows run the script inside WSL; the suite reaches
-the daemons on localhost with either the Windows or a Linux node. If the ord
-release binary does not run (it needs OpenSSL 3, so Ubuntu 22.04 or later), the
-script builds the same tag with `cargo install` (Rust 1.89 or later, `libssl-dev`).
+CI runs it as its own job (`regtest-solstice` in `.github/workflows/ci.yml`).
+Platforms, Windows and settings are in the harness README.
 
 Result on 2026-10-07 (Sam's laptop, WSL 2 Ubuntu 20.04, ord built from source,
 suite run with Windows node 22). Keys are derived from fixed labels and the chain
@@ -190,16 +188,20 @@ starts empty, so the transaction ids are the same on every run:
 | Invest, 1.5 RT | `880cfa51…290a7cbd` | Investor output 150000000, vault change output 2099999850000000, BTC outputs none. |
 | Withdraw, 0.5 RT | `902a0c50…7dbce39e` | Vault output 50000000, investor change output 100000000. |
 | Withdraw the rest, no rune change | `ee7c9284…cef64ccc` | Vault output 100000000. Rune `burned` 0, `mints` 0. |
-| CLI etch steps: commit, then etch | `0dd6c5df…2a17e19d`, then `bde62890…3356a85e` | Rune `SOLSTICE•CLIRUNE`, id `236:1`, premine 2100000000000000 at the `--vault` address. Before 5 confirmations, and with another rune name, the etch step refuses to build. |
 
 In every swap the balances `ord` reports per output equal the builder's output
 plan (`SwapResult.outputs`, `runeChange`).
 
-The CLI row runs the functions behind `btc-locker solstice etch` (the commit
-step, the etch step, and signing through btc-locker's `signTransaction`), without
-the prompts. btc-locker's `BitcoinAPI` has no regtest endpoint, so the suite hands
-those functions an adapter over bitcoind's RPC; the command itself has not been
-run against testnet or mainnet.
+The functions behind `btc-locker solstice etch` (the commit step, the etch step,
+and signing through btc-locker's `signTransaction`) have their own regtest suite
+in the CLI package, `packages/cli/regtest/solstice-etch.regtest.ts`, run without
+the prompts. On 2026-10-07 on the same machine it committed in
+`1cdfe719…d2b51dc4`, etched in `b1234f37…90d1474a`, and ord reported rune
+`SOLSTICE•CLIRUNE`, id `108:1`, premine 2100000000000000 at the `--vault`
+address. Before 5 confirmations, and with another rune name, the etch step
+refuses to build. btc-locker's `BitcoinAPI` has no regtest endpoint, so the suite
+hands those functions an adapter over bitcoind's RPC; the command itself has not
+been run against testnet or mainnet.
 
 ## Scope / not done
 
@@ -238,5 +240,5 @@ run against testnet or mainnet.
 npm test        --workspace @sundial-protocol/solstice   # 116 tests, includes the ord vectors
 npm run build   --workspace @sundial-protocol/solstice   # esm + cjs
 npm run type-check --workspace @sundial-protocol/solstice
-bash packages/solstice/regtest/regtest.sh run             # regtest suite: needs bash and curl
+npm run regtest --workspace @sundial-protocol/solstice    # regtest suite: needs bash and curl
 ```
