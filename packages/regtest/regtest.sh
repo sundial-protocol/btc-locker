@@ -29,7 +29,7 @@ BIN_DIR="$HOME_DIR/bin"
 DATA_DIR="$HOME_DIR/data"
 RPC_PORT="${BTC_REGTEST_RPC_PORT:-18543}"
 ORD_PORT="${BTC_REGTEST_ORD_PORT:-18580}"
-# Regtest only. The helpers read the same defaults (index.js).
+# Regtest only. The helpers read the same defaults (src/index.ts).
 RPC_USER=regtest
 RPC_PASS=regtest
 

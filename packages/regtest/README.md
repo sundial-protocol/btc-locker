@@ -5,19 +5,21 @@ the regtest suites of `@sundial-protocol/btc-locker` (core),
 `@sundial-protocol/solstice` and the CLI.
 
 It imports no Sundial package. Its only dependencies are `bitcoinjs-lib`,
-`ecpair` and `@bitcoinerlab/secp256k1`. It is plain JavaScript with hand-written
-type declarations, so there is nothing to build.
+`ecpair` and `@bitcoinerlab/secp256k1`. It is TypeScript, compiled to `dist/`
+(ES modules with type declarations) by `npm run build`. Inside this repository
+turbo builds it before any package that depends on it, so `npm run build` at the
+root, or the build step of a regtest CI job, is enough.
 
 ## What is in it
 
 | File | What it is |
 | --- | --- |
 | `regtest.sh` | Installed as the `btc-regtest` command. Downloads Bitcoin Core 29.0 (release archive, SHA-256 pinned), starts `bitcoind -regtest`, runs a suite, stops it. With `--ord` it also downloads ord 0.29.0 and starts `ord --index-runes server`. |
-| `index.js` | `rpc`, `mine`, `party` (keys derived from a label), `utxosOf`, `heightOf`, `medianTime`, `mempoolAccept`, `broadcast`, `signAndBroadcast`, and `esploraOverRpc`, an Esplora-style chain API served from bitcoind. |
-| `ord.js` | Imported as `@sundial-protocol/btc-regtest/ord`: `ord`, `ordSynced`, `runeBalances`, and a `mine` that waits for ord. |
+| `src/index.ts` | `rpc`, `mine`, `party` (keys derived from a label), `utxosOf`, `heightOf`, `medianTime`, `mempoolAccept`, `broadcast`, `signAndBroadcast`, and `esploraOverRpc`, an Esplora-style chain API served from bitcoind. |
+| `src/ord.ts` | Imported as `@sundial-protocol/btc-regtest/ord`: `ord`, `ordSynced`, `runeBalances`, and a `mine` that waits for ord. |
 
 ord is opt-in. Without `--ord` (or `BTC_REGTEST_ORD=1`) the script never
-downloads or starts it, and nothing in `index.js` refers to it.
+downloads or starts it, and nothing in `src/index.ts` refers to it.
 
 bitcoind runs with `-acceptnonstdtxn=0`, so its mempool applies the policy
 mainnet nodes apply (dust limits, OP_RETURN size, standard script rules).

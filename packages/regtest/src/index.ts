@@ -4,12 +4,12 @@
  * with `scantxoutset` and every transaction is signed in the test.
  *
  * Ports and credentials are the defaults of `regtest.sh`. This file imports no
- * Sundial package, and nothing about ord or Runes: those helpers are in ./ord.js.
+ * Sundial package, and nothing about ord or Runes: those helpers are in ./ord.
  */
 
 import { createHash } from "node:crypto";
 import * as bitcoin from "bitcoinjs-lib";
-import { ECPairFactory } from "ecpair";
+import { ECPairFactory, type ECPairInterface } from "ecpair";
 import ecc from "@bitcoinerlab/secp256k1";
 
 bitcoin.initEccLib(ecc);
@@ -21,8 +21,8 @@ export const RPC_URL = `http://127.0.0.1:${process.env.BTC_REGTEST_RPC_PORT ?? 1
 const RPC_AUTH = "Basic " + Buffer.from("regtest:regtest").toString("base64");
 
 /** Call a Bitcoin Core RPC method. */
-export async function rpc(method, ...params) {
-  let response;
+export async function rpc<T = unknown>(method: string, ...params: unknown[]): Promise<T> {
+  let response: Response;
   try {
     response = await fetch(RPC_URL, {
       method: "POST",
@@ -34,9 +34,24 @@ export async function rpc(method, ...params) {
       cause,
     });
   }
-  const body = await response.json();
+  const body = (await response.json()) as { result: T; error: { message: string } | null };
   if (body.error) throw new Error(`${method}: ${body.error.message}`);
   return body.result;
+}
+
+export interface Party {
+  /** The label the key was derived from. */
+  name: string;
+  key: ECPairInterface;
+  privateKeyHex: string;
+  /** Compressed public key, hex. */
+  publicKeyHex: string;
+  /** P2WPKH address. */
+  address: string;
+  /** P2WPKH scriptPubKey, hex. */
+  scriptHex: string;
+  /** x-only public key, for taproot. */
+  xOnly: Buffer;
 }
 
 /**
@@ -44,7 +59,7 @@ export async function rpc(method, ...params) {
  * label that names the suite ("dawn regtest user"): two suites that share a
  * label share a key.
  */
-export function party(label) {
+export function party(label: string): Party {
   const key = ECPair.fromPrivateKey(createHash("sha256").update(label).digest(), {
     network: NETWORK,
   });
@@ -52,23 +67,34 @@ export function party(label) {
   return {
     name: label,
     key,
-    privateKeyHex: Buffer.from(key.privateKey).toString("hex"),
+    privateKeyHex: Buffer.from(key.privateKey!).toString("hex"),
     publicKeyHex: Buffer.from(key.publicKey).toString("hex"),
-    address: payment.address,
-    scriptHex: Buffer.from(payment.output).toString("hex"),
+    address: payment.address!,
+    scriptHex: Buffer.from(payment.output!).toString("hex"),
     xOnly: Buffer.from(key.publicKey.subarray(1, 33)),
   };
 }
 
 /** Mine `blocks` blocks, paying the coinbase to `to`. Returns the new height. */
-export async function mine(blocks, to) {
+export async function mine(blocks: number, to: { address: string }): Promise<number> {
   await rpc("generatetoaddress", blocks, to.address);
-  return rpc("getblockcount");
+  return rpc<number>("getblockcount");
+}
+
+/** An unspent output. Structurally the same as btc-locker's `UTXO`. */
+export interface Utxo {
+  txid: string;
+  vout: number;
+  /** Satoshis. */
+  value: number;
+  scriptPubKey: string;
 }
 
 /** Unspent outputs of an address, oldest first. Confirmed outputs only. */
-export async function utxosOf(address) {
-  const scan = await rpc("scantxoutset", "start", [`addr(${address})`]);
+export async function utxosOf(address: string): Promise<Utxo[]> {
+  const scan = await rpc<{
+    unspents: Array<{ txid: string; vout: number; amount: number; scriptPubKey: string; height: number }>;
+  }>("scantxoutset", "start", [`addr(${address})`]);
   return scan.unspents
     .sort((a, b) => a.height - b.height || a.txid.localeCompare(b.txid) || a.vout - b.vout)
     .map((u) => ({
@@ -80,24 +106,31 @@ export async function utxosOf(address) {
 }
 
 /** Height of the block that confirmed `txid`. */
-export async function heightOf(txid) {
-  const tx = await rpc("getrawtransaction", txid, true);
+export async function heightOf(txid: string): Promise<number> {
+  const tx = await rpc<{ blockhash?: string }>("getrawtransaction", txid, true);
   if (!tx.blockhash) throw new Error(`${txid} is not confirmed`);
-  return (await rpc("getblockheader", tx.blockhash)).height;
+  return (await rpc<{ height: number }>("getblockheader", tx.blockhash)).height;
 }
 
 /** Median time past of the tip: what consensus compares a time-based locktime with. */
-export async function medianTime() {
-  return (await rpc("getblockchaininfo")).mediantime;
+export async function medianTime(): Promise<number> {
+  return (await rpc<{ mediantime: number }>("getblockchaininfo")).mediantime;
 }
 
-/**
- * Whether bitcoind would take a signed transaction into its mempool, without
- * broadcasting it. `reason` is bitcoind's reject reason, `vsize` and `fee` (in
- * satoshis) are set when it is accepted.
- */
-export async function mempoolAccept(hex) {
-  const [result] = await rpc("testmempoolaccept", [hex]);
+export interface MempoolAccept {
+  allowed: boolean;
+  /** bitcoind's reject reason, when not allowed. */
+  reason?: string;
+  vsize?: number;
+  /** Satoshis. */
+  fee?: number;
+}
+
+/** Whether bitcoind would take a signed transaction into its mempool, without broadcasting it. */
+export async function mempoolAccept(hex: string): Promise<MempoolAccept> {
+  const [result] = await rpc<
+    Array<{ allowed: boolean; "reject-reason"?: string; vsize?: number; fees?: { base: number } }>
+  >("testmempoolaccept", [hex]);
   return {
     allowed: result.allowed,
     reason: result["reject-reason"],
@@ -107,8 +140,8 @@ export async function mempoolAccept(hex) {
 }
 
 /** Broadcast a signed transaction. Returns the txid; throws with bitcoind's reason. */
-export function broadcast(hex) {
-  return rpc("sendrawtransaction", hex);
+export function broadcast(hex: string): Promise<string> {
+  return rpc<string>("sendrawtransaction", hex);
 }
 
 /**
@@ -116,12 +149,12 @@ export function broadcast(hex) {
  * Handles P2WPKH inputs and taproot script-path inputs whose leaf names the
  * signer's x-only key. Returns the txid.
  */
-export async function signAndBroadcast(psbtBase64, signers) {
+export async function signAndBroadcast(psbtBase64: string, signers: Party[]): Promise<string> {
   const psbt = bitcoin.Psbt.fromBase64(psbtBase64, { network: NETWORK });
   psbt.data.inputs.forEach((input, index) => {
-    const script = Buffer.from(input.witnessUtxo.script).toString("hex");
+    const script = Buffer.from(input.witnessUtxo!.script).toString("hex");
     const signer = input.tapLeafScript
-      ? signers.find((s) => Buffer.from(input.tapLeafScript[0].script).includes(s.xOnly))
+      ? signers.find((s) => Buffer.from(input.tapLeafScript![0].script).includes(s.xOnly))
       : signers.find((s) => s.scriptHex === script);
     if (!signer) throw new Error(`no signer for input ${index}`);
     psbt.signInput(index, signer.key);
@@ -130,32 +163,37 @@ export async function signAndBroadcast(psbtBase64, signers) {
   return broadcast(psbt.extractTransaction().toHex());
 }
 
+export interface ApiUtxo extends Utxo {
+  status: { confirmed: boolean; block_height?: number };
+}
+
+async function addressUtxos(address: string): Promise<ApiUtxo[]> {
+  const height = await rpc<number>("getblockcount");
+  return (await utxosOf(address)).map((u) => ({
+    ...u,
+    status: { confirmed: true, block_height: height },
+  }));
+}
+
 /**
- * The Esplora-style calls Sundial code makes on a chain API (`getAddressUtxos`,
- * `fetchConfirmedUtxos`, `getTransaction`, `getBlockHeight`,
- * `broadcastTransaction`, `makeRequest("/tx/:txid/status")`), served from
+ * The Esplora-style calls Sundial code makes on a chain API, served from
  * bitcoind. Hand it to code that expects such an object.
  */
 export const esploraOverRpc = {
-  async getAddressUtxos(address) {
-    const height = await rpc("getblockcount");
-    return (await utxosOf(address)).map((u) => ({
-      ...u,
-      status: { confirmed: true, block_height: height },
-    }));
-  },
-  fetchConfirmedUtxos: (address) => esploraOverRpc.getAddressUtxos(address),
-  getTransaction: (txid) => rpc("getrawtransaction", txid),
-  getBlockHeight: () => rpc("getblockcount"),
-  async broadcastTransaction(hex) {
+  getAddressUtxos: addressUtxos,
+  fetchConfirmedUtxos: addressUtxos,
+  getTransaction: (txid: string) => rpc<string>("getrawtransaction", txid),
+  getBlockHeight: () => rpc<number>("getblockcount"),
+  async broadcastTransaction(hex: string): Promise<{ txid: string }> {
     return { txid: await broadcast(hex) };
   },
-  async makeRequest(endpoint) {
+  /** Only `/tx/:txid/status` is served. */
+  async makeRequest(endpoint: string): Promise<{ confirmed: boolean; block_height?: number }> {
     const match = /^\/tx\/([0-9a-f]{64})\/status$/.exec(endpoint);
     if (!match) throw new Error(`esploraOverRpc: unsupported endpoint ${endpoint}`);
-    const tx = await rpc("getrawtransaction", match[1], true);
+    const tx = await rpc<{ blockhash?: string }>("getrawtransaction", match[1], true);
     if (!tx.blockhash) return { confirmed: false };
-    const header = await rpc("getblockheader", tx.blockhash);
+    const header = await rpc<{ height: number }>("getblockheader", tx.blockhash);
     return { confirmed: true, block_height: header.height };
   },
 };
