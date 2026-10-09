@@ -82,44 +82,37 @@ later), the script builds the same tag with `cargo install` (Rust 1.89 or later,
 | `BTC_REGTEST_ORD_PORT` | `18580` | ord HTTP |
 | `BTC_REGTEST_ORD` | unset | `1` is the same as `--ord` |
 
-## Taking it along when a package moves to its own repository
+## Using it from another repository
 
-This folder is set up to be **depended on by name**. Tests, scripts and CI refer
-to `@sundial-protocol/btc-regtest` and to the `btc-regtest` command, never to a
-path, so they do not change when the package comes from somewhere else. Three
-repositories will need it (btc-locker, Solstice, Dawn), which is why it is a
-package and not a folder each of them edits.
+The package stays in the btc-locker repository, next to the library both
+products depend on, and is published to GitHub Packages like
+`@sundial-protocol/btc-locker`. The Dawn and Solstice repositories install it;
+they do not copy it. Checked on 2026-10-09 by packing it, installing the tarball
+into an empty project outside this repository, and running a suite there.
 
-Until it is published, copy the folder. Both routes end with the same imports.
+In the other repository:
 
-**Route A, copy the folder (works today):**
-
-1. Copy `packages/regtest/` into the new repository's `packages/` folder. Copy
-   the whole folder, including `.gitattributes`.
-2. Make sure the new repository's root `package.json` lists `packages/*` (or
-   this folder) under `workspaces`, then run `npm install`. npm links the folder
-   as `@sundial-protocol/btc-regtest` and puts `btc-regtest` on the path.
-3. Run `git update-index --chmod=+x packages/regtest/regtest.sh` if the copy was
-   made on Windows, where the executable bit is lost.
+1. Have the `@sundial-protocol` scope point at GitHub Packages, the same setup
+   that installs `@sundial-protocol/btc-locker`: an `.npmrc` with
+   `@sundial-protocol:registry=https://npm.pkg.github.com` and a token that can
+   read packages.
+2. `npm install --save-dev @sundial-protocol/btc-regtest`.
+3. Add the two scripts shown above, a `vitest.regtest.config.ts`, and tests under
+   `regtest/`. When moving an existing suite, move those files as they are.
 4. Copy the package's regtest job from `.github/workflows/ci.yml`. It names the
-   package, not a path, so it needs no edits.
+   package, not a path. Add `NODE_AUTH_TOKEN` to the install step if the
+   repository does not already set it for btc-locker.
 
-**Route B, publish it (no copy):**
+Before the first release from here exists, a repository can copy this folder
+into its own `packages/` workspace instead. Imports and scripts are the same.
 
-1. In this folder's `package.json`, remove `"private": true` and add
-   `"publishConfig": { "registry": "https://npm.pkg.github.com" }`, like the
-   other packages. Publish it.
-2. In each package that uses it, change the dev dependency from `"*"` to the
-   published version.
-3. Delete the folder from every repository that had a copy.
-
-A future core repository never downloads ord on either route: ord is only
-fetched when a suite asks for it.
+A repository that does not use Runes never downloads ord: it is only fetched
+when a suite asks for it.
 
 ### What still needs touching at split time
 
 - **The dev dependency range.** `"@sundial-protocol/btc-regtest": "*"` resolves
-  to the workspace copy. With route B it needs a real version.
+  to the workspace copy here. In another repository use a real version range.
 - **`@sundial-protocol/btc-locker` in the Solstice and CLI packages.** It is
   `"*"` today and resolves to the workspace. Outside this repository it has to
   be a published version that includes the two fixes on this branch (the `api`
@@ -133,8 +126,8 @@ fetched when a suite asks for it.
   sends the CLI to the Dawn repository and does not say where the Solstice
   command goes. The test should follow the command.
 - **Pinned versions.** Bitcoin Core and ord versions and checksums are in
-  `regtest.sh`. With copies in several repositories they can drift apart; with
-  route B they cannot.
+  `regtest.sh`. A new Bitcoin Core or ord version is a new release of this
+  package, and each repository picks it up by bumping the dependency.
 - **Regtest in `BitcoinAPI`.** Suites pass `esploraOverRpc` where a `BitcoinAPI`
   is expected, with a cast. When the `baseUrl` option from the
   bitcoin-api-extraction spec exists, a real `BitcoinAPI` pointed at an Esplora

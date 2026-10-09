@@ -1,7 +1,6 @@
 {
   "name": "@sundial-protocol/btc-regtest",
   "version": "0.1.0",
-  "private": true,
   "description": "Local Bitcoin Core regtest (ord optional) and test helpers for Sundial packages",
   "type": "module",
   "exports": {
@@ -31,6 +30,14 @@
   },
   "author": "Sundial Protocol",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sundial-protocol/btc-locker.git",
+    "directory": "packages/regtest"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "engines": {
     "node": ">=18.0.0"
   }
