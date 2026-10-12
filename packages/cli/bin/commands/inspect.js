@@ -84,7 +84,7 @@ export function setupInspectCommands(program) {
     .option("-a, --address <address>", "Bitcoin address to check")
     .option(
       "--api <provider>",
-      "API provider (mempool|blockstream|blockcypher)",
+      "API provider (mempool|blockstream)",
       "mempool",
     )
     .action(async (cmdOptions) => {

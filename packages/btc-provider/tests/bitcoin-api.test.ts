@@ -41,11 +41,6 @@ describe("BitcoinAPI", () => {
       expect(api).toBeDefined();
     });
 
-    test("should create with blockcypher provider", () => {
-      const api = new BitcoinAPI(NETWORKS.testnet, "blockcypher");
-      expect(api).toBeDefined();
-    });
-
     test("should create with mainnet network", () => {
       const api = new BitcoinAPI(NETWORKS.bitcoin);
       expect(api).toBeDefined();
@@ -81,6 +76,15 @@ describe("BitcoinAPI", () => {
       );
     });
 
+    test("should throw for an unknown provider", () => {
+      expect(() => new BitcoinAPI("testnet", "blockcypher" as any)).toThrow(
+        "Unknown API provider 'blockcypher'. Use 'mempool' or 'blockstream'."
+      );
+      expect(
+        () => new BitcoinAPI("testnet", ["mempool", "esplora"] as any)
+      ).toThrow("Unknown API provider 'esplora'");
+    });
+
     test("should throw for an unknown network name", () => {
       expect(() => new BitcoinAPI("signet" as any)).toThrow(
         "Unknown network 'signet'"
@@ -103,14 +107,11 @@ describe("BitcoinAPI", () => {
       );
     });
 
-    test.each(["blockstream", "blockcypher"] as const)(
-      "%s: should throw, it does not serve testnet4",
-      (provider) => {
-        expect(() => new BitcoinAPI(NETWORKS.testnet4, provider)).toThrow(
-          `API provider '${provider}' does not serve the 'testnet4' network.`
-        );
-      }
-    );
+    test("blockstream: should throw, it does not serve testnet4", () => {
+      expect(() => new BitcoinAPI(NETWORKS.testnet4, "blockstream")).toThrow(
+        "API provider 'blockstream' does not serve the 'testnet4' network."
+      );
+    });
 
     test("should not fall back to a provider that does not serve it", async () => {
       mockRequest("invalid network", 400);
@@ -271,23 +272,6 @@ describe("BitcoinAPI", () => {
       expect(result.chain_stats.tx_count).toBe(3);
     });
 
-    test("blockcypher: should transform response", async () => {
-      mockRequest(
-        JSON.stringify({
-          n_tx: 5,
-          total_received: 200000,
-          total_sent: 100000,
-          unconfirmed_n_tx: 1,
-          unconfirmed_balance: 10000,
-        })
-      );
-      const api = new BitcoinAPI(NETWORKS.testnet, "blockcypher");
-      const result = await api.getAddressInfo("tb1test");
-      expect(result.address).toBe("tb1test");
-      expect(result.chain_stats.tx_count).toBe(5);
-      expect(result.mempool_stats.funded_txo_count).toBe(1);
-    });
-
     test("should wrap errors", async () => {
       mockRequestError("timeout");
       const api = new BitcoinAPI(NETWORKS.testnet, "mempool");
@@ -313,35 +297,6 @@ describe("BitcoinAPI", () => {
       expect(result).toHaveLength(1);
       expect(result[0].txid).toBe("a".repeat(64));
       expect(result[0].value).toBe(50000);
-    });
-
-    test("blockcypher: should transform UTXOs", async () => {
-      mockRequest(
-        JSON.stringify({
-          txrefs: [
-            {
-              tx_hash: "b".repeat(64),
-              tx_output_n: 1,
-              value: 30000,
-              confirmations: 6,
-              block_height: 200,
-            },
-          ],
-        })
-      );
-      const api = new BitcoinAPI(NETWORKS.testnet, "blockcypher");
-      const result = await api.getAddressUtxos("tb1test");
-      expect(result).toHaveLength(1);
-      expect(result[0].txid).toBe("b".repeat(64));
-      expect(result[0].vout).toBe(1);
-      expect(result[0].status.confirmed).toBe(true);
-    });
-
-    test("blockcypher: should handle empty txrefs", async () => {
-      mockRequest(JSON.stringify({}));
-      const api = new BitcoinAPI(NETWORKS.testnet, "blockcypher");
-      const result = await api.getAddressUtxos("tb1test");
-      expect(result).toEqual([]);
     });
 
     test("mempool: should fallback to blockstream on invalid network", async () => {
@@ -391,13 +346,6 @@ describe("BitcoinAPI", () => {
       expect(result).toBe("0100000001abcdef");
     });
 
-    test("blockcypher: should return hex from JSON", async () => {
-      mockRequest(JSON.stringify({ hex: "0200000001fedcba" }));
-      const api = new BitcoinAPI(NETWORKS.testnet, "blockcypher");
-      const result = await api.getTransaction("a".repeat(64));
-      expect(result).toBe("0200000001fedcba");
-    });
-
     test("should wrap errors", async () => {
       mockRequestError("timeout");
       const api = new BitcoinAPI(NETWORKS.testnet, "mempool");
@@ -417,13 +365,6 @@ describe("BitcoinAPI", () => {
       expect(call(req).init.method).toBe("POST");
       expect(call(req).init.body).toBe("rawhex");
       expect(call(req).headers["Content-Type"]).toBe("text/plain");
-    });
-
-    test("blockcypher: should broadcast via POST JSON", async () => {
-      mockRequest(JSON.stringify({ txid: "txid456" }));
-      const api = new BitcoinAPI(NETWORKS.testnet, "blockcypher");
-      const result = await api.broadcastTransaction("rawhex");
-      expect(result.txid).toBe("txid456");
     });
 
     test("should wrap errors", async () => {
@@ -454,15 +395,6 @@ describe("BitcoinAPI", () => {
       expect(result[6]).toBe(15);
     });
 
-    test("blockcypher: should return defaults", async () => {
-      // blockcypher doesn't call API for fee estimates
-      const api = new BitcoinAPI(NETWORKS.testnet, "blockcypher");
-      const result = await api.getFeeEstimates();
-      expect(result[1]).toBe(20);
-      expect(result[6]).toBe(10);
-      expect(result[144]).toBe(5);
-    });
-
     test("should wrap errors", async () => {
       mockRequestError("fail");
       const api = new BitcoinAPI(NETWORKS.testnet, "mempool");
@@ -478,13 +410,6 @@ describe("BitcoinAPI", () => {
       const api = new BitcoinAPI(NETWORKS.testnet, "mempool");
       const result = await api.getBlockHeight();
       expect(result).toBe(850000);
-    });
-
-    test("blockcypher: should return height from JSON", async () => {
-      mockRequest(JSON.stringify({ height: 850001 }));
-      const api = new BitcoinAPI(NETWORKS.testnet, "blockcypher");
-      const result = await api.getBlockHeight();
-      expect(result).toBe(850001);
     });
 
     test("should wrap errors", async () => {

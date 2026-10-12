@@ -1,6 +1,8 @@
 /**
  * Bitcoin API Service
- * Integrates with various Bitcoin APIs for testnet/mainnet operations
+ * Talks to public Esplora APIs (mempool.space, Blockstream) for testnet/mainnet
+ * operations. Both serve the same paths, so every call is one request that any
+ * provider can answer.
  */
 
 import { NETWORKS, type BitcoinNetwork, type NetworkName } from "./network.js";
@@ -28,7 +30,7 @@ export interface ApiUTXO {
   };
 }
 
-export type ApiProvider = "mempool" | "blockstream" | "blockcypher";
+export type ApiProvider = "mempool" | "blockstream";
 
 export interface ApiUrls {
   [provider: string]: {
@@ -116,14 +118,10 @@ const BASE_URLS: ApiUrls = {
     testnet: "https://mempool.space/testnet/api",
     testnet4: "https://mempool.space/testnet4/api",
   },
-  // Blockstream and BlockCypher do not serve testnet4 (checked 2026-10-12).
+  // Blockstream does not serve testnet4 (checked 2026-10-12).
   blockstream: {
     bitcoin: "https://blockstream.info/api",
     testnet: "https://blockstream.info/testnet/api",
-  },
-  blockcypher: {
-    bitcoin: "https://api.blockcypher.com/v1/btc/main",
-    testnet: "https://api.blockcypher.com/v1/btc/test3",
   },
 };
 
@@ -131,10 +129,6 @@ const BASE_URLS: ApiUrls = {
 const IN_BROWSER =
   typeof (globalThis as { document?: unknown }).document !== "undefined";
 const USER_AGENT = "btc-locker-cli/1.0.0";
-
-/** mempool.space and Blockstream serve the same Esplora paths. */
-const isEsplora = (provider: ApiProvider) =>
-  provider === "mempool" || provider === "blockstream";
 
 /**
  * Whether a failure says the provider is the problem, so the next one is worth
@@ -151,7 +145,7 @@ function isProviderFailure(error: BitcoinAPIError): boolean {
 
 /** What nodes answer when asked to broadcast a transaction they already have. */
 const ALREADY_KNOWN =
-  /txn-already-known|txn-already-in-mempool|already in (the )?block ?chain|outputs already in utxo set|already exists/i;
+  /txn-already-known|txn-already-in-mempool|already in (the )?block ?chain|outputs already in utxo set/i;
 
 export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
   private network: N;
@@ -205,10 +199,15 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
     }
 
     const asked = Array.isArray(apiProvider) ? apiProvider : [apiProvider];
+    const unknown = asked.find((provider) => !BASE_URLS[provider]);
+    if (unknown) {
+      throw new Error(
+        `Unknown API provider '${unknown}'. Use 'mempool' or 'blockstream'.`
+      );
+    }
     const serving = asked.filter(
       (provider, index) =>
-        BASE_URLS[provider]?.[resolved.name] &&
-        asked.indexOf(provider) === index
+        BASE_URLS[provider][resolved.name] && asked.indexOf(provider) === index
     );
     if (serving.length === 0) {
       throw new Error(
@@ -412,34 +411,9 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
    * Get address balance and transaction count
    */
   async getAddressInfo(address: string): Promise<AddressInfo> {
-    return this.tryProviders("get address info", async (provider) => {
-      if (isEsplora(provider)) {
-        return await this.sendJson(provider, `/address/${address}`);
-      } else if (provider === "blockcypher") {
-        const result = await this.sendJson(
-          provider,
-          `/addrs/${address}/balance`
-        );
-        return {
-          address,
-          chain_stats: {
-            funded_txo_count: result.n_tx,
-            funded_txo_sum: result.total_received,
-            spent_txo_count: result.n_tx - result.unconfirmed_n_tx,
-            spent_txo_sum: result.total_sent,
-            tx_count: result.n_tx,
-          },
-          mempool_stats: {
-            funded_txo_count: result.unconfirmed_n_tx,
-            funded_txo_sum: result.unconfirmed_balance,
-            spent_txo_count: 0,
-            spent_txo_sum: 0,
-            tx_count: result.unconfirmed_n_tx,
-          },
-        };
-      }
-      throw new Error("Unsupported API provider");
-    });
+    return this.tryProviders("get address info", (provider) =>
+      this.sendJson(provider, `/address/${address}`)
+    );
   }
 
   /**
@@ -447,42 +421,22 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
    */
   async getAddressUtxos(address: string): Promise<ApiUTXO[]> {
     return this.tryProviders("get UTXOs", async (provider) => {
-      if (isEsplora(provider)) {
-        const rawUtxos = await this.sendJson(
-          provider,
-          `/address/${address}/utxo`
-        );
+      const rawUtxos = await this.sendJson(
+        provider,
+        `/address/${address}/utxo`
+      );
 
-        // Return flat UTXO structure with status attached
-        return rawUtxos.map((rawUtxo: any) => ({
-          txid: rawUtxo.txid,
-          vout: rawUtxo.vout,
-          value: rawUtxo.value,
-          status: rawUtxo.status || {
-            confirmed: rawUtxo.status?.confirmed || false,
-            block_height: rawUtxo.status?.block_height,
-            block_hash: rawUtxo.status?.block_hash,
-          },
-        }));
-      } else if (provider === "blockcypher") {
-        const result = await this.sendJson(
-          provider,
-          `/addrs/${address}?unspentOnly=true&includeScript=true`
-        );
-        return (
-          result.txrefs?.map((utxo: any) => ({
-            txid: utxo.tx_hash,
-            vout: utxo.tx_output_n,
-            value: utxo.value,
-            status: {
-              confirmed: utxo.confirmations > 0,
-              block_height: utxo.block_height,
-              block_hash: utxo.block_hash,
-            },
-          })) || []
-        );
-      }
-      throw new Error("Unsupported API provider");
+      // Return flat UTXO structure with status attached
+      return rawUtxos.map((rawUtxo: any) => ({
+        txid: rawUtxo.txid,
+        vout: rawUtxo.vout,
+        value: rawUtxo.value,
+        status: rawUtxo.status || {
+          confirmed: rawUtxo.status?.confirmed || false,
+          block_height: rawUtxo.status?.block_height,
+          block_hash: rawUtxo.status?.block_hash,
+        },
+      }));
     });
   }
 
@@ -490,18 +444,9 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
    * Get raw transaction data
    */
   async getTransaction(txid: string): Promise<string> {
-    return this.tryProviders("get transaction", async (provider) => {
-      if (isEsplora(provider)) {
-        return await this.sendText(provider, `/tx/${txid}/hex`);
-      } else if (provider === "blockcypher") {
-        const result = await this.sendJson(
-          provider,
-          `/txs/${txid}?includeHex=true`
-        );
-        return result.hex;
-      }
-      throw new Error("Unsupported API provider");
-    });
+    return this.tryProviders("get transaction", (provider) =>
+      this.sendText(provider, `/tx/${txid}/hex`)
+    );
   }
 
   /**
@@ -511,13 +456,7 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
   async broadcastTransaction(txHex: string): Promise<BroadcastResult> {
     return this.tryProviders("broadcast transaction", async (provider) => {
       try {
-        if (isEsplora(provider)) {
-          return await this.sendBroadcast(provider, "/tx", txHex);
-        } else if (provider === "blockcypher") {
-          return await this.sendJson(provider, "/txs/push", "POST", {
-            tx: txHex,
-          });
-        }
+        return await this.sendBroadcast(provider, "/tx", txHex);
       } catch (error) {
         if (
           error instanceof BitcoinAPIError &&
@@ -534,7 +473,6 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
         }
         throw error;
       }
-      throw new Error("Unsupported API provider");
     });
   }
 
@@ -560,34 +498,17 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
    * Get current fee estimates
    */
   async getFeeEstimates(): Promise<FeeEstimates> {
-    return this.tryProviders("get fee estimates", async (provider) => {
-      if (isEsplora(provider)) {
-        return await this.sendJson(provider, "/fee-estimates");
-      } else if (provider === "blockcypher") {
-        // BlockCypher doesn't have fee estimates, return defaults
-        return {
-          1: 20, // high priority (next block)
-          6: 10, // medium priority (6 blocks)
-          144: 5, // low priority (1 day)
-        };
-      }
-      throw new Error("Unsupported API provider");
-    });
+    return this.tryProviders("get fee estimates", (provider) =>
+      this.sendJson(provider, "/fee-estimates")
+    );
   }
 
   /**
    * Get current block height
    */
   async getBlockHeight(): Promise<number> {
-    return this.tryProviders("get block height", async (provider) => {
-      if (isEsplora(provider)) {
-        const tip = await this.sendJson(provider, "/blocks/tip/height");
-        return tip;
-      } else if (provider === "blockcypher") {
-        const result = await this.sendJson(provider, "/");
-        return result.height;
-      }
-      throw new Error("Unsupported API provider");
-    });
+    return this.tryProviders("get block height", (provider) =>
+      this.sendJson(provider, "/blocks/tip/height")
+    );
   }
 }

@@ -6,8 +6,7 @@
 
 1. **No API Keys Required** - Uses free public APIs:
    - Mempool.space API (default)
-   - Blockstream Esplora API
-   - BlockCypher API (backup)
+   - Blockstream Esplora API (backup)
 
 2. **Testnet Bitcoin** - Get free testnet coins:
    - https://coinfaucet.eu/en/btc-testnet/

@@ -31,7 +31,6 @@ function hosts(answers: { [host: string]: Answer }) {
 
 const MEMPOOL = "mempool.space";
 const BLOCKSTREAM = "blockstream.info";
-const BLOCKCYPHER = "api.blockcypher.com";
 
 describe("providers", () => {
   test("default to mempool.space, then Blockstream", () => {
@@ -56,12 +55,12 @@ describe("providers", () => {
 
   test("a list keeps its order and drops repeats", () => {
     const api = new BitcoinAPI("bitcoin", [
-      "blockcypher",
+      "blockstream",
       "mempool",
-      "blockcypher",
+      "blockstream",
     ]);
-    expect(api.providers).toEqual(["blockcypher", "mempool"]);
-    expect(api.provider).toBe("blockcypher");
+    expect(api.providers).toEqual(["blockstream", "mempool"]);
+    expect(api.provider).toBe("blockstream");
   });
 
   test("a list leaves out providers that do not serve the network", () => {
@@ -70,10 +69,8 @@ describe("providers", () => {
   });
 
   test("a list with no provider for the network throws", () => {
-    expect(
-      () => new BitcoinAPI("testnet4", ["blockstream", "blockcypher"])
-    ).toThrow(
-      "None of the API providers (blockstream, blockcypher) serves the 'testnet4' network."
+    expect(() => new BitcoinAPI("testnet4", ["blockstream"])).toThrow(
+      "None of the API providers (blockstream) serves the 'testnet4' network."
     );
   });
 });
@@ -127,33 +124,16 @@ describe("fallback, by method", () => {
     }
   );
 
-  test("the next provider is asked in its own dialect", async () => {
-    const { fetchFn, fetch } = hosts({
+  test("the order of a list is the order asked", async () => {
+    const { asked, fetch } = hosts({
       [BLOCKSTREAM]: new TypeError("fetch failed"),
-      [BLOCKCYPHER]: ok('{"height":42}'),
+      [MEMPOOL]: ok("42"),
     });
-    const api = new BitcoinAPI("bitcoin", ["blockstream", "blockcypher"], {
+    const api = new BitcoinAPI("bitcoin", ["blockstream", "mempool"], {
       fetch,
     });
     expect(await api.getBlockHeight()).toBe(42);
-    expect(fetchFn.mock.calls[1][0]).toBe(
-      "https://api.blockcypher.com/v1/btc/main/"
-    );
-  });
-
-  test("three providers are tried in order", async () => {
-    const { asked, fetch } = hosts({
-      [BLOCKCYPHER]: status(429),
-      [MEMPOOL]: status(500),
-      [BLOCKSTREAM]: ok("5"),
-    });
-    const api = new BitcoinAPI(
-      "bitcoin",
-      ["blockcypher", "mempool", "blockstream"],
-      { fetch }
-    );
-    expect(await api.getBlockHeight()).toBe(5);
-    expect(asked).toEqual([BLOCKCYPHER, MEMPOOL, BLOCKSTREAM]);
+    expect(asked).toEqual([BLOCKSTREAM, MEMPOOL]);
   });
 
   test("makeRequest, makeRequestText and makeBroadcastRequest ask the first provider only", async () => {
@@ -365,19 +345,6 @@ describe("broadcasting a transaction a provider already has", () => {
       txid: SEGWIT_TX.txid,
     });
     expect(asked).toEqual([MEMPOOL]);
-  });
-
-  test("BlockCypher's wording", async () => {
-    const { fetch } = hosts({
-      [BLOCKCYPHER]: status(
-        400,
-        `{"error": "Transaction with hash ${SEGWIT_TX.txid} already exists."}`
-      ),
-    });
-    const api = new BitcoinAPI("bitcoin", "blockcypher", { fetch });
-    expect(await api.broadcastTransaction(SEGWIT_TX.hex)).toEqual({
-      txid: SEGWIT_TX.txid,
-    });
   });
 
   test("the first provider times out after taking it, the second already has it", async () => {

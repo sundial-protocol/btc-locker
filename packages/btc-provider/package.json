@@ -1,7 +1,7 @@
 {
   "name": "@sundial-protocol/btc-provider",
   "version": "1.0.0",
-  "description": "Bitcoin chain data and broadcast over public HTTP APIs (mempool.space, Blockstream, BlockCypher), on Node and in the browser",
+  "description": "Bitcoin chain data and broadcast over public Esplora APIs (mempool.space, Blockstream), on Node and in the browser",
   "main": "dist/cjs/index.js",
   "types": "dist/cjs/index.d.ts",
   "type": "module",
