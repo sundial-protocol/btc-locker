@@ -199,7 +199,8 @@ export function buildSwapTransaction(params: SwapParams): SwapResult {
   outputs.push({ role: "btc recipient", address: btc.recipientAddress, value: btc.amount });
 
   psbt.addOutput({ script: runestoneScript, value: 0n });
-  outputs.push({ role: "runestone", scriptHex: runestoneScript.toString("hex"), value: 0 });
+  const runestoneScriptHex = Buffer.from(runestoneScript).toString("hex");
+  outputs.push({ role: "runestone", scriptHex: runestoneScriptHex, value: 0 });
 
   if (emitBtcChange && btc.changeAddress) {
     psbt.addOutput({ address: btc.changeAddress, value: BigInt(btcChangeSats) });
@@ -209,7 +210,7 @@ export function buildSwapTransaction(params: SwapParams): SwapResult {
   return {
     psbtBase64: psbt.toBase64(),
     runestone,
-    runestoneScriptHex: runestoneScript.toString("hex"),
+    runestoneScriptHex,
     fee,
     runeChange,
     btcChangeSats,

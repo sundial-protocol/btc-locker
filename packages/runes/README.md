@@ -44,8 +44,10 @@ const decoded = nativeRunestoneCodec.decipher(script, { outputCount: 4 });
 if (decoded.cenotaph) throw new Error(decoded.flaws.join("; "));
 ```
 
-Scripts and commitments are Node `Buffer`s. In a browser the bundler has to
-provide `Buffer`.
+Scripts and commitments are plain `Uint8Array`s, in and out, so the package
+runs in a browser with no polyfill. A Node `Buffer` is a `Uint8Array` and can be
+passed in as is. The results are not Buffers: for hex use
+`Buffer.from(script).toString("hex")` on Node, or any hex encoder.
 
 ## Verification against ord
 

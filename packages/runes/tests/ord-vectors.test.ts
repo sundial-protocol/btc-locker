@@ -133,7 +133,7 @@ describe(`ord ${vectors.source.tag} reference vectors (${vectors.source.commit.s
     for (const v of vectors.encipher) {
       test(v.name, () => {
         const script = nativeRunestoneCodec.encipher(fromJson(v.runestone as JsonRunestone));
-        expect(script.toString("hex")).toBe(v.scriptPubKey);
+        expect(Buffer.from(script).toString("hex")).toBe(v.scriptPubKey);
         expectMatchesOrd(v.scriptPubKey, v.outputs, v.ord as OrdArtifact);
       });
     }
@@ -166,7 +166,7 @@ describe(`ord ${vectors.source.tag} reference vectors (${vectors.source.commit.s
       test(`${v.name} is ${v.number}, commitment ${v.commitment || "(empty)"}`, () => {
         expect(runeNameToNumber(v.name).toString()).toBe(v.number);
         expect(numberToRuneName(BigInt(v.number))).toBe(v.name);
-        expect(runeCommitment(BigInt(v.number)).toString("hex")).toBe(v.commitment);
+        expect(Buffer.from(runeCommitment(BigInt(v.number))).toString("hex")).toBe(v.commitment);
       });
     }
     for (const v of vectors.spacedRunes) {

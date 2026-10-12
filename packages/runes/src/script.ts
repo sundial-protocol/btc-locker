@@ -7,26 +7,24 @@
  * related in this package pushes bytes with {@link pushBytes} instead.
  */
 
+import { concatBytes } from "./bytes.js";
+
 export const OP_PUSHDATA1 = 0x4c;
 export const OP_PUSHDATA2 = 0x4d;
 export const OP_PUSHDATA4 = 0x4e;
 
 /** A data push, with the length prefix rust-bitcoin's `push_slice` would write. */
-export function pushBytes(data: Buffer): Buffer {
+export function pushBytes(data: Uint8Array): Uint8Array {
   const n = data.length;
-  let prefix: Buffer;
+  let prefix: number[];
   if (n < OP_PUSHDATA1) {
-    prefix = Buffer.from([n]);
+    prefix = [n];
   } else if (n <= 0xff) {
-    prefix = Buffer.from([OP_PUSHDATA1, n]);
+    prefix = [OP_PUSHDATA1, n];
   } else if (n <= 0xffff) {
-    prefix = Buffer.alloc(3);
-    prefix[0] = OP_PUSHDATA2;
-    prefix.writeUInt16LE(n, 1);
+    prefix = [OP_PUSHDATA2, n & 0xff, n >>> 8];
   } else {
-    prefix = Buffer.alloc(5);
-    prefix[0] = OP_PUSHDATA4;
-    prefix.writeUInt32LE(n, 1);
+    prefix = [OP_PUSHDATA4, n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, n >>> 24];
   }
-  return Buffer.concat([prefix, data]);
+  return concatBytes([Uint8Array.from(prefix), data]);
 }

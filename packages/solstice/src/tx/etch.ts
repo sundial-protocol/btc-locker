@@ -154,7 +154,8 @@ export function buildEtchTransaction(params: EtchParams): EtchResult {
   outputs.push({ role: "vault (premine)", address: vaultAddress, value: vaultOutputValue });
 
   psbt.addOutput({ script: runestoneScript, value: 0n });
-  outputs.push({ role: "runestone", scriptHex: runestoneScript.toString("hex"), value: 0 });
+  const runestoneScriptHex = Buffer.from(runestoneScript).toString("hex");
+  outputs.push({ role: "runestone", scriptHex: runestoneScriptHex, value: 0 });
 
   if (emitChange && changeAddress) {
     psbt.addOutput({ address: changeAddress, value: BigInt(changeSats) });
@@ -164,7 +165,7 @@ export function buildEtchTransaction(params: EtchParams): EtchResult {
   return {
     psbtBase64: psbt.toBase64(),
     runestone,
-    runestoneScriptHex: runestoneScript.toString("hex"),
+    runestoneScriptHex,
     fee,
     changeSats,
     outputs,

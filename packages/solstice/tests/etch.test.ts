@@ -84,7 +84,7 @@ describe("createEtchCommitment", () => {
   test("writes a one-byte commitment as a data push, not OP_N", () => {
     // "F" is rune 5: a script compiler would emit OP_5, which ord does not match.
     const c = createEtchCommitment({ name: "F" }, adminXOnly, NETWORK);
-    expect(runeCommitment(runeNameToNumber("F")).toString("hex")).toBe("05");
+    expect(Buffer.from(runeCommitment(runeNameToNumber("F"))).toString("hex")).toBe("05");
     expect(c.tapLeafScriptHex.endsWith("ac0063010568")).toBe(true);
   });
 
@@ -272,7 +272,7 @@ describe("buildEtchTransaction (C0, reveal)", () => {
     expect(witness[0].length).toBe(64);
     expect(Buffer.from(witness[2]).toString("hex")).toBe(commitment.controlBlockHex);
     expect(pushes(witness[1])).toContain(
-      runeCommitment(runeNameToNumber(rune.name)).toString("hex"),
+      Buffer.from(runeCommitment(runeNameToNumber(rune.name))).toString("hex"),
     );
 
     // No change output: the whole remainder is the fee.

@@ -13,6 +13,7 @@
  * exactly. Any deviation throws before a PSBT is ever handed out for signing.
  */
 
+import { bytesEqual } from "./bytes.js";
 import type { RunestoneCodec } from "./codec.js";
 import type { DecipherContext, Runestone } from "./types.js";
 
@@ -36,7 +37,7 @@ export function encipherGuarded(
   runestone: Runestone,
   codec: RunestoneCodec,
   context?: DecipherContext,
-): Buffer {
+): Uint8Array {
   const script = codec.encipher(runestone);
 
   const decoded = codec.decipher(script, context);
@@ -47,7 +48,7 @@ export function encipherGuarded(
   }
 
   const reencoded = codec.encipher(decoded.runestone);
-  if (!reencoded.equals(script)) {
+  if (!bytesEqual(reencoded, script)) {
     throw new CenotaphError(
       "runestone did not round-trip: re-enciphered bytes differ from the original",
     );

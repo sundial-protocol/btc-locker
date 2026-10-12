@@ -12,7 +12,7 @@ import type { DecipherContext, DecipherResult, Runestone } from "./types.js";
 
 export interface RunestoneCodec {
   /** Encode a runestone to its `OP_RETURN` scriptPubKey. */
-  encipher(runestone: Runestone): Buffer;
+  encipher(runestone: Runestone): Uint8Array;
   /** Decode a scriptPubKey to a runestone, flagging cenotaphs. */
-  decipher(scriptPubKey: Buffer, context?: DecipherContext): DecipherResult;
+  decipher(scriptPubKey: Uint8Array, context?: DecipherContext): DecipherResult;
 }

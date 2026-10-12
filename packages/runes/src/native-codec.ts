@@ -33,6 +33,7 @@ import {
 import { RUNE_ID_ZERO, runeIdDelta, compareRuneId, type RuneId } from "./rune-id.js";
 import { encodeVarint, decodeAllVarints, U128_MAX } from "./varint.js";
 import { OP_PUSHDATA1, OP_PUSHDATA2, OP_PUSHDATA4, pushBytes } from "./script.js";
+import { concatBytes } from "./bytes.js";
 
 const OP_RETURN = 0x6a;
 
@@ -52,18 +53,18 @@ const FLAW_TEXT: Record<Flaw, string> = {
   varint: "invalid varint",
 };
 
-type Payload = { payload: Buffer } | { flaw: Flaw } | undefined;
+type Payload = { payload: Uint8Array } | { flaw: Flaw } | undefined;
 
 /**
  * Extract the runestone payload from a scriptPubKey: `OP_RETURN OP_13` followed
  * by data pushes only. Returns `undefined` when the script is not a runestone.
  */
-function readPayload(script: Buffer): Payload {
+function readPayload(script: Uint8Array): Payload {
   if (script.length < 2 || script[0] !== OP_RETURN || script[1] !== RUNESTONE_MAGIC) {
     return undefined;
   }
 
-  const parts: Buffer[] = [];
+  const parts: Uint8Array[] = [];
   let i = 2;
   while (i < script.length) {
     const opcode = script[i];
@@ -78,11 +79,13 @@ function readPayload(script: Buffer): Payload {
       i += 1;
     } else if (opcode === OP_PUSHDATA2) {
       if (i + 2 > script.length) return { flaw: "invalid-script" };
-      length = script.readUInt16LE(i);
+      length = script[i] | (script[i + 1] << 8);
       i += 2;
     } else if (opcode === OP_PUSHDATA4) {
       if (i + 4 > script.length) return { flaw: "invalid-script" };
-      length = script.readUInt32LE(i);
+      // `>>> 0` keeps the top bit from making the length negative.
+      length =
+        (script[i] | (script[i + 1] << 8) | (script[i + 2] << 16) | (script[i + 3] << 24)) >>> 0;
       i += 4;
     } else {
       return { flaw: "opcode" };
@@ -93,7 +96,7 @@ function readPayload(script: Buffer): Payload {
     i += length;
   }
 
-  return { payload: Buffer.concat(parts) };
+  return { payload: concatBytes(parts) };
 }
 
 /** `RuneId::new`: block 0 is only valid with tx 0; block is a u64, tx a u32. */
@@ -113,7 +116,7 @@ function nextRuneId(previous: RuneId, block: bigint, tx: bigint): RuneId | undef
 }
 
 export class NativeRunestoneCodec implements RunestoneCodec {
-  encipher(runestone: Runestone): Buffer {
+  encipher(runestone: Runestone): Uint8Array {
     const stream: bigint[] = [];
 
     const pushTag = (tag: Tag, values: bigint[]): void => {
@@ -187,16 +190,16 @@ export class NativeRunestoneCodec implements RunestoneCodec {
     // ── Serialize ────────────────────────────────────────────────────────────
     const bytes: number[] = [];
     for (const v of stream) bytes.push(...encodeVarint(v));
-    const payload = Buffer.from(bytes);
+    const payload = Uint8Array.from(bytes);
 
     // Like ord: the whole payload in one push, and no push at all when empty.
-    const prefix = Buffer.from([OP_RETURN, RUNESTONE_MAGIC]);
+    const prefix = Uint8Array.from([OP_RETURN, RUNESTONE_MAGIC]);
     return payload.length === 0
       ? prefix
-      : Buffer.concat([prefix, pushBytes(payload)]);
+      : concatBytes([prefix, pushBytes(payload)]);
   }
 
-  decipher(scriptPubKey: Buffer, context: DecipherContext = {}): DecipherResult {
+  decipher(scriptPubKey: Uint8Array, context: DecipherContext = {}): DecipherResult {
     const { outputCount } = context;
     const runestone: Runestone = {};
     const flaws: Flaw[] = [];
@@ -207,7 +210,7 @@ export class NativeRunestoneCodec implements RunestoneCodec {
       flaws: flaws.map((f) => FLAW_TEXT[f]),
     });
 
-    const read = readPayload(Buffer.from(scriptPubKey));
+    const read = readPayload(scriptPubKey);
     if (read === undefined) {
       return {
         runestone,
