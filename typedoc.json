@@ -1,0 +1,9 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "Sundial BTC Locker",
+  "entryPointStrategy": "packages",
+  "entryPoints": ["packages/core", "packages/solstice", "packages/cli"],
+  "out": "docs",
+  "readme": "README.md",
+  "includeVersion": false
+}

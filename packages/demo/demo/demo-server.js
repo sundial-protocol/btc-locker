@@ -16,7 +16,9 @@ const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
 
 // Package paths
-const CORE_DOCS_DIR = path.join(__dirname, "..", "..", "core", "docs");
+const REPO_ROOT = path.join(__dirname, "..", "..", "..");
+// Monorepo TypeDoc output (core + solstice + cli), built by `npm run docs` at the repo root
+const DOCS_DIR = path.join(REPO_ROOT, "docs");
 const CORE_DIST_DIR = path.join(__dirname, "..", "..", "core", "dist");
 
 const app = express();
@@ -192,7 +194,7 @@ app.get("/cli", (req, res) => {
 
 // Serve API documentation index (specific handler for the root docs page)
 app.get("/docs/", (req, res) => {
-  const docsPath = path.join(CORE_DOCS_DIR, "index.html");
+  const docsPath = path.join(DOCS_DIR, "index.html");
 
   if (fs.existsSync(docsPath)) {
     // Read the file and inject base href if not present
@@ -205,7 +207,7 @@ app.get("/docs/", (req, res) => {
     // Try to generate docs automatically
     exec(
       "npm run docs",
-      { cwd: path.join(__dirname, "..", "..", "core") },
+      { cwd: REPO_ROOT },
       (error, stdout, stderr) => {
         if (error) {
           res.status(404).json({
@@ -243,13 +245,13 @@ app.get("/docs", (req, res) => {
 });
 
 // Serve docs static assets (for CSS, JS, images, etc.)
-app.use("/docs", express.static(CORE_DOCS_DIR));
+app.use("/docs", express.static(DOCS_DIR));
 
 // Middleware to inject base href into HTML files in docs
 app.use("/docs", (req, res, next) => {
   // Only process HTML files
   if (req.path.endsWith(".html")) {
-    const filePath = path.join(CORE_DOCS_DIR, req.path);
+    const filePath = path.join(DOCS_DIR, req.path);
 
     if (fs.existsSync(filePath)) {
       let content = fs.readFileSync(filePath, "utf8");
@@ -284,7 +286,7 @@ app.use((req, res) => {
 // Start server
 app.listen(port, () => {
   console.log(`Demo: http://localhost:${port}`);
-  console.log(`JS Library Docs: http://localhost:${port}/docs`);
+  console.log(`JS Library Docs (core / solstice / cli): http://localhost:${port}/docs`);
   console.log(`Server API Docs: http://localhost:${port}/api-docs`);
   console.log(`CLI Docs: http://localhost:${port}/cli`);
 });

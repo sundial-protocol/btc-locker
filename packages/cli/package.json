@@ -1,6 +1,6 @@
 {
   "name": "@sundial-protocol/btc-locker-cli",
-  "version": "2.0.4",
+  "version": "2.1.0",
   "private": false,
   "type": "module",
   "description": "CLI for the BTC Locker Bitcoin timelock library",
@@ -9,14 +9,21 @@
   },
   "scripts": {
     "start": "node bin/btc-locker",
+    "test:regtest": "vitest run --config vitest.regtest.config.ts",
+    "regtest": "btc-regtest run --ord",
     "lint": "eslint bin/**/*.js"
   },
   "dependencies": {
     "@sundial-protocol/btc-locker": "*",
+    "@sundial-protocol/solstice": "*",
     "bitcoinjs-lib": "^7.0.0",
     "chalk": "^5.6.2",
     "commander": "^11.1.0",
     "inquirer": "^8.2.6"
+  },
+  "devDependencies": {
+    "@sundial-protocol/btc-regtest": "*",
+    "vitest": "^4.0.18"
   },
   "files": [
     "bin/"

@@ -1,6 +1,6 @@
 {
   "name": "@sundial-protocol/btc-locker",
-  "version": "2.0.5",
+  "version": "2.1.1",
   "description": "A comprehensive Bitcoin timelock script library for creating and managing time-locked transactions",
   "main": "dist/cjs/index.js",
   "types": "dist/cjs/index.d.ts",
@@ -56,10 +56,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:regtest": "vitest run --config vitest.regtest.config.ts",
+    "regtest": "btc-regtest run",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "type-check": "tsc --noEmit",
-    "docs": "typedoc --tsconfig tsconfig.docs.json src/index.ts",
+    "docs": "typedoc",
     "example": "node examples/basic-usage.js"
   },
   "keywords": [
@@ -94,6 +96,7 @@
   "devDependencies": {
     "@babel/core": "^7.23.0",
     "@babel/preset-env": "^7.23.0",
+    "@sundial-protocol/btc-regtest": "*",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^4.0.18",
     "babel-loader": "^9.1.3",

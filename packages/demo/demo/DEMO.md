@@ -42,9 +42,9 @@ npm run demo:dev
 - **Request/Response Examples**: Comprehensive examples for all operations
 - **Schema Validation**: Real-time validation of API requests
 
-#### Traditional JSDoc Documentation
+#### Library Documentation (TypeDoc)
 
-- **Library Documentation**: http://localhost:3000/docs
+- **Library Documentation**: http://localhost:3000/docs — one site covering `@sundial-protocol/btc-locker` (core), `@sundial-protocol/solstice`, and `@sundial-protocol/btc-locker-cli`. Generated into the repo-root `docs/` by `npm run docs` (auto-generated on first visit if missing)
 - **Class Documentation**: Complete method and parameter documentation
 - **Code Examples**: Usage examples for all functions
 - **Inheritance Diagrams**: Clear class hierarchy and relationships
@@ -154,8 +154,8 @@ const transaction = await txResponse.json();
 
 ### 2. Traditional Documentation Browse
 
-1. Access JSDoc documentation at http://localhost:3000/docs
-2. Browse class documentation and method signatures
+1. Access the library documentation at http://localhost:3000/docs
+2. Pick a package (core, solstice, cli) and browse class documentation and method signatures
 3. Review code examples and parameter descriptions
 4. Understand the library architecture and inheritance
 
@@ -204,7 +204,7 @@ BITCOIN_NETWORK=testnet     # Default Bitcoin network
 ├── api-routes.js           # REST API endpoint definitions
 ├── home.html              # Landing page with feature overview
 ├── swagger.config.js       # OpenAPI/Swagger configuration
-├── docs/                   # Generated JSDoc documentation
+├── ../../../docs/          # Generated TypeDoc (core + solstice + cli), from `npm run docs` at the repo root
 ├── dist/                   # Built library bundle
 └── examples/               # Usage examples
 ```

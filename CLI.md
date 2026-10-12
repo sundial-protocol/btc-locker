@@ -150,3 +150,103 @@ btc-locker timelock --time $FUTURE_TIME --pubkey $PUBKEY
 ```bash
 btc-locker check --time $FUTURE_TIME
 ```
+
+## Solstice (Runes receipt token)
+
+Commands for the Solstice value-accrual vault's receipt-token + atomic-swap layer
+(`@sundial-protocol/solstice`). Testnet by default.
+
+### Etch a receipt rune (C0)
+
+Premines the full fixed supply into a vault address. An etching takes **two
+transactions**: a commit to the rune name, and the etching itself, which has to
+confirm when the commit has 6 confirmations or more. Without the commit, Runes
+indexers ignore the etching.
+
+`--from-key` funds both transactions, owns the commit output and signs the
+etching. The premine goes to `--vault` (default: the key's own address).
+
+```bash
+# Step 1: commit. Add --dry-run first to see the PSBT without broadcasting.
+btc-locker solstice etch \
+  --from-key YOUR_PRIVATE_KEY \
+  --name SOLSTICE.RECEIPT \
+  --ticker RT \
+  --supply 2100000000000000 \
+  --divisibility 8 \
+  --symbol q
+# prints the commit txid
+
+# Step 2: once the commit has 5 confirmations, the same command plus --commit.
+btc-locker solstice etch \
+  --from-key YOUR_PRIVATE_KEY \
+  --name SOLSTICE.RECEIPT \
+  --ticker RT \
+  --supply 2100000000000000 \
+  --divisibility 8 \
+  --symbol q \
+  --vault VAULT_ADDRESS \
+  --commit COMMIT_TXID
+```
+
+Or pass `--wait` in step 1 to keep the command running until the commit has 5
+confirmations and then go straight to step 2 (about 50 minutes on mainnet).
+
+Step 2 refuses to build if the commit output does not match the name and key, or
+if the commit has fewer than 5 confirmations. An etching that confirms too early
+is ignored by indexers and the commit output is spent for nothing.
+
+**Custody.** The key that makes the commit is the only key that can etch: the
+commit output is a taproot output locked to it, and the etching decides where the
+premine goes. This command takes one private key, so it suits testing. A vault
+whose admin is a multisig needs that group to produce one Schnorr signature for
+the etching (see `packages/solstice/README.md`).
+
+Rune names are `A–Z`; spacers can be written as `•` or `.` and are display only.
+After the etch confirms, its **rune id** is `<blockHeight>:<txIndexInBlock>` —
+read it from a Runes explorer and pass it to `solstice swap --rune-id`.
+
+### Atomic swap — invest (C1) / withdraw (C2)
+
+One builder handles both directions; roles are just which side supplies RT vs BTC.
+Because rune balances need an indexer to read, you pass the rune-carrying UTXO(s)
+explicitly as `txid:vout:value:runeAmount`.
+
+```bash
+# Invest: RT Vault→investor, BTC investor→YP
+btc-locker solstice swap \
+  --rune-id 840000:1 \
+  --rt-utxo <vaultRtTxid>:0:1000:1000000 \
+  --rt-amount 400000 \
+  --rt-to <investorAddress> \
+  --rt-change <vaultAddress> \
+  --rt-key VAULT_PRIVATE_KEY \
+  --btc-utxo <investorBtcTxid>:1:100000 \
+  --btc-amount 90000 \
+  --btc-to <ypDeploymentAddress> \
+  --btc-change <investorAddress> \
+  --btc-key INVESTOR_PRIVATE_KEY \
+  --dry-run
+```
+
+For withdrawal, swap the roles: RT comes from the user, BTC comes from the Buffer.
+Provide `--rt-owner` / `--btc-owner` (instead of the keys) to build an unsigned
+PSBT for a counterparty to co-sign — the server-submit model. Drop `--dry-run` to
+sign (with the provided keys) and broadcast.
+
+### Decode a runestone
+
+Inspect any runestone `OP_RETURN` scriptPubKey and check whether it is a cenotaph:
+
+```bash
+btc-locker solstice decode -s 6a5d0b160100c0a2330180b51800
+```
+
+### JSON output
+
+All three support the global `--json` flag for machine-readable output, e.g.
+`btc-locker --json solstice decode -s <hex>`. In that mode stdout carries exactly
+one JSON document, written when the command ends; status lines are dropped, and
+prompts and errors go to stderr. `etch` nests its two steps under `commit` and
+`etch`. Each built transaction includes `psbtBase64`, and `txid` once it has been
+broadcast. A failed run has an `error` field.
