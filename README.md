@@ -64,11 +64,16 @@ This is a **Turborepo monorepo** containing the following packages under `packag
 
 ## Installation
 
-This package sits in a private GitHub Package Registry. To install, first set up your `.env` with an authorized github token to be used by `.npmrc`:
+This package sits in a private GitHub Package Registry, so npm needs a GitHub token to install it. The token goes in the `.npmrc` in your home directory (`~/.npmrc`, or `C:\Users\<you>\.npmrc` on Windows), never in a repository:
 
-```bash
-NODE_AUTH_TOKEN=ghp_yourgithubtokenhere
+```ini
+@sundial-protocol:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=ghp_yourgithubtokenhere
 ```
+
+Create the token at GitHub → Settings → Developer settings → Personal access tokens (classic). It needs the `read:packages` scope to install, and `write:packages` as well to publish. If the `sundial-protocol` organization asks for it, authorize the token for single sign-on.
+
+The first line can also live in a project's own `.npmrc`, as it does in this repository. Do not add an `_authToken` line there: a project `.npmrc` overrides the one in your home directory, so an empty or stale token in the project gives a 401 even when your own token is valid.
 
 Then install via npm:
 
@@ -220,6 +225,8 @@ npm run release
 ```
 
 `npm run version` runs `changeset version`, which consumes all pending changeset files and updates `package.json` versions and `CHANGELOG.md` files. `npm run release` builds all packages and then runs `changeset publish`.
+
+Publishing uses the token in your `~/.npmrc` (see [Installation](#installation)), which needs the `write:packages` scope. A 401 from `npm run release` means that token is missing, expired, or overridden by an `_authToken` line in a project `.npmrc`. Run `npm install` first if packages were added since your last install; the build fails on a missing workspace package otherwise.
 
 ## Contributing
 
