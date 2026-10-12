@@ -10,12 +10,17 @@ import { transactionId } from "./txid.js";
  * Bitcoin UTXO with API status information
  * @interface ApiUTXO
  * @description UTXO from Bitcoin API with confirmation status.
- * Structurally compatible with btc-locker's `UTXO`.
+ * Has every field of btc-locker's `UTXO`, which it extended before it moved
+ * here, so an API UTXO can be enriched and handed to the locker's builders.
  */
 export interface ApiUTXO {
   txid: string;
   vout: number;
   value: number;
+  /** Optional scriptPubKey hex of the output. The APIs do not return it; callers may fill it in. */
+  scriptPubKey?: string;
+  /** When true, the locker's UTXO selection skips this output. */
+  doNotSpend?: boolean;
   status: {
     confirmed: boolean;
     block_height?: number;
