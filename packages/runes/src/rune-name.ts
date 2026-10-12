@@ -79,7 +79,7 @@ export function runeCommitment(rune: bigint): Uint8Array {
 const SPACER = "•";
 
 /**
- * Split a spaced rune name such as `SOLSTICE•RECEIPT` into its on-chain name and
+ * Split a spaced rune name such as `EXAMPLE•TOKEN` into its on-chain name and
  * spacer bitmask (bit `i` set means a spacer after letter `i`).
  */
 export function parseSpacedRune(spaced: string): { name: string; spacers: number } {

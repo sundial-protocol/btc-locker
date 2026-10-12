@@ -16,8 +16,8 @@ describe("rune name codec (modified base-26)", () => {
     expect(runeNameToNumber("AAA")).toBe(702n);
   });
 
-  test("round-trips real Solstice instance names", () => {
-    for (const name of ["SOLSTICERECEIPT", "EXAMPLERUNE", "A", "Z", "ZZZZZZZZ"]) {
+  test("round-trips names", () => {
+    for (const name of ["EXAMPLETOKEN", "EXAMPLERUNE", "A", "Z", "ZZZZZZZZ"]) {
       expect(numberToRuneName(runeNameToNumber(name))).toBe(name);
     }
   });

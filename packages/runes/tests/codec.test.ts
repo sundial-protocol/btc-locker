@@ -105,7 +105,7 @@ describe("bytes are plain Uint8Array, not Node Buffers", () => {
     for (const bytes of [
       codec.encipher(runestone),
       encipherGuarded(runestone, codec),
-      runeCommitment(runeNameToNumber("SOLSTICERECEIPT")),
+      runeCommitment(runeNameToNumber("EXAMPLETOKEN")),
       pushBytes(Uint8Array.from([1, 2, 3])),
     ]) {
       expect(bytes).toBeInstanceOf(Uint8Array);

@@ -4,8 +4,7 @@
  * A cenotaph is a malformed runestone that Bitcoin accepts but Runes indexers
  * treat as a burn: every rune the transaction spends is destroyed. So every
  * runestone should be shown to round-trip through the decoder to a non-cenotaph
- * before the transaction is signed. (Solstice's Runes decision record requires
- * this for receipt tokens.)
+ * before the transaction is signed.
  *
  * {@link encipherGuarded} is the one function a builder should use to turn a
  * {@link Runestone} into a scriptPubKey: it enciphers, deciphers, asserts the
