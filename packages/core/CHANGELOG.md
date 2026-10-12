@@ -1,5 +1,11 @@
 # @sundial-protocol/btc-locker
 
+## 2.2.0
+
+### Minor Changes
+
+- provider moved to new package, improved fallback support, node 18, blockcypher removed
+
 ## 2.1.1
 
 ### Patch Changes
