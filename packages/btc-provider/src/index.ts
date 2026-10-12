@@ -7,6 +7,9 @@
 
 import BitcoinAPI from "./bitcoin-api.js";
 
+export { BitcoinAPIError } from "./bitcoin-api.js";
+export { transactionId } from "./txid.js";
+
 export type {
   ApiProvider,
   ApiUrls,
