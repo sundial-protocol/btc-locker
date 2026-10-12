@@ -1,12 +1,18 @@
-import {Network, networks} from "bitcoinjs-lib";
+// The network parameters live in `@sundial-protocol/btc-provider`, which has no
+// dependency on bitcoinjs-lib. They have the same shape as bitcoinjs-lib's
+// `Network`, so `NETWORKS.x.info` is passed to it directly throughout the locker;
+// tests/network.test.ts checks the values match.
+import {
+  NETWORKS as PROVIDER_NETWORKS,
+  type NetworkType,
+} from "@sundial-protocol/btc-provider";
 
-export type NetworkType = {
-  info: Network;
-  name: "bitcoin" | "testnet" | "regtest";
-}
-
+// The provider also knows testnet4. The locker has not been run there, so it
+// keeps to the networks bitcoinjs-lib defines.
 export const NETWORKS: { [key: string]: NetworkType } = {
-  bitcoin: { info: networks.bitcoin, name: "bitcoin" },
-  testnet: { info: networks.testnet, name: "testnet" },
-  regtest: { info: networks.regtest, name: "regtest" },
+  bitcoin: PROVIDER_NETWORKS.bitcoin,
+  testnet: PROVIDER_NETWORKS.testnet,
+  regtest: PROVIDER_NETWORKS.regtest,
 };
+
+export type { NetworkType };

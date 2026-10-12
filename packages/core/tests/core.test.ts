@@ -34,13 +34,13 @@ describe("BTCLockerCore", () => {
   describe("constructor", () => {
     test("should create with default network", () => {
       const core = new BTCLockerCore();
-      expect(core.network).toBe(bitcoin.networks.bitcoin);
+      expect(core.network).toEqual(bitcoin.networks.bitcoin);
       expect(core.initialized).toBe(false);
     });
 
     test("should create with testnet", () => {
       const core = new BTCLockerCore(NETWORKS.testnet);
-      expect(core.network).toBe(bitcoin.networks.testnet);
+      expect(core.network).toEqual(bitcoin.networks.testnet);
     });
 
     test("should throw for regtest (unsupported by API)", () => {
