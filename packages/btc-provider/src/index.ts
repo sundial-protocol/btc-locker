@@ -1,5 +1,5 @@
 /**
- * @sundial-protocol/bitcoin-api
+ * @sundial-protocol/btc-provider
  *
  * Client for public Bitcoin HTTP APIs with provider switching. Extracted from
  * `@sundial-protocol/btc-locker`, which re-exports it unchanged.
@@ -14,6 +14,7 @@ export type {
   ApiUTXO,
   FeeEstimates,
   BroadcastResult,
+  BitcoinAPIOptions,
 } from "./bitcoin-api.js";
 
 export {

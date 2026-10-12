@@ -20,8 +20,8 @@ export interface Network {
   wif: number;
 }
 
-/** The names of the networks this package knows. */
-export type NetworkName = "bitcoin" | "testnet" | "regtest";
+/** The names of the networks this package knows. `testnet` is testnet3. */
+export type NetworkName = "bitcoin" | "testnet" | "testnet4" | "regtest";
 
 /**
  * The least a {@link BitcoinAPI} needs to know about a network: its name.
@@ -66,5 +66,7 @@ const regtest: Network = {
 export const NETWORKS: { [key: string]: NetworkType } = {
   bitcoin: { info: bitcoin, name: "bitcoin" },
   testnet: { info: testnet, name: "testnet" },
+  // testnet4 has testnet3's address prefixes and version bytes.
+  testnet4: { info: testnet, name: "testnet4" },
   regtest: { info: regtest, name: "regtest" },
 };

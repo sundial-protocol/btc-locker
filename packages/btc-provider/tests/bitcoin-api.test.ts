@@ -1,48 +1,33 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
-import https from "https";
+import { describe, test, expect, vi, beforeEach, afterAll } from "vitest";
 import BitcoinAPI from "../src/bitcoin-api";
 import { NETWORKS } from "../src/network";
 
-vi.mock("https", () => ({
-  default: { request: vi.fn() },
-  request: vi.fn(),
-}));
+// The class calls the global fetch unless one is passed in the options.
+const fetchMock = vi.fn();
+vi.stubGlobal("fetch", fetchMock);
+afterAll(() => vi.unstubAllGlobals());
 
 function mockRequest(body: string, statusCode = 200) {
-  const mockReq = { on: vi.fn(), write: vi.fn(), end: vi.fn() };
-  (https.request as ReturnType<typeof vi.fn>).mockImplementation(
-    (_opts: any, cb: any) => {
-      const mockRes = {
-        statusCode,
-        on: vi.fn((evt: string, handler: any) => {
-          if (evt === "data") handler(body);
-          if (evt === "end") handler();
-        }),
-      };
-      cb(mockRes);
-      return mockReq;
-    },
+  fetchMock.mockImplementation(
+    async () => new Response(body, { status: statusCode }),
   );
-  return mockReq;
+  return fetchMock;
 }
 
 function mockRequestError(errorMessage: string) {
-  const mockReq = {
-    on: vi.fn((evt: string, handler: any) => {
-      if (evt === "error") handler(new Error(errorMessage));
-    }),
-    write: vi.fn(),
-    end: vi.fn(),
-  };
-  (https.request as ReturnType<typeof vi.fn>).mockImplementation(
-    (_opts: any, _cb: any) => mockReq,
-  );
-  return mockReq;
+  fetchMock.mockRejectedValue(new Error(errorMessage));
+  return fetchMock;
+}
+
+/** The URL and init of the nth call to a fake fetch. */
+function call(mock: ReturnType<typeof vi.fn>, n = 0) {
+  const [url, init] = mock.mock.calls[n] as [string, RequestInit];
+  return { url, init, headers: init.headers as Record<string, string> };
 }
 
 describe("BitcoinAPI", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    fetchMock.mockReset();
   });
 
   describe("constructor", () => {
@@ -69,6 +54,129 @@ describe("BitcoinAPI", () => {
     test("should throw for regtest network", () => {
       expect(() => new BitcoinAPI(NETWORKS.regtest)).toThrow(
         "Regtest network is not supported",
+      );
+      expect(() => new BitcoinAPI("regtest")).toThrow(
+        "Regtest network is not supported",
+      );
+    });
+
+    test("should accept a network name", async () => {
+      mockRequest("1");
+      const api = new BitcoinAPI("testnet");
+      expect(api.networkType).toBe(NETWORKS.testnet);
+      await api.getBlockHeight();
+      expect(call(fetchMock).url).toBe(
+        "https://mempool.space/testnet/api/blocks/tip/height",
+      );
+    });
+
+    test("should accept any object with a network name", async () => {
+      mockRequest("1");
+      const network = { name: "bitcoin" } as const;
+      const api = new BitcoinAPI(network, "blockstream");
+      expect(api.networkType).toBe(network);
+      await api.getBlockHeight();
+      expect(call(fetchMock).url).toBe(
+        "https://blockstream.info/api/blocks/tip/height",
+      );
+    });
+
+    test("should throw for an unknown network name", () => {
+      expect(() => new BitcoinAPI("signet" as any)).toThrow(
+        "Unknown network 'signet'",
+      );
+    });
+  });
+
+  describe("testnet4", () => {
+    test("has testnet's address parameters under its own name", () => {
+      expect(NETWORKS.testnet4.name).toBe("testnet4");
+      expect(NETWORKS.testnet4.info).toEqual(NETWORKS.testnet.info);
+    });
+
+    test("mempool: should use the testnet4 endpoint", async () => {
+      mockRequest("120000");
+      const api = new BitcoinAPI("testnet4");
+      expect(await api.getBlockHeight()).toBe(120000);
+      expect(call(fetchMock).url).toBe(
+        "https://mempool.space/testnet4/api/blocks/tip/height",
+      );
+    });
+
+    test.each(["blockstream", "blockcypher"] as const)(
+      "%s: should throw, it does not serve testnet4",
+      (provider) => {
+        expect(() => new BitcoinAPI(NETWORKS.testnet4, provider)).toThrow(
+          `API provider '${provider}' does not serve the 'testnet4' network.`,
+        );
+      },
+    );
+
+    test("should not fall back to a provider that does not serve it", async () => {
+      mockRequest("invalid network", 400);
+      const api = new BitcoinAPI("testnet4");
+      await expect(api.getAddressUtxos("tb1test")).rejects.toThrow(
+        "Failed to get UTXOs: API Error 400: invalid network",
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("fetch", () => {
+    test("should use the fetch passed in the options", async () => {
+      const injected = vi.fn(async () => new Response("7"));
+      const api = new BitcoinAPI("testnet", "mempool", { fetch: injected });
+      expect(await api.getBlockHeight()).toBe(7);
+      expect(injected).toHaveBeenCalledTimes(1);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test("should pass the injected fetch on to the fallback provider", async () => {
+      const injected = vi
+        .fn()
+        .mockResolvedValueOnce(new Response("bad", { status: 400 }))
+        .mockResolvedValueOnce(new Response("[]"));
+      const api = new BitcoinAPI("testnet", "mempool", { fetch: injected });
+      expect(await api.getAddressUtxos("tb1test")).toEqual([]);
+      expect(call(injected, 1).url).toBe(
+        "https://blockstream.info/testnet/api/address/tb1test/utxo",
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test("should send a User-Agent outside the browser", async () => {
+      mockRequest("{}");
+      await new BitcoinAPI("testnet").makeRequest("/test");
+      expect(call(fetchMock).headers["User-Agent"]).toBe("btc-locker-cli/1.0.0");
+    });
+
+    test("should report the cause of a failed fetch", async () => {
+      fetchMock.mockRejectedValue(
+        new TypeError("fetch failed", {
+          cause: new Error("getaddrinfo ENOTFOUND mempool.space"),
+        }),
+      );
+      await expect(new BitcoinAPI("testnet").getBlockHeight()).rejects.toThrow(
+        "Failed to get block height: fetch failed: getaddrinfo ENOTFOUND mempool.space",
+      );
+    });
+
+    test("should give up after the timeout", async () => {
+      // A fetch that never answers, and rejects when its signal aborts.
+      const hanging = vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init.signal!.addEventListener("abort", () =>
+              reject(init.signal!.reason),
+            );
+          }),
+      );
+      const api = new BitcoinAPI("testnet", "mempool", {
+        fetch: hanging as unknown as typeof fetch,
+        timeoutMs: 20,
+      });
+      await expect(api.makeRequestText("/slow")).rejects.toThrow(
+        "Request timed out after 20ms",
       );
     });
   });
@@ -103,7 +211,9 @@ describe("BitcoinAPI", () => {
       const req = mockRequest('{"ok":true}');
       const api = new BitcoinAPI(NETWORKS.testnet);
       await api.makeRequest("/post", "POST", { data: 1 });
-      expect(req.write).toHaveBeenCalled();
+      expect(call(req).init.method).toBe("POST");
+      expect(call(req).init.body).toBe('{"data":1}');
+      expect(call(req).headers["Content-Type"]).toBe("application/json");
     });
 
     test("should handle empty body", async () => {
@@ -231,64 +341,31 @@ describe("BitcoinAPI", () => {
     });
 
     test("mempool: should fallback to blockstream on 400 error", async () => {
-      let callCount = 0;
-      const mockReq = { on: vi.fn(), write: vi.fn(), end: vi.fn() };
-      (https.request as ReturnType<typeof vi.fn>).mockImplementation(
-        (_opts: any, cb: any) => {
-          callCount++;
-          if (callCount === 1) {
-            // First call (mempool) - return 400
-            const mockRes = {
-              statusCode: 400,
-              on: vi.fn((evt: string, handler: any) => {
-                if (evt === "data") handler("API Error 400: invalid");
-                if (evt === "end") handler();
-              }),
-            };
-            cb(mockRes);
-          } else {
-            // Second call (blockstream fallback) - return success
-            const utxos = [
-              {
-                txid: "c".repeat(64),
-                vout: 0,
-                value: 10000,
-                status: { confirmed: true },
-              },
-            ];
-            const mockRes = {
-              statusCode: 200,
-              on: vi.fn((evt: string, handler: any) => {
-                if (evt === "data") handler(JSON.stringify(utxos));
-                if (evt === "end") handler();
-              }),
-            };
-            cb(mockRes);
-          }
-          return mockReq;
+      const utxos = [
+        {
+          txid: "c".repeat(64),
+          vout: 0,
+          value: 10000,
+          status: { confirmed: true },
         },
-      );
+      ];
+      fetchMock
+        // First call (mempool) - return 400
+        .mockResolvedValueOnce(
+          new Response("API Error 400: invalid", { status: 400 }),
+        )
+        // Second call (blockstream fallback) - return success
+        .mockResolvedValueOnce(new Response(JSON.stringify(utxos)));
       const api = new BitcoinAPI(NETWORKS.testnet, "mempool");
       const result = await api.getAddressUtxos("tb1test");
       expect(result).toHaveLength(1);
       expect(result[0].txid).toBe("c".repeat(64));
+      expect(call(fetchMock, 0).url).toContain("https://mempool.space/");
+      expect(call(fetchMock, 1).url).toContain("https://blockstream.info/");
     });
 
     test("should throw when fallback also fails", async () => {
-      const mockReq = { on: vi.fn(), write: vi.fn(), end: vi.fn() };
-      (https.request as ReturnType<typeof vi.fn>).mockImplementation(
-        (_opts: any, cb: any) => {
-          const mockRes = {
-            statusCode: 400,
-            on: vi.fn((evt: string, handler: any) => {
-              if (evt === "data") handler("API Error 400: bad");
-              if (evt === "end") handler();
-            }),
-          };
-          cb(mockRes);
-          return mockReq;
-        },
-      );
+      mockRequest("API Error 400: bad", 400);
       const api = new BitcoinAPI(NETWORKS.testnet, "mempool");
       await expect(api.getAddressUtxos("tb1test")).rejects.toThrow(
         "tried multiple APIs",
@@ -330,10 +407,14 @@ describe("BitcoinAPI", () => {
 
   describe("broadcastTransaction", () => {
     test("mempool: should broadcast and return txid", async () => {
-      mockRequest("  txid123  ");
+      const req = mockRequest("  txid123  ");
       const api = new BitcoinAPI(NETWORKS.testnet, "mempool");
       const result = await api.broadcastTransaction("rawhex");
       expect(result.txid).toBe("txid123");
+      expect(call(req).url).toBe("https://mempool.space/testnet/api/tx");
+      expect(call(req).init.method).toBe("POST");
+      expect(call(req).init.body).toBe("rawhex");
+      expect(call(req).headers["Content-Type"]).toBe("text/plain");
     });
 
     test("blockcypher: should broadcast via POST JSON", async () => {

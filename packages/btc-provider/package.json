@@ -1,7 +1,7 @@
 {
-  "name": "@sundial-protocol/bitcoin-api",
+  "name": "@sundial-protocol/btc-provider",
   "version": "1.0.0",
-  "description": "Client for public Bitcoin HTTP APIs (mempool.space, Blockstream, BlockCypher) with provider switching",
+  "description": "Bitcoin chain data and broadcast over public HTTP APIs (mempool.space, Blockstream, BlockCypher), on Node and in the browser",
   "main": "dist/cjs/index.js",
   "types": "dist/cjs/index.d.ts",
   "type": "module",
@@ -40,7 +40,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/sundial-protocol/btc-locker.git",
-    "directory": "packages/bitcoin-api"
+    "directory": "packages/btc-provider"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"

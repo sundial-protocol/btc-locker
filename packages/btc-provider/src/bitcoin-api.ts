@@ -3,8 +3,7 @@
  * Integrates with various Bitcoin APIs for testnet/mainnet operations
  */
 
-import https from "https";
-import type { BitcoinNetwork } from "./network.js";
+import { NETWORKS, type BitcoinNetwork, type NetworkName } from "./network.js";
 
 /**
  * Bitcoin UTXO with API status information
@@ -57,6 +56,38 @@ export interface BroadcastResult {
   txid: string;
 }
 
+export interface BitcoinAPIOptions {
+  /** The `fetch` to call. Defaults to the global one. */
+  fetch?: typeof fetch;
+  /** Milliseconds before a request is abandoned. Defaults to 30000. */
+  timeoutMs?: number;
+}
+
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+/** Base URL of each provider on each network it serves. */
+const BASE_URLS: ApiUrls = {
+  mempool: {
+    bitcoin: "https://mempool.space/api",
+    testnet: "https://mempool.space/testnet/api",
+    testnet4: "https://mempool.space/testnet4/api",
+  },
+  // Blockstream and BlockCypher do not serve testnet4 (checked 2026-10-12).
+  blockstream: {
+    bitcoin: "https://blockstream.info/api",
+    testnet: "https://blockstream.info/testnet/api",
+  },
+  blockcypher: {
+    bitcoin: "https://api.blockcypher.com/v1/btc/main",
+    testnet: "https://api.blockcypher.com/v1/btc/test3",
+  },
+};
+
+// Browsers refuse a User-Agent set by a page, so it is only sent elsewhere.
+const IN_BROWSER =
+  typeof (globalThis as { document?: unknown }).document !== "undefined";
+const USER_AGENT = "btc-locker-cli/1.0.0";
+
 export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
   private network: N;
   private apiProvider: ApiProvider;
@@ -68,70 +99,106 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
   get networkType(): N {
     return this.network;
   }
-  private baseUrls: ApiUrls;
   private baseUrl: string;
+  private fetchFn: typeof fetch;
+  private timeoutMs: number;
 
-  constructor(network: N, apiProvider: ApiProvider = "mempool") {
-    // Validate network support
-    if (network.name === "regtest") {
+  /**
+   * @param network - A network name ("bitcoin", "testnet", "testnet4") or an
+   * object with that name, such as a `NetworkType`.
+   */
+  constructor(
+    network: N | NetworkName,
+    apiProvider: ApiProvider = "mempool",
+    options: BitcoinAPIOptions = {},
+  ) {
+    const resolved = (
+      typeof network === "string" ? NETWORKS[network] : network
+    ) as N | undefined;
+    if (!resolved) {
       throw new Error(
-        "Regtest network is not supported. Use 'bitcoin' or 'testnet' instead.",
+        `Unknown network '${String(network)}'. Use 'bitcoin', 'testnet' or 'testnet4'.`,
       );
     }
 
-    this.network = network;
-    this.apiProvider = apiProvider;
-    this.baseUrls = {
-      mempool: {
-        bitcoin: "https://mempool.space/api",
-        testnet: "https://mempool.space/testnet/api",
-      },
-      blockstream: {
-        bitcoin: "https://blockstream.info/api",
-        testnet: "https://blockstream.info/testnet/api",
-      },
-      blockcypher: {
-        bitcoin: "https://api.blockcypher.com/v1/btc/main",
-        testnet: "https://api.blockcypher.com/v1/btc/test3",
-      },
-    };
+    // Validate network support
+    if (resolved.name === "regtest") {
+      throw new Error(
+        "Regtest network is not supported. Use 'bitcoin', 'testnet' or 'testnet4' instead.",
+      );
+    }
 
-    this.baseUrl = this.baseUrls[this.apiProvider][this.network.name];
+    const baseUrl = BASE_URLS[apiProvider]?.[resolved.name];
+    if (!baseUrl) {
+      throw new Error(
+        `API provider '${apiProvider}' does not serve the '${resolved.name}' network.`,
+      );
+    }
+
+    this.network = resolved;
+    this.apiProvider = apiProvider;
+    this.baseUrl = baseUrl;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.fetchFn =
+      options.fetch ??
+      ((input, init) => {
+        if (typeof globalThis.fetch !== "function") {
+          throw new Error(
+            "No global fetch. Use Node 18 or later, or pass one in the options.",
+          );
+        }
+        return globalThis.fetch(input, init);
+      });
+  }
+
+  /**
+   * Send one request and return the body of a 2xx response.
+   */
+  private async send(
+    endpoint: string,
+    method: "GET" | "POST",
+    contentType?: string,
+    body?: string,
+  ): Promise<string> {
+    const headers: Record<string, string> = {};
+    if (contentType) headers["Content-Type"] = contentType;
+    if (!IN_BROWSER) headers["User-Agent"] = USER_AGENT;
+
+    let response: Response;
+    let text: string;
+    try {
+      response = await this.fetchFn(`${this.baseUrl}${endpoint}`, {
+        method,
+        headers,
+        body,
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      text = await response.text();
+    } catch (error) {
+      const { name, message, cause } = error as Error & { cause?: unknown };
+      if (name === "TimeoutError") {
+        throw new Error(`Request timed out after ${this.timeoutMs}ms`, {
+          cause: error,
+        });
+      }
+      // Node's fetch says only "fetch failed"; the reason is in the cause.
+      const reason = (cause as { message?: string } | undefined)?.message;
+      throw new Error(reason ? `${message}: ${reason}` : message, {
+        cause: error,
+      });
+    }
+
+    if (!response.ok) {
+      throw new Error(`API Error ${response.status}: ${text}`);
+    }
+    return text;
   }
 
   /**
    * Make HTTP request for raw text responses
    */
   async makeRequestText(endpoint: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const url = `${this.baseUrl}${endpoint}`;
-      const urlObj = new URL(url);
-
-      const options: https.RequestOptions = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || 443,
-        path: urlObj.pathname + urlObj.search,
-        method: "GET",
-        headers: {
-          "User-Agent": "btc-locker-cli/1.0.0",
-        },
-      };
-
-      const req = https.request(options, (res) => {
-        let body = "";
-        res.on("data", (chunk) => (body += chunk));
-        res.on("end", () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(body.trim());
-          } else {
-            reject(new Error(`API Error ${res.statusCode}: ${body}`));
-          }
-        });
-      });
-
-      req.on("error", reject);
-      req.end();
-    });
+    return (await this.send(endpoint, "GET")).trim();
   }
 
   /**
@@ -143,54 +210,17 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
     data: any = null,
     // eslint-disable-next-line
   ): Promise<any> {
-    return new Promise((resolve, reject) => {
-      const url = `${this.baseUrl}${endpoint}`;
-      const urlObj = new URL(url);
-
-      const options: https.RequestOptions = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || 443,
-        path: urlObj.pathname + urlObj.search,
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": "btc-locker-cli/1.0.0",
-        },
-      };
-
-      if (data && method !== "GET") {
-        const postData = JSON.stringify(data);
-        if (options.headers) {
-          (options.headers as any)["Content-Length"] =
-            Buffer.byteLength(postData);
-        }
-      }
-
-      const req = https.request(options, (res) => {
-        let body = "";
-        res.on("data", (chunk) => (body += chunk));
-        res.on("end", () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            try {
-              const result = body ? JSON.parse(body) : {};
-              resolve(result);
-            } catch (error) {
-              reject(new Error(`Parse Error: ${(error as Error).message}`));
-            }
-          } else {
-            reject(new Error(`API Error ${res.statusCode}: ${body}`));
-          }
-        });
-      });
-
-      req.on("error", reject);
-
-      if (data && method !== "GET") {
-        req.write(JSON.stringify(data));
-      }
-
-      req.end();
-    });
+    const body = await this.send(
+      endpoint,
+      method,
+      "application/json",
+      data && method !== "GET" ? JSON.stringify(data) : undefined,
+    );
+    try {
+      return body ? JSON.parse(body) : {};
+    } catch (error) {
+      throw new Error(`Parse Error: ${(error as Error).message}`);
+    }
   }
 
   /**
@@ -277,6 +307,7 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
       // If using mempool and network error occurs, try blockstream as fallback
       if (
         this.apiProvider === "mempool" &&
+        BASE_URLS.blockstream[this.network.name] &&
         (errorMsg.includes("invalid network") ||
           errorMsg.includes("API Error 400"))
       ) {
@@ -284,7 +315,10 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
           `Mempool API failed for ${address}, trying Blockstream as fallback...`,
         );
         try {
-          const fallbackApi = new BitcoinAPI(this.network, "blockstream");
+          const fallbackApi = new BitcoinAPI(this.network, "blockstream", {
+            fetch: this.fetchFn,
+            timeoutMs: this.timeoutMs,
+          });
           return await fallbackApi.getAddressUtxos(address);
         } catch (fallbackError) {
           throw new Error(
@@ -345,39 +379,9 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
     endpoint: string,
     txHex: string,
   ): Promise<BroadcastResult> {
-    return new Promise((resolve, reject) => {
-      const url = `${this.baseUrl}${endpoint}`;
-      const urlObj = new URL(url);
-
-      const options: https.RequestOptions = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || 443,
-        path: urlObj.pathname + urlObj.search,
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain",
-          "User-Agent": "btc-locker-cli/1.0.0",
-          "Content-Length": Buffer.byteLength(txHex),
-        },
-      };
-
-      const req = https.request(options, (res) => {
-        let body = "";
-        res.on("data", (chunk) => (body += chunk));
-        res.on("end", () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            // Return the response as-is (usually the txid)
-            resolve({ txid: body.trim() });
-          } else {
-            reject(new Error(`API Error ${res.statusCode}: ${body}`));
-          }
-        });
-      });
-
-      req.on("error", (error) => reject(error));
-      req.write(txHex);
-      req.end();
-    });
+    // Return the response as-is (usually the txid)
+    const body = await this.send(endpoint, "POST", "text/plain", txHex);
+    return { txid: body.trim() };
   }
 
   /**

@@ -87,7 +87,7 @@
   "homepage": "https://github.com/sundial-protocol/btc-locker#readme",
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.2.0",
-    "@sundial-protocol/bitcoin-api": "^1.0.0",
+    "@sundial-protocol/btc-provider": "^1.0.0",
     "bip32": "^5.0.0",
     "bitcoinjs-lib": "^7.0.0",
     "ecpair": "^2.1.0",
@@ -120,6 +120,6 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   }
 }
