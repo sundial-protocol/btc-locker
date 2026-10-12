@@ -23,8 +23,11 @@ import {
   type UTXO,
 } from "@sundial-protocol/btc-locker";
 import type { ReceiptRune } from "../receipt/receipt-rune.js";
-import { runeCommitment, runeNameToNumber } from "../runes/rune-name.js";
-import { pushBytes } from "../runes/script.js";
+import {
+  pushBytes,
+  runeCommitment,
+  runeNameToNumber,
+} from "@sundial-protocol/btc-runes";
 import { DEFAULT_RUNE_OUTPUT_VALUE, type BuiltOutput } from "./types.js";
 
 /**

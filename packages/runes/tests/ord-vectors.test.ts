@@ -23,15 +23,15 @@
 
 import { describe, test, expect } from "vitest";
 import vectors from "./vectors/ord-runestones.json";
-import { nativeRunestoneCodec } from "../src/runes/native-codec";
+import { nativeRunestoneCodec } from "../src/native-codec";
 import {
   numberToRuneName,
   runeCommitment,
   runeNameToNumber,
   parseSpacedRune,
   formatSpacedRune,
-} from "../src/runes/rune-name";
-import type { Runestone } from "../src/runes/types";
+} from "../src/rune-name";
+import type { Runestone } from "../src/types";
 
 interface JsonRuneId {
   block: string;

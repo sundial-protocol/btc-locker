@@ -6,7 +6,7 @@ import {
   isEtched,
   type ReceiptRune,
 } from "../src/receipt/receipt-rune";
-import { runeNameToNumber } from "../src/runes/rune-name";
+import { runeNameToNumber } from "@sundial-protocol/btc-runes";
 
 const exampleRune: ReceiptRune = {
   name: "EXAMPLERUNE",

@@ -4,7 +4,7 @@ import {
   runeNameToNumber,
   numberToRuneName,
   parseSpacedRune,
-} from "../src/runes/rune-name";
+} from "../src/rune-name";
 
 describe("rune name codec (modified base-26)", () => {
   test("known vectors", () => {

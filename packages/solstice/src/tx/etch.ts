@@ -22,10 +22,12 @@ import {
   type UTXO,
 } from "@sundial-protocol/btc-locker";
 import { receiptEtching, type ReceiptRune } from "../receipt/receipt-rune.js";
-import type { RunestoneCodec } from "../runes/codec.js";
-import { nativeRunestoneCodec } from "../runes/native-codec.js";
-import { encipherGuarded } from "../runes/guard.js";
-import type { Runestone } from "../runes/types.js";
+import {
+  encipherGuarded,
+  nativeRunestoneCodec,
+  type Runestone,
+  type RunestoneCodec,
+} from "@sundial-protocol/btc-runes";
 import { createEtchCommitment } from "./etch-commit.js";
 import { DEFAULT_RUNE_OUTPUT_VALUE, type BuiltOutput } from "./types.js";
 

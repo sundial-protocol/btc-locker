@@ -4,7 +4,7 @@
  * A runestone is carried in a single `OP_RETURN OP_13 <payload>` output. The
  * payload is a stream of LEB128 varints decoded as tag/value pairs, plus a Body
  * section (tag 0) holding delta-encoded edicts. See the Runes spec for the full
- * grammar; Solstice only needs the Etching and Edict subsets.
+ * grammar.
  */
 
 import type { RuneId } from "./rune-id.js";

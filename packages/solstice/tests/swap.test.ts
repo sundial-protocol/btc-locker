@@ -4,7 +4,7 @@ import {
   buildInvestTransaction,
   buildWithdrawTransaction,
 } from "../src/tx/swap";
-import { nativeRunestoneCodec } from "../src/runes/native-codec";
+import { nativeRunestoneCodec } from "@sundial-protocol/btc-runes";
 import type { ReceiptRune } from "../src/receipt/receipt-rune";
 import type { RuneUtxo } from "../src/tx/types";
 import { NETWORK, p2wpkh, txid } from "./helpers";

@@ -3,10 +3,10 @@ import * as bitcoin from "bitcoinjs-lib";
 import {
   NativeRunestoneCodec,
   nativeRunestoneCodec,
-} from "../src/runes/native-codec";
-import { encipherGuarded, CenotaphError } from "../src/runes/guard";
-import { RUNESTONE_MAGIC, type Runestone } from "../src/runes/types";
-import { runeNameToNumber } from "../src/runes/rune-name";
+} from "../src/native-codec";
+import { encipherGuarded, CenotaphError } from "../src/guard";
+import { RUNESTONE_MAGIC, type Runestone } from "../src/types";
+import { runeNameToNumber } from "../src/rune-name";
 
 const codec = new NativeRunestoneCodec();
 

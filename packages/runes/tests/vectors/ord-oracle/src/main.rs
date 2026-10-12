@@ -648,7 +648,7 @@ fn main() {
       "tag": ORD_TAG,
       "commit": ORD_COMMIT,
       "crate": "crates/ordinals",
-      "generator": "packages/solstice/tests/vectors/ord-oracle",
+      "generator": "packages/runes/tests/vectors/ord-oracle",
     },
     "encipher": encipher,
     "decipher": decipher,

@@ -4,7 +4,7 @@
     "tag": "0.29.0",
     "commit": "7e37a3bd3391044b39f5f11f20dfdb8b3764cd0e",
     "crate": "crates/ordinals",
-    "generator": "packages/solstice/tests/vectors/ord-oracle"
+    "generator": "packages/runes/tests/vectors/ord-oracle"
   },
   "encipher": [
     {

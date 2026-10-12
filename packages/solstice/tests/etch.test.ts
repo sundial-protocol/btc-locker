@@ -9,10 +9,14 @@ import {
   createEtchCommitment,
 } from "../src/tx/etch-commit";
 import { buildEtchTransaction } from "../src/tx/etch";
-import { nativeRunestoneCodec } from "../src/runes/native-codec";
-import { runeCommitment, runeNameToNumber } from "../src/runes/rune-name";
+import {
+  nativeRunestoneCodec,
+  runeCommitment,
+  runeNameToNumber,
+} from "@sundial-protocol/btc-runes";
 import type { ReceiptRune } from "../src/receipt/receipt-rune";
-import vectors from "./vectors/ord-runestones.json";
+// ord's own vectors live with the codec they check.
+import vectors from "../../runes/tests/vectors/ord-runestones.json";
 import { NETWORK, p2wpkh, txid } from "./helpers";
 
 bitcoin.initEccLib(ecc);
