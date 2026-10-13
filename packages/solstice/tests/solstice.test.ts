@@ -62,12 +62,9 @@ function fakeChain(options: {
       if (id !== options.tx?.id) throw new Error("Transaction not found");
       return options.tx.hex;
     }),
-    makeRequest: vi.fn(async () =>
-      options.txHeight === undefined
-        ? { confirmed: false }
-        : { confirmed: true, block_height: options.txHeight },
+    getConfirmations: vi.fn(async () =>
+      options.txHeight === undefined ? 0 : TIP - options.txHeight + 1,
     ),
-    getBlockHeight: vi.fn(async () => TIP),
     broadcastTransaction: vi.fn(async () => ({ txid: "from-provider" })),
   };
   return { api, solstice: new Solstice(NETWORKS.testnet, api as unknown as BitcoinAPI) };
@@ -113,17 +110,10 @@ describe("Solstice", () => {
   });
 
   describe("getConfirmations", () => {
-    test("is 0 while unconfirmed, without asking for the tip", async () => {
-      const { api, solstice } = fakeChain();
-      expect(await solstice.getConfirmations(txid(5))).toBe(0);
-      expect(api.makeRequest).toHaveBeenCalledWith(`/tx/${txid(5)}/status`);
-      expect(api.getBlockHeight).not.toHaveBeenCalled();
-    });
-
-    test("counts the confirming block", async () => {
-      const { solstice } = fakeChain({ txHeight: TIP });
-      expect(await solstice.getConfirmations(txid(5))).toBe(1);
-      expect(await fakeChain({ txHeight: TIP - 5 }).solstice.getConfirmations(txid(5))).toBe(6);
+    test("asks its own API", async () => {
+      const { api, solstice } = fakeChain({ txHeight: TIP - 5 });
+      expect(await solstice.getConfirmations(txid(5))).toBe(6);
+      expect(api.getConfirmations).toHaveBeenCalledWith(txid(5));
     });
   });
 

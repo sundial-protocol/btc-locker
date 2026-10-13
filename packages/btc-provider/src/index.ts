@@ -10,6 +10,12 @@ import BitcoinAPI from "./bitcoin-api.js";
 export { BitcoinAPIError } from "./bitcoin-api.js";
 export { transactionId } from "./txid.js";
 export { FeePriorities, DEFAULT_CHAIN_FEE_RATES } from "./fees.js";
+export {
+  blockHashOfHeader,
+  previousBlockHashOfHeader,
+  type FinalityProof,
+  type TransactionStatus,
+} from "./finality.js";
 
 export type {
   ApiProvider,

@@ -8,6 +8,13 @@
 import { NETWORKS, type BitcoinNetwork, type NetworkName } from "./network.js";
 import { transactionId } from "./txid.js";
 import { FeePriorities, defaultFeeRate, feeRateForPriority } from "./fees.js";
+import {
+  HEADER_HEX_LENGTH,
+  blockHashOfHeader,
+  previousBlockHashOfHeader,
+  type FinalityProof,
+  type TransactionStatus,
+} from "./finality.js";
 
 /**
  * Bitcoin UTXO with API status information
@@ -525,5 +532,119 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
     return this.tryProviders("get block height", (provider) =>
       this.sendJson(provider, "/blocks/tip/height")
     );
+  }
+
+  // ── Confirmations and finality proofs ──────────────────────────────────────
+
+  /**
+   * Whether a transaction is confirmed, and in which block.
+   */
+  async getTransactionStatus(txid: string): Promise<TransactionStatus> {
+    return this.tryProviders("get transaction status", (provider) =>
+      this.sendJson(provider, `/tx/${txid}/status`)
+    );
+  }
+
+  /**
+   * Confirmations of a transaction: 0 while unconfirmed, 1 once it is in the
+   * tip block.
+   */
+  async getConfirmations(txid: string): Promise<number> {
+    const status = await this.getTransactionStatus(txid);
+    if (!status.confirmed || status.block_height === undefined) return 0;
+    // The tip can come from a provider that is a block behind the one that
+    // reported the status. A confirmed transaction has at least one.
+    return Math.max(1, (await this.getBlockHeight()) - status.block_height + 1);
+  }
+
+  /**
+   * Proof that a confirmed transaction is in its block: a BIP 37 merkle block,
+   * hex. The same bytes as bitcoind's `gettxoutproof`.
+   */
+  async getMerkleBlockProof(txid: string): Promise<string> {
+    return this.tryProviders("get merkle block proof", (provider) =>
+      this.sendText(provider, `/tx/${txid}/merkleblock-proof`)
+    );
+  }
+
+  /**
+   * Hash of the block at a height on the best chain.
+   */
+  async getBlockHash(height: number): Promise<string> {
+    return this.tryProviders("get block hash", (provider) =>
+      this.sendText(provider, `/block-height/${height}`)
+    );
+  }
+
+  /**
+   * The 80-byte header of a block, hex.
+   */
+  async getBlockHeader(blockHash: string): Promise<string> {
+    return this.tryProviders("get block header", (provider) =>
+      this.sendText(provider, `/block/${blockHash}/header`)
+    );
+  }
+
+  /**
+   * Everything a verifier needs to accept a transaction as final: the raw
+   * transaction, the proof that its block includes it, and the headers of the
+   * blocks mined after that block.
+   *
+   * The pieces are checked against each other before they are returned: the
+   * proof is for the transaction's block, every header hashes to the block it
+   * was asked for, and each one builds on the one before. Providers are not
+   * trusted to agree, and the chain can change between two requests.
+   *
+   * @param headerCount - Headers after the transaction's block (default 6, what
+   * Charms asks for). The transaction needs `headerCount + 1` confirmations.
+   * @throws If the transaction is unconfirmed or too young, or if the pieces do
+   * not fit together.
+   */
+  async getFinalityProof(txid: string, headerCount = 6): Promise<FinalityProof> {
+    if (!Number.isInteger(headerCount) || headerCount < 0) {
+      throw new Error("headerCount must be a non-negative integer");
+    }
+    const cannot = `Cannot build a finality proof for ${txid}`;
+
+    const status = await this.getTransactionStatus(txid);
+    const { block_height: height, block_hash: blockHash } = status;
+    if (!status.confirmed || height === undefined || !blockHash) {
+      throw new Error(`${cannot}: it is not confirmed.`);
+    }
+    const confirmations = (await this.getBlockHeight()) - height + 1;
+    if (confirmations < headerCount + 1) {
+      throw new Error(
+        `${cannot}: it has ${confirmations} confirmation(s), and ${headerCount} header(s) after its block need ${headerCount + 1}.`
+      );
+    }
+
+    const [tx, proof, blocks] = await Promise.all([
+      this.getTransaction(txid),
+      this.getMerkleBlockProof(txid),
+      Promise.all(
+        Array.from({ length: headerCount }, async (_, i) => {
+          const hash = await this.getBlockHash(height + 1 + i);
+          return { hash, header: await this.getBlockHeader(hash) };
+        })
+      ),
+    ]);
+
+    const changed = `${cannot}: the pieces do not fit together. The chain may have changed while they were read; try again.`;
+    // A merkle block starts with the header of the block it proves against.
+    if (blockHashOfHeader(proof.slice(0, HEADER_HEX_LENGTH)) !== blockHash) {
+      throw new Error(changed);
+    }
+    let previous = blockHash;
+    for (const { hash, header } of blocks) {
+      if (
+        blockHashOfHeader(header) !== hash ||
+        previousBlockHashOfHeader(header) !== previous
+      ) {
+        throw new Error(changed);
+      }
+      previous = hash;
+    }
+
+    return { tx, proof, headers: blocks.map((block) => block.header) };
   }
 }

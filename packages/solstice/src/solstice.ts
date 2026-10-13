@@ -130,9 +130,7 @@ export class Solstice {
 
   /** Confirmations of a transaction: 0 while unconfirmed. */
   async getConfirmations(txid: string): Promise<number> {
-    const status = await this.api.makeRequest(`/tx/${txid}/status`);
-    if (!status?.confirmed) return 0;
-    return (await this.api.getBlockHeight()) - status.block_height + 1;
+    return this.api.getConfirmations(txid);
   }
 
   /** Confirmed UTXOs of an address, largest first, as builder inputs. */

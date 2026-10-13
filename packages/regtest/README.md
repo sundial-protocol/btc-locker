@@ -15,7 +15,7 @@ root, or the build step of a regtest CI job, is enough.
 | File | What it is |
 | --- | --- |
 | `regtest.sh` | Installed as the `btc-regtest` command. Downloads Bitcoin Core 29.0 (release archive, SHA-256 pinned), starts `bitcoind -regtest`, runs a suite, stops it. With `--ord` it also downloads ord 0.29.0 and starts `ord --index-runes server`. |
-| `src/index.ts` | `rpc`, `mine`, `party` (keys derived from a label), `utxosOf`, `heightOf`, `medianTime`, `mempoolAccept`, `broadcast`, `signAndBroadcast`, and `esploraOverRpc`, an Esplora-style chain API served from bitcoind. |
+| `src/index.ts` | `rpc`, `mine`, `party` (keys derived from a label), `utxosOf`, `heightOf`, `medianTime`, `mempoolAccept`, `broadcast`, `signAndBroadcast`, and `esploraOverRpc`, an Esplora-style chain API served from bitcoind: UTXOs, raw transactions, the tip, broadcast, transaction status and confirmations, merkle block proofs, block hashes and headers. |
 | `src/ord.ts` | Imported as `@sundial-protocol/btc-regtest/ord`: `ord`, `ordSynced`, `runeBalances`, and a `mine` that waits for ord. |
 
 ord is opt-in. Without `--ord` (or `BTC_REGTEST_ORD=1`) the script never
