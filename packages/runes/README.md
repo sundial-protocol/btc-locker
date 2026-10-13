@@ -63,7 +63,7 @@ Three pieces, all under `tests/`:
 | --- | --- |
 | `vectors/ord-oracle/` | The oracle: a small Rust program that imports `ord`'s `ordinals` crate and calls its `Runestone::encipher` and `Runestone::decipher`. None of this package's code runs in it. `Cargo.toml` pins the crate to ord 0.29.0, commit `7e37a3bd3391044b39f5f11f20dfdb8b3764cd0e`. |
 | `vectors/ord-runestones.json` | The oracle's output. Its `source` block records the ord tag and commit. |
-| `ord-vectors.test.ts` | Feeds the same inputs to this codec and asserts equality. It runs in `npm test`. |
+| `ord-vectors.test.ts` | Feeds the same inputs to this codec and asserts equality. It runs in `npm test`, and so in the `test` jobs in CI. |
 
 The vectors file holds 64 cases:
 
@@ -93,7 +93,8 @@ git diff --stat -- tests/vectors
 ```
 
 An empty diff means the committed file is ord's output and was not edited by
-hand. The script builds outside the repository, under
+hand. CI runs the same check on every pull request: the `Runes vectors (ord
+oracle)` job regenerates the file and fails if it differs. The script builds outside the repository, under
 `~/.cache/btc-runes-ord-oracle`, unless `CARGO_TARGET_DIR` is set.
 
 **3. Decode a vector by hand.** The first `encipher` vector is
