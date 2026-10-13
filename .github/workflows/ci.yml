@@ -148,3 +148,40 @@ jobs:
       - name: Show daemon logs
         if: failure()
         run: npx btc-regtest logs
+
+  # The ord reference vectors. The unit tests above compare the codec with
+  # packages/runes/tests/vectors/ord-runestones.json; this job checks the file
+  # itself, by rebuilding it with ord's own `ordinals` crate (pinned in the
+  # oracle's Cargo.toml and Cargo.lock) and failing if the result differs from
+  # what is committed.
+  runes-vectors:
+    name: Runes vectors (ord oracle)
+    runs-on: ubuntu-latest
+    env:
+      # The oracle needs Rust 1.89 or later. Pinned so the build is repeatable.
+      RUSTUP_TOOLCHAIN: "1.91.1"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+
+      # generate.sh builds under ~/.cache/btc-runes-ord-oracle.
+      - name: Cache the oracle build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cache/btc-runes-ord-oracle
+          key: ord-oracle-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN }}-${{ hashFiles('packages/runes/tests/vectors/ord-oracle/**') }}
+          restore-keys: |
+            ord-oracle-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN }}-
+
+      - name: Regenerate the vectors with ord
+        run: bash packages/runes/tests/vectors/ord-oracle/generate.sh
+
+      - name: Fail if the committed vectors differ
+        run: git diff --exit-code -- packages/runes/tests/vectors/ord-runestones.json

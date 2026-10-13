@@ -19,23 +19,20 @@
  * it only changes the BTC deployment destination, which is a plain parameter.
  */
 
-// ── Runes primitives ─────────────────────────────────────────────────────────
+// ── Runes primitives and runestone codec ─────────────────────────────────────
+// These live in @sundial-protocol/btc-runes. They are re-exported so code that
+// imports them from this package keeps working.
 export {
   encodeVarint,
   decodeVarint,
   decodeAllVarints,
   U128_MAX,
-  type DecodedVarint,
-} from "./runes/varint.js";
-export {
   LARGEST_RUNE_NAME,
   runeNameToNumber,
   numberToRuneName,
   runeCommitment,
   parseSpacedRune,
   formatSpacedRune,
-} from "./runes/rune-name.js";
-export {
   RUNE_ID_ZERO,
   formatRuneId,
   parseRuneId,
@@ -43,15 +40,18 @@ export {
   compareRuneId,
   runeIdDelta,
   runeIdFromDelta,
-  type RuneId,
-} from "./runes/rune-id.js";
-export {
   Tag,
   Flag,
   flagMask,
   RUNESTONE_MAGIC,
   MAX_DIVISIBILITY,
   MAX_SPACERS,
+  NativeRunestoneCodec,
+  nativeRunestoneCodec,
+  encipherGuarded,
+  CenotaphError,
+  type DecodedVarint,
+  type RuneId,
   type Flaw,
   type DecipherContext,
   type Terms,
@@ -59,12 +59,8 @@ export {
   type Edict,
   type Runestone,
   type DecipherResult,
-} from "./runes/types.js";
-
-// ── Runestone codec (pluggable) ──────────────────────────────────────────────
-export type { RunestoneCodec } from "./runes/codec.js";
-export { NativeRunestoneCodec, nativeRunestoneCodec } from "./runes/native-codec.js";
-export { encipherGuarded, CenotaphError } from "./runes/guard.js";
+  type RunestoneCodec,
+} from "@sundial-protocol/btc-runes";
 
 // ── Receipt rune (per-instance) ──────────────────────────────────────────────
 export {

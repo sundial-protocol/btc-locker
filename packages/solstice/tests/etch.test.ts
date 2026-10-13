@@ -9,10 +9,13 @@ import {
   createEtchCommitment,
 } from "../src/tx/etch-commit";
 import { buildEtchTransaction } from "../src/tx/etch";
-import { nativeRunestoneCodec } from "../src/runes/native-codec";
-import { runeCommitment, runeNameToNumber } from "../src/runes/rune-name";
+import {
+  LARGEST_RUNE_NAME,
+  nativeRunestoneCodec,
+  runeCommitment,
+  runeNameToNumber,
+} from "@sundial-protocol/btc-runes";
 import type { ReceiptRune } from "../src/receipt/receipt-rune";
-import vectors from "./vectors/ord-runestones.json";
 import { NETWORK, p2wpkh, txid } from "./helpers";
 
 bitcoin.initEccLib(ecc);
@@ -32,6 +35,13 @@ const adminXOnly = Buffer.from(admin.publicKey.subarray(1));
 const vault = p2wpkh(1);
 const funding = p2wpkh(2);
 
+/**
+ * The commitment bytes for a rune name, as hex. Whether they are the bytes ord
+ * expects is btc-runes' test; these tests check where this package puts them.
+ */
+const commitmentHex = (name: string): string =>
+  Buffer.from(runeCommitment(runeNameToNumber(name))).toString("hex");
+
 /** The data pushes of a script, read the way ord reads a tapscript. */
 function pushes(script: Uint8Array): string[] {
   const out: string[] = [];
@@ -50,9 +60,10 @@ function pushes(script: Uint8Array): string[] {
 }
 
 describe("createEtchCommitment", () => {
-  test("is a taproot output whose leaf pushes the commitment ord expects", () => {
+  test("is a taproot output whose leaf pushes the rune name's commitment", () => {
     const c = createEtchCommitment(rune, adminXOnly, NETWORK);
-    const commitment = vectors.runeNames.find((v) => v.name === rune.name)!.commitment;
+    const commitment = commitmentHex(rune.name);
+    expect(commitment).toHaveLength(18);
 
     expect(c.scriptPubKeyHex).toMatch(/^5120[0-9a-f]{64}$/);
     expect(c.address.startsWith("tb1p")).toBe(true);
@@ -80,7 +91,7 @@ describe("createEtchCommitment", () => {
   test("writes a one-byte commitment as a data push, not OP_N", () => {
     // "F" is rune 5: a script compiler would emit OP_5, which ord does not match.
     const c = createEtchCommitment({ name: "F" }, adminXOnly, NETWORK);
-    expect(runeCommitment(runeNameToNumber("F")).toString("hex")).toBe("05");
+    expect(commitmentHex("F")).toBe("05");
     expect(c.tapLeafScriptHex.endsWith("ac0063010568")).toBe(true);
   });
 
@@ -90,9 +101,10 @@ describe("createEtchCommitment", () => {
   });
 
   test("the longest name has a 16-byte commitment, the largest allowed", () => {
-    const longest = vectors.runeNames.find((v) => v.commitment.length === 32)!;
-    const c = createEtchCommitment({ name: longest.name }, adminXOnly, NETWORK);
-    expect(c.tapLeafScriptHex.endsWith(`ac006310${longest.commitment}68`)).toBe(true);
+    const commitment = commitmentHex(LARGEST_RUNE_NAME);
+    expect(commitment).toHaveLength(32);
+    const c = createEtchCommitment({ name: LARGEST_RUNE_NAME }, adminXOnly, NETWORK);
+    expect(c.tapLeafScriptHex.endsWith(`ac006310${commitment}68`)).toBe(true);
   });
 
   test("an empty commitment (rune A) is pushed as a zero byte", () => {
@@ -219,12 +231,19 @@ describe("buildEtchTransaction (C0, reveal)", () => {
       "btc change",
     ]);
 
-    // The runestone is byte for byte the one ord enciphers for this etching.
-    expect(res.runestoneScriptHex).toBe(vectors.encipher[0].scriptPubKey);
-    const decoded = nativeRunestoneCodec.decipher(Buffer.from(res.runestoneScriptHex, "hex"));
+    // The runestone carries every field of the receipt rune, with the whole
+    // supply premined to output 0 and no open-mint terms.
+    const decoded = nativeRunestoneCodec.decipher(Buffer.from(res.runestoneScriptHex, "hex"), {
+      outputCount: 3,
+    });
     expect(decoded.cenotaph).toBe(false);
+    expect(decoded.runestone).toEqual(res.runestone);
     expect(decoded.runestone.etching?.rune).toBe(runeNameToNumber("SOLSTICERECEIPT"));
     expect(decoded.runestone.etching?.premine).toBe(rune.totalSupply);
+    expect(decoded.runestone.etching?.divisibility).toBe(rune.divisibility);
+    expect(decoded.runestone.etching?.symbol).toBe(rune.symbol);
+    expect(decoded.runestone.etching?.spacers).toBe(rune.spacers);
+    expect(decoded.runestone.etching?.terms).toBeUndefined();
     expect(decoded.runestone.pointer).toBe(0);
 
     // Change conserves value: in = vault + fee + change.
@@ -267,9 +286,7 @@ describe("buildEtchTransaction (C0, reveal)", () => {
     expect(witness.length).toBe(3);
     expect(witness[0].length).toBe(64);
     expect(Buffer.from(witness[2]).toString("hex")).toBe(commitment.controlBlockHex);
-    expect(pushes(witness[1])).toContain(
-      runeCommitment(runeNameToNumber(rune.name)).toString("hex"),
-    );
+    expect(pushes(witness[1])).toContain(commitmentHex(rune.name));
 
     // No change output: the whole remainder is the fee.
     expect(res.outputs.map((o) => o.role)).toEqual(["vault (premine)", "runestone"]);

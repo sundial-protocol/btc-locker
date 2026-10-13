@@ -1,4 +1,4 @@
-//! Prints reference vectors for Solstice's native runestone codec as JSON.
+//! Prints reference vectors for the native runestone codec as JSON.
 //!
 //! Every byte and every classification below comes from ord's `ordinals` crate
 //! (`Runestone::encipher` / `Runestone::decipher`), pinned in Cargo.toml. u128
@@ -190,14 +190,14 @@ const SPACERS: u128 = 3;
 const SYMBOL: u128 = 5;
 
 fn main() {
-  let receipt = SpacedRune::from_str("SOLSTICE•RECEIPT").unwrap();
-  let receipt_id = id(840_000, 7);
+  let example = SpacedRune::from_str("EXAMPLE•TOKEN").unwrap();
+  let example_id = id(840_000, 7);
 
-  let solstice_etching = Etching {
+  let example_etching = Etching {
     divisibility: Some(8),
     premine: Some(2_100_000_000_000_000),
-    rune: Some(receipt.rune),
-    spacers: Some(receipt.spacers),
+    rune: Some(example.rune),
+    spacers: Some(example.spacers),
     symbol: Some('$'),
     terms: None,
     turbo: true,
@@ -206,23 +206,23 @@ fn main() {
   let encipher = vec![
     encipher_vector(
       "etching: full premine, divisibility, symbol, spacers, turbo, pointer 0",
-      "The C0 launch runestone, as receiptEtching() + buildEtchTransaction() produce it.",
+      "A launch etching: the whole supply premined to one output.",
       3,
       Runestone {
-        etching: Some(solstice_etching),
+        etching: Some(example_etching),
         pointer: Some(0),
         ..Default::default()
       },
     ),
     encipher_vector(
       "etching: no symbol, no spacers",
-      "ReceiptRune.symbol and .spacers are optional.",
+      "Symbol and spacers are optional.",
       2,
       Runestone {
         etching: Some(Etching {
           spacers: None,
           symbol: None,
-          ..solstice_etching
+          ..example_etching
         }),
         pointer: Some(0),
         ..Default::default()
@@ -247,7 +247,7 @@ fn main() {
     ),
     encipher_vector(
       "etching: open-mint terms, divisibility 38",
-      "Solstice never sets terms; covered because the codec encodes them.",
+      "Open-mint terms.",
       2,
       Runestone {
         etching: Some(Etching {
@@ -273,7 +273,7 @@ fn main() {
       5,
       Runestone {
         edicts: vec![Edict {
-          id: receipt_id,
+          id: example_id,
           amount: 150_000_000,
           output: 0,
         }],
@@ -287,7 +287,7 @@ fn main() {
       3,
       Runestone {
         edicts: vec![Edict {
-          id: receipt_id,
+          id: example_id,
           amount: 2_100_000_000_000_000,
           output: 0,
         }],
@@ -301,7 +301,7 @@ fn main() {
       3,
       Runestone {
         edicts: vec![Edict {
-          id: receipt_id,
+          id: example_id,
           amount: 1,
           output: 2,
         }],
@@ -330,7 +330,7 @@ fn main() {
       "",
       2,
       Runestone {
-        mint: Some(receipt_id),
+        mint: Some(example_id),
         pointer: Some(1),
         ..Default::default()
       },
@@ -340,7 +340,7 @@ fn main() {
       "",
       4,
       Runestone {
-        etching: Some(solstice_etching),
+        etching: Some(example_etching),
         mint: Some(id(2, 1)),
         pointer: Some(3),
         edicts: vec![Edict { id: id(0, 0), amount: 9, output: 2 }],
@@ -615,7 +615,7 @@ fn main() {
     "Z",
     "AA",
     "AAAAAAAAAAAAA",
-    "SOLSTICERECEIPT",
+    "EXAMPLETOKEN",
     "ZZZZZZZZZZZZZZZZZZZZZZZZZZ",
     "BCGDENLQRQWDSLRUGSNLBTMFIJAV",
   ]
@@ -630,7 +630,7 @@ fn main() {
   })
   .collect();
 
-  let spaced: Vec<Value> = ["SOLSTICE•RECEIPT", "A•B•C", "CALADAN•RT", "EXAMPLERUNE"]
+  let spaced: Vec<Value> = ["EXAMPLE•TOKEN", "A•B•C", "SECOND•TOKEN", "EXAMPLERUNE"]
     .iter()
     .map(|name| {
       let spaced = SpacedRune::from_str(name).unwrap();
@@ -648,7 +648,7 @@ fn main() {
       "tag": ORD_TAG,
       "commit": ORD_COMMIT,
       "crate": "crates/ordinals",
-      "generator": "packages/solstice/tests/vectors/ord-oracle",
+      "generator": "packages/runes/tests/vectors/ord-oracle",
     },
     "encipher": encipher,
     "decipher": decipher,

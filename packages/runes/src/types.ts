@@ -4,7 +4,7 @@
  * A runestone is carried in a single `OP_RETURN OP_13 <payload>` output. The
  * payload is a stream of LEB128 varints decoded as tag/value pairs, plus a Body
  * section (tag 0) holding delta-encoded edicts. See the Runes spec for the full
- * grammar; Solstice only needs the Etching and Edict subsets.
+ * grammar.
  */
 
 import type { RuneId } from "./rune-id.js";
@@ -55,7 +55,7 @@ export function flagMask(flag: Flag): bigint {
   return 1n << BigInt(flag);
 }
 
-/** Open-mint terms. Solstice premines the full supply and sets no terms. */
+/** Open-mint terms. An etching that premines its whole supply sets none. */
 export interface Terms {
   amount?: bigint;
   cap?: bigint;
@@ -75,7 +75,7 @@ export interface Etching {
   spacers?: number;
   /** Single display glyph, as a Unicode code point. */
   symbol?: number;
-  /** Amount minted to the etcher at etch time (the Solstice premine). */
+  /** Amount minted to the etcher at etch time (the premine). */
   premine?: bigint;
   /** Open-mint terms; omitted for a closed, fully-premined supply. */
   terms?: Terms;

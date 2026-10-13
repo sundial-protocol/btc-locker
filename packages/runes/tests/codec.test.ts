@@ -3,10 +3,11 @@ import * as bitcoin from "bitcoinjs-lib";
 import {
   NativeRunestoneCodec,
   nativeRunestoneCodec,
-} from "../src/runes/native-codec";
-import { encipherGuarded, CenotaphError } from "../src/runes/guard";
-import { RUNESTONE_MAGIC, type Runestone } from "../src/runes/types";
-import { runeNameToNumber } from "../src/runes/rune-name";
+} from "../src/native-codec";
+import { encipherGuarded, CenotaphError } from "../src/guard";
+import { RUNESTONE_MAGIC, type Runestone } from "../src/types";
+import { runeCommitment, runeNameToNumber } from "../src/rune-name";
+import { pushBytes } from "../src/script";
 
 const codec = new NativeRunestoneCodec();
 
@@ -95,5 +96,61 @@ describe("encipherGuarded (cenotaph guard)", () => {
     expect(() =>
       encipherGuarded({ edicts: [{ id: { block: 1n, tx: 1n }, amount: 1n, output: 0 }] }, brokenCodec),
     ).toThrow(CenotaphError);
+  });
+});
+
+describe("bytes are plain Uint8Array, not Node Buffers", () => {
+  test("encipher, encipherGuarded, runeCommitment and pushBytes return Uint8Array", () => {
+    const runestone: Runestone = { edicts: [{ id: { block: 1n, tx: 1n }, amount: 5n, output: 0 }] };
+    for (const bytes of [
+      codec.encipher(runestone),
+      encipherGuarded(runestone, codec),
+      runeCommitment(runeNameToNumber("EXAMPLETOKEN")),
+      pushBytes(Uint8Array.from([1, 2, 3])),
+    ]) {
+      expect(bytes).toBeInstanceOf(Uint8Array);
+      expect(Buffer.isBuffer(bytes)).toBe(false);
+    }
+  });
+
+  test("decipher reads a Uint8Array and a Buffer alike", () => {
+    const script = codec.encipher({ pointer: 1 });
+    expect(codec.decipher(script)).toEqual(codec.decipher(Buffer.from(script)));
+    expect(codec.decipher(script).cenotaph).toBe(false);
+  });
+});
+
+describe("pushBytes length prefixes", () => {
+  const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
+
+  test("direct push up to 75 bytes", () => {
+    expect(hex(pushBytes(new Uint8Array(0)))).toBe("00");
+    expect(hex(pushBytes(new Uint8Array(75))).slice(0, 2)).toBe("4b");
+  });
+
+  test("OP_PUSHDATA1, OP_PUSHDATA2 and OP_PUSHDATA4 write little-endian lengths", () => {
+    expect(hex(pushBytes(new Uint8Array(76))).slice(0, 4)).toBe("4c4c");
+    expect(hex(pushBytes(new Uint8Array(255))).slice(0, 4)).toBe("4cff");
+    expect(hex(pushBytes(new Uint8Array(256))).slice(0, 6)).toBe("4d0001");
+    expect(hex(pushBytes(new Uint8Array(0xffff))).slice(0, 6)).toBe("4dffff");
+    expect(hex(pushBytes(new Uint8Array(0x10000))).slice(0, 10)).toBe("4e00000100");
+    expect(pushBytes(new Uint8Array(0x10000)).length).toBe(0x10000 + 5);
+  });
+
+  test("decipher reads a payload pushed with OP_PUSHDATA2 and OP_PUSHDATA4", () => {
+    // The same one-edict payload, re-pushed with each wider length prefix.
+    const direct = codec.encipher({ edicts: [{ id: { block: 1n, tx: 1n }, amount: 5n, output: 0 }] });
+    const payload = direct.subarray(3);
+    const wide = (prefix: number[]) =>
+      Uint8Array.from([0x6a, RUNESTONE_MAGIC, ...prefix, ...payload]);
+    const expected = codec.decipher(direct);
+    expect(codec.decipher(wide([0x4d, payload.length, 0]))).toEqual(expected);
+    expect(codec.decipher(wide([0x4e, payload.length, 0, 0, 0]))).toEqual(expected);
+  });
+
+  test("a truncated OP_PUSHDATA4 length is an invalid script", () => {
+    const decoded = codec.decipher(Uint8Array.from([0x6a, RUNESTONE_MAGIC, 0x4e, 0xff, 0xff, 0xff, 0xff, 0x00]));
+    expect(decoded.cenotaph).toBe(true);
+    expect(decoded.flaw).toBe("invalid-script");
   });
 });

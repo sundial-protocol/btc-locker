@@ -20,7 +20,7 @@
   "scripts": {
     "build": "npm run build:esm && npm run build:cjs",
     "build:esm": "tsc -p tsconfig.esm.json",
-    "build:cjs": "tsc -p tsconfig.build.json --module commonjs --outDir dist/cjs",
+    "build:cjs": "tsc -p tsconfig.build.json --module commonjs --outDir dist/cjs && node ../../scripts/mark-cjs.mjs dist/cjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -43,6 +43,7 @@
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.2.0",
     "@sundial-protocol/btc-locker": "*",
+    "@sundial-protocol/btc-runes": "*",
     "bitcoinjs-lib": "^7.0.0"
   },
   "devDependencies": {

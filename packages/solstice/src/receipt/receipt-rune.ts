@@ -13,9 +13,12 @@
  * Claim Ratio denominator is exactly `totalSupply − (supply still in the Vault)`.
  */
 
-import { runeNameToNumber } from "../runes/rune-name.js";
-import type { RuneId } from "../runes/rune-id.js";
-import type { Edict, Etching } from "../runes/types.js";
+import {
+  runeNameToNumber,
+  type Edict,
+  type Etching,
+  type RuneId,
+} from "@sundial-protocol/btc-runes";
 
 export interface ReceiptRune {
   /** On-chain rune name (A–Z, no spacers), e.g. `"EXAMPLERUNE"`. */

@@ -23,8 +23,11 @@ import {
   type UTXO,
 } from "@sundial-protocol/btc-locker";
 import type { ReceiptRune } from "../receipt/receipt-rune.js";
-import { runeCommitment, runeNameToNumber } from "../runes/rune-name.js";
-import { pushBytes } from "../runes/script.js";
+import {
+  pushBytes,
+  runeCommitment,
+  runeNameToNumber,
+} from "@sundial-protocol/btc-runes";
 import { DEFAULT_RUNE_OUTPUT_VALUE, type BuiltOutput } from "./types.js";
 
 /**
@@ -81,7 +84,7 @@ const MAX_COMMITMENT_LENGTH = 16;
  * leaf would match even without the commitment. The name is still bound to this
  * key and output, and `A` is far below any minimum name length.
  */
-export function commitmentLeafScript(key: Buffer, commitment: Buffer): Buffer {
+export function commitmentLeafScript(key: Buffer, commitment: Uint8Array): Buffer {
   if (key.length !== 32) {
     throw new Error("etch commit: the leaf key must be a 32-byte x-only public key");
   }

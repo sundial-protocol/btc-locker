@@ -43,11 +43,13 @@ This is a **Turborepo monorepo** containing the following packages under `packag
 
 2. **`packages/solstice` (`@sundial-protocol/solstice`)**: The Runes receipt-token and atomic-swap layer for the Solstice value-accrual vault, built on top of the core library's script, PSBT and signing primitives.
 
-3. **`packages/cli` (`@sundial-protocol/btc-locker-cli`)**: A user-friendly CLI tool for interacting with the core and solstice libraries directly from the terminal.
+3. **`packages/runes` (`@sundial-protocol/btc-runes`)**: Bitcoin Runes primitives with no dependencies: a runestone encoder and decoder checked against `ord`, rune names, rune ids and varints. The solstice library is built on it.
 
-4. **`packages/demo` (`@sundial-protocol/btc-locker-demo`)**: A multipurpose demo server used for running interactive documentation locally and demonstrating how to use the library.
+4. **`packages/cli` (`@sundial-protocol/btc-locker-cli`)**: A user-friendly CLI tool for interacting with the core and solstice libraries directly from the terminal.
 
-1. **Vitest unit tests (`packages/core/tests/`, `packages/solstice/tests/`)**: Unit tests used to verify the correctness & stability of the core and solstice libraries.
+5. **`packages/demo` (`@sundial-protocol/btc-locker-demo`)**: A multipurpose demo server used for running interactive documentation locally and demonstrating how to use the library.
+
+1. **Vitest unit tests (`packages/core/tests/`, `packages/runes/tests/`, `packages/solstice/tests/`)**: Unit tests used to verify the correctness & stability of the core, runes and solstice libraries.
 
 2. **TypeDocs (`docs/`)**: A .gitignored folder with the generated API reference for the core, solstice and CLI packages. Run `npm run docs` to generate the latest documentation for your local demo.
 

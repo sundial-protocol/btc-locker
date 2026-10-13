@@ -4,7 +4,7 @@ import {
   decodeVarint,
   decodeAllVarints,
   U128_MAX,
-} from "../src/runes/varint";
+} from "../src/varint";
 
 describe("LEB128 varint (u128)", () => {
   test("known vectors", () => {

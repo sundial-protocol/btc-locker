@@ -64,7 +64,7 @@ export function numberToRuneName(n: bigint): string {
  * `Rune::commitment`). It has to appear as a data push in a tapscript spent by
  * the etching transaction, or indexers ignore the etching.
  */
-export function runeCommitment(rune: bigint): Buffer {
+export function runeCommitment(rune: bigint): Uint8Array {
   if (rune < 0n || rune >= 1n << 128n) {
     throw new Error(`rune number out of u128 range: ${rune}`);
   }
@@ -72,14 +72,14 @@ export function runeCommitment(rune: bigint): Buffer {
   for (let x = rune; x > 0n; x >>= 8n) {
     bytes.push(Number(x & 0xffn));
   }
-  return Buffer.from(bytes);
+  return Uint8Array.from(bytes);
 }
 
 /** The spacer ord displays and accepts; `.` is accepted as an alternative. */
 const SPACER = "•";
 
 /**
- * Split a spaced rune name such as `SOLSTICE•RECEIPT` into its on-chain name and
+ * Split a spaced rune name such as `EXAMPLE•TOKEN` into its on-chain name and
  * spacer bitmask (bit `i` set means a spacer after letter `i`).
  */
 export function parseSpacedRune(spaced: string): { name: string; spacers: number } {

@@ -22,10 +22,12 @@ import {
   type UTXO,
 } from "@sundial-protocol/btc-locker";
 import { receiptEtching, type ReceiptRune } from "../receipt/receipt-rune.js";
-import type { RunestoneCodec } from "../runes/codec.js";
-import { nativeRunestoneCodec } from "../runes/native-codec.js";
-import { encipherGuarded } from "../runes/guard.js";
-import type { Runestone } from "../runes/types.js";
+import {
+  encipherGuarded,
+  nativeRunestoneCodec,
+  type Runestone,
+  type RunestoneCodec,
+} from "@sundial-protocol/btc-runes";
 import { createEtchCommitment } from "./etch-commit.js";
 import { DEFAULT_RUNE_OUTPUT_VALUE, type BuiltOutput } from "./types.js";
 
@@ -152,7 +154,8 @@ export function buildEtchTransaction(params: EtchParams): EtchResult {
   outputs.push({ role: "vault (premine)", address: vaultAddress, value: vaultOutputValue });
 
   psbt.addOutput({ script: runestoneScript, value: 0n });
-  outputs.push({ role: "runestone", scriptHex: runestoneScript.toString("hex"), value: 0 });
+  const runestoneScriptHex = Buffer.from(runestoneScript).toString("hex");
+  outputs.push({ role: "runestone", scriptHex: runestoneScriptHex, value: 0 });
 
   if (emitChange && changeAddress) {
     psbt.addOutput({ address: changeAddress, value: BigInt(changeSats) });
@@ -162,7 +165,7 @@ export function buildEtchTransaction(params: EtchParams): EtchResult {
   return {
     psbtBase64: psbt.toBase64(),
     runestone,
-    runestoneScriptHex: runestoneScript.toString("hex"),
+    runestoneScriptHex,
     fee,
     changeSats,
     outputs,

@@ -4,32 +4,32 @@
     "tag": "0.29.0",
     "commit": "7e37a3bd3391044b39f5f11f20dfdb8b3764cd0e",
     "crate": "crates/ordinals",
-    "generator": "packages/solstice/tests/vectors/ord-oracle"
+    "generator": "packages/runes/tests/vectors/ord-oracle"
   },
   "encipher": [
     {
       "name": "etching: full premine, divisibility, symbol, spacers, turbo, pointer 0",
-      "note": "The C0 launch runestone, as receiptEtching() + buildEtchTransaction() produce it.",
+      "note": "A launch etching: the whole supply premined to one output.",
       "outputs": 3,
       "runestone": {
         "etching": {
-          "rune": "1264124569365602650127",
+          "rune": "21748009270908115",
           "divisibility": 8,
-          "spacers": 128,
+          "spacers": 64,
           "symbol": 36,
           "premine": "2100000000000000",
           "turbo": true
         },
         "pointer": 0
       },
-      "scriptPubKey": "6a5d200205048f90918381c7a9a0878901010803800105240680809dd085bedd031600",
+      "scriptPubKey": "6a5d1c020504d3a9a8f9aff6d0260108034005240680809dd085bedd031600",
       "ord": {
         "type": "runestone",
         "runestone": {
           "etching": {
-            "rune": "1264124569365602650127",
+            "rune": "21748009270908115",
             "divisibility": 8,
-            "spacers": 128,
+            "spacers": 64,
             "symbol": 36,
             "premine": "2100000000000000",
             "turbo": true
@@ -40,23 +40,23 @@
     },
     {
       "name": "etching: no symbol, no spacers",
-      "note": "ReceiptRune.symbol and .spacers are optional.",
+      "note": "Symbol and spacers are optional.",
       "outputs": 2,
       "runestone": {
         "etching": {
-          "rune": "1264124569365602650127",
+          "rune": "21748009270908115",
           "divisibility": 8,
           "premine": "2100000000000000",
           "turbo": true
         },
         "pointer": 0
       },
-      "scriptPubKey": "6a5d1b0205048f90918381c7a9a087890101080680809dd085bedd031600",
+      "scriptPubKey": "6a5d18020504d3a9a8f9aff6d02601080680809dd085bedd031600",
       "ord": {
         "type": "runestone",
         "runestone": {
           "etching": {
-            "rune": "1264124569365602650127",
+            "rune": "21748009270908115",
             "divisibility": 8,
             "premine": "2100000000000000",
             "turbo": true
@@ -96,7 +96,7 @@
     },
     {
       "name": "etching: open-mint terms, divisibility 38",
-      "note": "Solstice never sets terms; covered because the codec encodes them.",
+      "note": "Open-mint terms.",
       "outputs": 2,
       "runestone": {
         "etching": {
@@ -382,9 +382,9 @@
       "outputs": 4,
       "runestone": {
         "etching": {
-          "rune": "1264124569365602650127",
+          "rune": "21748009270908115",
           "divisibility": 8,
-          "spacers": 128,
+          "spacers": 64,
           "symbol": 36,
           "premine": "2100000000000000",
           "turbo": true
@@ -405,14 +405,14 @@
         },
         "pointer": 3
       },
-      "scriptPubKey": "6a5d290205048f90918381c7a9a0878901010803800105240680809dd085bedd031402140116030000000902",
+      "scriptPubKey": "6a5d25020504d3a9a8f9aff6d0260108034005240680809dd085bedd031402140116030000000902",
       "ord": {
         "type": "runestone",
         "runestone": {
           "etching": {
-            "rune": "1264124569365602650127",
+            "rune": "21748009270908115",
             "divisibility": 8,
-            "spacers": 128,
+            "spacers": 64,
             "symbol": 36,
             "premine": "2100000000000000",
             "turbo": true
@@ -2818,9 +2818,9 @@
       "commitment": "d643a1d1d0976001"
     },
     {
-      "name": "SOLSTICERECEIPT",
-      "number": "1264124569365602650127",
-      "commitment": "0f48641038a6408744"
+      "name": "EXAMPLETOKEN",
+      "number": "21748009270908115",
+      "commitment": "d3142affb2434d"
     },
     {
       "name": "ZZZZZZZZZZZZZZZZZZZZZZZZZZ",
@@ -2835,9 +2835,9 @@
   ],
   "spacedRunes": [
     {
-      "spaced": "SOLSTICE•RECEIPT",
-      "name": "SOLSTICERECEIPT",
-      "spacers": 128
+      "spaced": "EXAMPLE•TOKEN",
+      "name": "EXAMPLETOKEN",
+      "spacers": 64
     },
     {
       "spaced": "A•B•C",
@@ -2845,9 +2845,9 @@
       "spacers": 3
     },
     {
-      "spaced": "CALADAN•RT",
-      "name": "CALADANRT",
-      "spacers": 64
+      "spaced": "SECOND•TOKEN",
+      "name": "SECONDTOKEN",
+      "spacers": 32
     },
     {
       "spaced": "EXAMPLERUNE",

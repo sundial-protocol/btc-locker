@@ -8,7 +8,7 @@ import {
   compareRuneId,
   RUNE_ID_ZERO,
   type RuneId,
-} from "../src/runes/rune-id";
+} from "../src/rune-id";
 
 describe("RuneId", () => {
   test("format / parse round-trip", () => {
