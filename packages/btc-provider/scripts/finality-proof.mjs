@@ -6,13 +6,15 @@
  *
  *   node scripts/finality-proof.mjs <txid> [network] [headers]
  *
- * `network` is bitcoin (default), testnet or testnet4. Prints the proof as JSON.
+ * `network` is bitcoin (default), testnet or testnet4. `headers` is an exact
+ * count; without it, headers are added until the work Charms requires is
+ * reached, which only mainnet can do. Prints the proof as JSON.
  * Exits 1 if the providers disagree or a provider fails.
  */
 
 import { BitcoinAPI } from "../dist/esm/index.js";
 
-const [txid, network = "bitcoin", headers = "6"] = process.argv.slice(2);
+const [txid, network = "bitcoin", headers] = process.argv.slice(2);
 if (!txid) {
   console.error("usage: node scripts/finality-proof.mjs <txid> [network] [headers]");
   process.exit(2);
@@ -23,7 +25,7 @@ const proofs = [];
 for (const provider of providers) {
   const api = new BitcoinAPI(network, provider);
   const started = Date.now();
-  const proof = await api.getFinalityProof(txid, Number(headers));
+  const proof = await api.getFinalityProof(txid, headers === undefined ? {} : Number(headers));
   console.error(
     `${provider}: tx ${proof.tx.length / 2} bytes, proof ${proof.proof.length / 2} bytes, ` +
       `${proof.headers.length} headers, ${await api.getConfirmations(txid)} confirmations, ` +

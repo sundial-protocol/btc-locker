@@ -1,6 +1,16 @@
 import { describe, expect, test, vi } from "vitest";
 import BitcoinAPI from "../src/bitcoin-api";
-import { blockHashOfHeader, previousBlockHashOfHeader } from "../src/finality";
+import {
+  CHARMS_FINALITY_TARGET_BITS,
+  blockHashOfHeader,
+  headerMeetsItsTarget,
+  merkleBlockNames,
+  merkleBlockTransactions,
+  previousBlockHashOfHeader,
+  targetOfBits,
+  workOfBits,
+  workOfHeader,
+} from "../src/finality";
 import recorded from "./finality-fixture.json";
 import { LEGACY_TX } from "./fixtures";
 
@@ -144,10 +154,101 @@ describe("proof pieces", () => {
   });
 });
 
+describe("merkle blocks", () => {
+  /** The transaction's hash as it sits in the proof, in block byte order. */
+  const inBlockOrder = (txid.match(/../g) as string[]).reverse().join("");
+  /** Where the proof's hashes start: header, 4-byte count, 1-byte hash count. */
+  const HASHES_AT = (80 + 4 + 1) * 2;
+  /** The proof with its `n`th hash replaced by `hash`. */
+  const withHash = (n: number, hash: string) =>
+    proof.slice(0, HASHES_AT + n * 64) + hash + proof.slice(HASHES_AT + (n + 1) * 64);
+  const hashAt = (n: number) => proof.slice(HASHES_AT + n * 64, HASHES_AT + (n + 1) * 64);
+
+  test("prove the one transaction they were built for", () => {
+    expect(merkleBlockTransactions(proof)).toEqual([txid]);
+    expect(merkleBlockNames(proof, txid)).toBe(true);
+    expect(merkleBlockNames(proof, txid.toUpperCase())).toBe(true);
+  });
+
+  test("do not prove a transaction that is not matched", () => {
+    expect(merkleBlockNames(proof, "ab".repeat(32))).toBe(false);
+    expect(merkleBlockNames(proof, "not a txid")).toBe(false);
+  });
+
+  test("are refused when a hash on the path is changed, though the txid is still in the bytes", () => {
+    const leaf = [...Array(13).keys()].find((n) => hashAt(n) === inBlockOrder) as number;
+    const sibling = leaf === 0 ? 1 : 0;
+    const forged = withHash(sibling, "11".repeat(32));
+    expect(forged).toContain(inBlockOrder);
+    expect(() => merkleBlockTransactions(forged)).toThrow("does not hash to its header's merkle root");
+    expect(merkleBlockNames(forged, txid)).toBe(false);
+  });
+
+  test("are refused when the transaction's own hash is changed", () => {
+    const forged = proof.replace(inBlockOrder, "22".repeat(32));
+    expect(() => merkleBlockTransactions(forged)).toThrow("merkle root");
+  });
+
+  test("are refused when malformed", () => {
+    expect(() => merkleBlockTransactions(proof + "00")).toThrow("wrong length");
+    expect(() => merkleBlockTransactions(proof.slice(0, -2))).toThrow("wrong length");
+    expect(() => merkleBlockTransactions(proof.slice(0, 160))).toThrow("ends early");
+    expect(() => merkleBlockTransactions("zz")).toThrow("is hex");
+    // A transaction count of zero.
+    expect(() => merkleBlockTransactions(proof.slice(0, 160) + "00000000" + proof.slice(168))).toThrow(
+      "no transactions",
+    );
+    // More hashes claimed than the proof holds.
+    expect(() => merkleBlockTransactions(proof.slice(0, 168) + "fd0010" + proof.slice(170))).toThrow();
+  });
+});
+
+describe("proof of work", () => {
+  test("target and work follow from the compact bits", () => {
+    // Difficulty 1, the genesis block's target.
+    expect(targetOfBits(0x1d00ffff)).toBe(0xffffn << 208n);
+    expect(workOfBits(0x1d00ffff)).toBe(0x100010001n);
+    expect(targetOfBits(0x03123456)).toBe(0x123456n);
+    expect(targetOfBits(0x02123456)).toBe(0x1234n);
+  });
+
+  test("recorded headers meet the targets they state", () => {
+    for (const header of [proof.slice(0, 160), ...headers]) {
+      expect(headerMeetsItsTarget(header)).toBe(true);
+    }
+  });
+
+  test("a header with a changed nonce does not", () => {
+    expect(headerMeetsItsTarget(tampered(headers[0]))).toBe(false);
+  });
+
+  test("on 2026-10-13 Charms' requirement was the transaction's block plus six headers", () => {
+    const required = workOfBits(CHARMS_FINALITY_TARGET_BITS);
+    const sum = (list: string[]) => list.reduce((work, h) => work + workOfHeader(h), 0n);
+    const block = proof.slice(0, 160);
+    expect(sum([block, ...headers.slice(0, 5)])).toBeLessThan(required);
+    expect(sum([block, ...headers])).toBeGreaterThanOrEqual(required);
+  });
+});
+
 describe("getFinalityProof", () => {
-  test("returns the transaction, its merkle block and the six headers after", async () => {
+  test("returns the transaction, its merkle block and the headers that reach Charms' work", async () => {
     const { api } = chain(6);
     expect(await api.getFinalityProof(txid)).toEqual({ tx, proof, headers });
+  });
+
+  test("stops at enough work, though more blocks exist", async () => {
+    // One block at the old reference difficulty is a little more than one of
+    // these, so the transaction's block and one header reach it.
+    const { api, asked } = chain(6);
+    const result = await api.getFinalityProof(txid, { targetBits: 0x1701e2a0 });
+    expect(result.headers).toEqual(headers.slice(0, 1));
+    expect(asked.filter((path) => path.endsWith("/header"))).toHaveLength(1);
+  });
+
+  test("needs no headers when the transaction's block alone holds the work", async () => {
+    const { api } = chain(6);
+    expect((await api.getFinalityProof(txid, { targetBits: 0x17021ef0 })).headers).toEqual([]);
   });
 
   test("accepts the txid in upper case", async () => {
@@ -176,19 +277,44 @@ describe("getFinalityProof", () => {
     );
   });
 
-  test("refuses with 6 confirmations: six headers need 7", async () => {
-    const { api, asked } = chain(5);
+  test("refuses while the blocks after it do not hold enough work", async () => {
+    const { api } = chain(5);
     await expect(api.getFinalityProof(txid)).rejects.toThrow(
+      "its block and the 5 block(s) after it hold 88.8% of the work required. It has 6 confirmation(s); wait for more.",
+    );
+  });
+
+  test("fetches no headers when the difficulty puts the work out of reach", async () => {
+    // As on a test network: far more blocks would be needed than maxHeaders.
+    const { api, asked } = chain(6);
+    await expect(api.getFinalityProof(txid, { maxHeaders: 3 })).rejects.toThrow(
+      "its block holds 14.8% of the work required. At that difficulty the proof would take about 6 header(s), and this call fetches at most 3.",
+    );
+    expect(asked.filter((path) => path.endsWith("/header"))).toHaveLength(0);
+  });
+
+  test("an exact count: six headers need 7 confirmations", async () => {
+    const { api, asked } = chain(5);
+    await expect(api.getFinalityProof(txid, 6)).rejects.toThrow(
       "it has 6 confirmation(s), and 6 header(s) after its block need 7.",
     );
     // Nothing was fetched beyond the status and the tip.
     expect(asked).toHaveLength(2);
   });
 
+  test("an exact count is not held to the work", async () => {
+    expect((await chain(6).api.getFinalityProof(txid, { headerCount: 3 })).headers).toEqual(
+      headers.slice(0, 3),
+    );
+  });
+
   test("refuses a bad header count", async () => {
     const { api } = chain();
     await expect(api.getFinalityProof(txid, -1)).rejects.toThrow("non-negative integer");
     await expect(api.getFinalityProof(txid, 1.5)).rejects.toThrow("non-negative integer");
+    await expect(api.getFinalityProof(txid, { maxHeaders: -1 })).rejects.toThrow(
+      "maxHeaders must be a non-negative integer",
+    );
   });
 
   describe("refuses pieces that do not fit together", () => {
@@ -206,6 +332,18 @@ describe("getFinalityProof", () => {
       const { api } = chain(6, {
         [`/tx/${txid}/merkleblock-proof`]: () => text(proof.replace(inBlockOrder, "00".repeat(32))),
       });
+      await expect(api.getFinalityProof(txid)).rejects.toThrow(mismatch);
+    });
+
+    test("a merkle block whose tree does not lead to the header's root", async () => {
+      // The transaction's hash is still in the proof; a hash beside it is not the real one.
+      const at = (80 + 4 + 1) * 2;
+      const first = proof.slice(at, at + 64);
+      const inBlockOrder = (txid.match(/../g) as string[]).reverse().join("");
+      const n = first === inBlockOrder ? 1 : 0;
+      const forged = proof.slice(0, at + n * 64) + "11".repeat(32) + proof.slice(at + (n + 1) * 64);
+      expect(forged).toContain(inBlockOrder);
+      const { api } = chain(6, { [`/tx/${txid}/merkleblock-proof`]: () => text(forged) });
       await expect(api.getFinalityProof(txid)).rejects.toThrow(mismatch);
     });
 

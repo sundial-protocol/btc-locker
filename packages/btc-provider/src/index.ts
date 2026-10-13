@@ -11,8 +11,15 @@ export { BitcoinAPIError } from "./bitcoin-api.js";
 export { transactionId } from "./txid.js";
 export { FeePriorities, DEFAULT_CHAIN_FEE_RATES } from "./fees.js";
 export {
+  CHARMS_FINALITY_TARGET_BITS,
   blockHashOfHeader,
+  headerMeetsItsTarget,
+  merkleBlockNames,
+  merkleBlockTransactions,
   previousBlockHashOfHeader,
+  targetOfBits,
+  workOfBits,
+  workOfHeader,
   type FinalityProof,
   type TransactionStatus,
 } from "./finality.js";
@@ -25,6 +32,7 @@ export type {
   FeeEstimates,
   BroadcastResult,
   BitcoinAPIOptions,
+  FinalityProofOptions,
 } from "./bitcoin-api.js";
 
 export {
