@@ -132,7 +132,8 @@ export interface FinalityProofOptions {
   targetBits?: number;
   /**
    * The most headers to fetch while adding up work (default 36). On a network
-   * whose difficulty is far below the target, the work is never enough.
+   * whose difficulty is far below the target, the work is never enough, and
+   * the call fails after fetching this many.
    */
   maxHeaders?: number;
 }
@@ -141,6 +142,9 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 
 /** The most headers getFinalityProof fetches while adding up work. */
 const DEFAULT_MAX_FINALITY_HEADERS = 36;
+
+/** The most headers getFinalityProof asks for at once. */
+const FINALITY_HEADER_BATCH = 12;
 
 /** The providers tried, in order, when none is named. */
 const DEFAULT_PROVIDERS: ApiProvider[] = ["mempool", "blockstream"];
@@ -723,22 +727,26 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
     }
 
     const required = workOfBits(targetBits);
-    // At the difficulty of the transaction's block, is the work in reach at
-    // all? On a test network it is not, and there is no use fetching headers.
-    const perBlock = workOfHeader(blockHeader);
-    const expected = (required - work + perBlock - 1n) / perBlock;
-    if (work < required && expected > BigInt(maxHeaders)) {
-      const percent = Number((work * 1000n) / required) / 10;
-      throw new Error(
-        `${cannot}: its block holds ${percent}% of the work required. At that difficulty the proof would take about ${expected} header(s), and this call fetches at most ${maxHeaders}.`
-      );
-    }
+    // No block's work says what the next one holds: difficulty changes, and a
+    // test network mixes minimum-difficulty blocks with real ones. So the only
+    // limits are the tip and maxHeaders, and the work is whatever the headers
+    // turn out to carry.
     const limit = Math.min(available, maxHeaders);
     while (work < required && headers.length < limit) {
-      // Guess from the last block's work, then top up one at a time.
+      // Size the batch from the last block's work, then top up. The guess only
+      // saves requests; a wrong one costs another round.
       const each = workOfHeader(headers[headers.length - 1] ?? blockHeader);
-      const missing = Number((required - work + each - 1n) / each);
-      await extend(Math.min(missing, limit - headers.length));
+      const missing = (required - work + each - 1n) / each;
+      const room = Math.min(limit - headers.length, FINALITY_HEADER_BATCH);
+      await extend(missing < BigInt(room) ? Number(missing) : room);
+    }
+    // A batch sized from a light block overshoots when heavier ones follow.
+    // Return no more headers than the work needs.
+    while (headers.length > 0) {
+      const last = workOfHeader(headers[headers.length - 1]);
+      if (work - last < required) break;
+      work -= last;
+      headers.pop();
     }
     if (work < required) {
       const percent = Number((work * 1000n) / required) / 10;

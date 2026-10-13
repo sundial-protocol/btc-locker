@@ -61,6 +61,58 @@ function chain(
   return { api, asked, fetch };
 }
 
+/** `n` as `bytes` little-endian bytes of hex. */
+const le = (n: number, bytes: number) =>
+  Array.from({ length: bytes }, (_, i) => ((n >>> (8 * i)) & 0xff).toString(16).padStart(2, "0")).join("");
+const reversed = (hex: string) => (hex.match(/../g) as string[]).reverse().join("");
+
+/**
+ * A header on top of `previousHash` with the given compact target, with a
+ * nonce found by trying. Only for easy targets.
+ */
+function mineHeader(previousHash: string, merkleRoot: string, bits: number): string {
+  for (let nonce = 0; ; nonce++) {
+    const header =
+      le(2, 4) + reversed(previousHash) + reversed(merkleRoot) + le(1_700_000_000, 4) + le(bits, 4) + le(nonce, 4);
+    if (headerMeetsItsTarget(header)) return header;
+  }
+}
+
+/**
+ * A chain like a test network's: the transaction is alone in a block of the
+ * least work there is, and the blocks after it are about 128 times harder.
+ */
+function unevenChain(blocksAfter: number) {
+  const EASY = 0x207fffff; // work 2
+  const HARD = 0x2000ffff; // work 256
+  const txBlock = mineHeader("00".repeat(32), txid, EASY);
+  // One transaction: its hash is the merkle root, matched by a single flag.
+  const merkleBlock = txBlock + le(1, 4) + "01" + reversed(txid) + "01" + "01";
+  const chainStatus = { confirmed: true, block_height: 100, block_hash: blockHashOfHeader(txBlock) };
+  const after: { hash: string; header: string }[] = [];
+  for (let i = 0; i < blocksAfter; i++) {
+    const header = mineHeader(after[i - 1]?.hash ?? chainStatus.block_hash, "11".repeat(32), HARD);
+    after.push({ hash: blockHashOfHeader(header), header });
+  }
+
+  const asked: string[] = [];
+  const fetch = vi.fn(async (url: string) => {
+    const path = new URL(url).pathname.replace(/^\/api/, "");
+    asked.push(path);
+    if (path === `/tx/${txid}/status`) return json(chainStatus);
+    if (path === `/tx/${txid}/hex`) return text(tx);
+    if (path === `/tx/${txid}/merkleblock-proof`) return text(merkleBlock);
+    if (path === "/blocks/tip/height") return text(String(100 + blocksAfter));
+    const byHeight = /^\/block-height\/(\d+)$/.exec(path);
+    if (byHeight) return text(after[Number(byHeight[1]) - 101].hash);
+    const byHash = /^\/block\/([0-9a-f]{64})\/header$/.exec(path);
+    const block = byHash && after.find((b) => b.hash === byHash[1]);
+    return block ? text(block.header) : notFound();
+  });
+  const api = new BitcoinAPI("bitcoin", "mempool", { fetch: fetch as unknown as typeof globalThis.fetch });
+  return { api, asked, merkleBlock, headers: after.map((b) => b.header) };
+}
+
 /** A header that is `header` with one byte of its nonce changed. */
 const tampered = (header: string) => header.slice(0, -2) + (header.endsWith("00") ? "01" : "00");
 
@@ -284,13 +336,38 @@ describe("getFinalityProof", () => {
     );
   });
 
-  test("fetches no headers when the difficulty puts the work out of reach", async () => {
-    // As on a test network: far more blocks would be needed than maxHeaders.
+  test("gives up at maxHeaders, having counted the work of every header it may fetch", async () => {
     const { api, asked } = chain(6);
     await expect(api.getFinalityProof(txid, { maxHeaders: 3 })).rejects.toThrow(
-      "its block holds 14.8% of the work required. At that difficulty the proof would take about 6 header(s), and this call fetches at most 3.",
+      "its block and the 3 block(s) after it hold 59.2% of the work required, after 3 header(s), the most this call fetches.",
     );
-    expect(asked.filter((path) => path.endsWith("/header"))).toHaveLength(0);
+    expect(asked.filter((path) => path.endsWith("/header"))).toHaveLength(3);
+  });
+
+  describe("when later blocks hold more work than the transaction's block", () => {
+    // Work 512: the transaction's block (2) and two of the blocks after it (256 each).
+    const TARGET = 0x1f7fffff;
+
+    test("the work is counted from the headers, not guessed from the first block", async () => {
+      // Going by its own block, the transaction would need 255 more blocks,
+      // far past maxHeaders. Two are enough.
+      const { api, merkleBlock, headers: after } = unevenChain(4);
+      expect(workOfBits(TARGET)).toBe(512n);
+      expect(workOfHeader(merkleBlock.slice(0, 160))).toBe(2n);
+      expect(workOfHeader(after[0])).toBe(256n);
+
+      const result = await api.getFinalityProof(txid, { targetBits: TARGET });
+      expect(result).toEqual({ tx, proof: merkleBlock, headers: after.slice(0, 2) });
+    });
+
+    test("headers are fetched a batch at a time, and no further than needed", async () => {
+      // 60 blocks at work 256 make 15360; 4 times that many would be needed.
+      const { api, asked } = unevenChain(40);
+      await expect(api.getFinalityProof(txid, { targetBits: 0x1f020000 })).rejects.toThrow(
+        "after 36 header(s), the most this call fetches.",
+      );
+      expect(asked.filter((path) => path.endsWith("/header"))).toHaveLength(36);
+    });
   });
 
   test("an exact count: six headers need 7 confirmations", async () => {
