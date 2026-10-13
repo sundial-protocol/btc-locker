@@ -11,6 +11,7 @@ import { FeePriorities, defaultFeeRate, feeRateForPriority } from "./fees.js";
 import {
   HEADER_HEX_LENGTH,
   blockHashOfHeader,
+  merkleBlockNames,
   previousBlockHashOfHeader,
   type FinalityProof,
   type TransactionStatus,
@@ -591,7 +592,8 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
    * blocks mined after that block.
    *
    * The pieces are checked against each other before they are returned: the
-   * proof is for the transaction's block, every header hashes to the block it
+   * transaction hashes to the id asked for, the proof names it and is for its
+   * block, every header hashes to the block it
    * was asked for, and each one builds on the one before. Providers are not
    * trusted to agree, and the chain can change between two requests.
    *
@@ -630,6 +632,13 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
     ]);
 
     const changed = `${cannot}: the pieces do not fit together. The chain may have changed while they were read; try again.`;
+    // The transaction returned is the one asked for, and the proof is about it.
+    if (
+      transactionId(tx) !== txid.toLowerCase() ||
+      !merkleBlockNames(proof, txid)
+    ) {
+      throw new Error(changed);
+    }
     // A merkle block starts with the header of the block it proves against.
     if (blockHashOfHeader(proof.slice(0, HEADER_HEX_LENGTH)) !== blockHash) {
       throw new Error(changed);

@@ -58,6 +58,15 @@ export function blockHashOfHeader(headerHex: string): string {
   return reversedHex(sha256(sha256(fromHex(headerHex))));
 }
 
+/**
+ * Whether a merkle block names a transaction. The matched transaction's id is
+ * one of the hashes the proof carries, in the byte order blocks use.
+ */
+export function merkleBlockNames(proofHex: string, txid: string): boolean {
+  if (!/^[0-9a-fA-F]{64}$/.test(txid)) return false;
+  return proofHex.toLowerCase().includes(reversedHex(fromHex(txid)));
+}
+
 /** The hash of the block before the one a header belongs to. */
 export function previousBlockHashOfHeader(headerHex: string): string {
   assertHeader(headerHex);

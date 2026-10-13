@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import BitcoinAPI from "../src/bitcoin-api";
 import { blockHashOfHeader, previousBlockHashOfHeader } from "../src/finality";
 import recorded from "./finality-fixture.json";
+import { LEGACY_TX } from "./fixtures";
 
 const { txid, status, tx, proof, blocks } = recorded;
 const HEIGHT = status.block_height;
@@ -149,6 +150,16 @@ describe("getFinalityProof", () => {
     expect(await api.getFinalityProof(txid)).toEqual({ tx, proof, headers });
   });
 
+  test("accepts the txid in upper case", async () => {
+    const upper = txid.toUpperCase();
+    const { api } = chain(6, {
+      [`/tx/${upper}/status`]: () => json(status),
+      [`/tx/${upper}/hex`]: () => text(tx),
+      [`/tx/${upper}/merkleblock-proof`]: () => text(proof),
+    });
+    expect(await api.getFinalityProof(upper)).toEqual({ tx, proof, headers });
+  });
+
   test("takes the number of headers", async () => {
     expect(await chain(2).api.getFinalityProof(txid, 2)).toEqual({
       tx,
@@ -182,6 +193,21 @@ describe("getFinalityProof", () => {
 
   describe("refuses pieces that do not fit together", () => {
     const mismatch = "the pieces do not fit together";
+
+    test("a transaction other than the one asked for", async () => {
+      const { api } = chain(6, { [`/tx/${txid}/hex`]: () => text(LEGACY_TX.hex) });
+      await expect(api.getFinalityProof(txid)).rejects.toThrow(mismatch);
+    });
+
+    test("a merkle block that does not name the transaction", async () => {
+      // The right block's header, but the transaction's hash is blanked out.
+      const inBlockOrder = (txid.match(/../g) as string[]).reverse().join("");
+      expect(proof).toContain(inBlockOrder);
+      const { api } = chain(6, {
+        [`/tx/${txid}/merkleblock-proof`]: () => text(proof.replace(inBlockOrder, "00".repeat(32))),
+      });
+      await expect(api.getFinalityProof(txid)).rejects.toThrow(mismatch);
+    });
 
     test("a header that is not the block asked for", async () => {
       const { api } = chain(6, {

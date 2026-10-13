@@ -282,6 +282,27 @@ describe("Solstice", () => {
       ).rejects.toThrow(`${commitTx.id}:3 does not commit to`);
     });
 
+    test("returns what the commit output holds over the fee to sourceAddress", async () => {
+      const { api, solstice } = chain(5);
+      const res = await solstice.buildEtchTransaction({ ...base, sourceAddress: funding.address });
+
+      expect(res.outputs.at(-1)).toMatchObject({ role: "btc change", address: funding.address });
+      expect(res.changeSats).toBeGreaterThan(546);
+      expect(res.fee + res.changeSats).toBe(10_000 - 546);
+      // The commit output covered it, so nothing was fetched to top up.
+      expect(api.fetchConfirmedUtxos).not.toHaveBeenCalled();
+      expect(inputsOf(res.psbtBase64)).toEqual([commitTx.id]);
+    });
+
+    test("prefers changeAddress over sourceAddress", async () => {
+      const res = await chain(5).solstice.buildEtchTransaction({
+        ...base,
+        sourceAddress: funding.address,
+        changeAddress: vault.address,
+      });
+      expect(res.outputs.at(-1)).toMatchObject({ role: "btc change", address: vault.address });
+    });
+
     describe("when fees rose since the commit", () => {
       const HIGH_RATE = 100;
 

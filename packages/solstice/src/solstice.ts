@@ -80,8 +80,9 @@ export interface SolsticeEtchParams extends FeeOptions {
     revealPublicKey: Uint8Array | string;
   };
   /**
-   * Address to top up from when the commit output no longer covers the fee,
-   * and where the change then goes. Without it, a shortfall is an error.
+   * Where change goes when `changeAddress` is not given, and the address to
+   * top up from when the commit output no longer covers the fee. Without it, a
+   * shortfall is an error.
    */
   sourceAddress?: string;
   /** Where BTC change is returned (default `sourceAddress`). */
@@ -222,7 +223,9 @@ export class Solstice {
         value: Number(commitOut.value),
         revealPublicKey: commit.revealPublicKey,
       },
-      changeAddress: params.changeAddress,
+      // Also on this first build: without a change address, whatever the
+      // commit output holds above the vault output and the fee goes to the miner.
+      changeAddress: params.changeAddress ?? sourceAddress,
       feeRate: params.feeRate ?? (await this.getFeeRate(priority)),
       network: this.network,
       codec: params.codec,
@@ -238,7 +241,6 @@ export class Solstice {
         ...base,
         inputs: funding,
         sourceScript: this.scriptOf(sourceAddress),
-        changeAddress: params.changeAddress ?? sourceAddress,
       }),
     );
   }
