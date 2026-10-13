@@ -52,23 +52,92 @@ passed in as is. The results are not Buffers: for hex use
 ## Verification against ord
 
 `ord` is the reference implementation of Runes, so the codec is tested against
-it and not against itself.
+it and not against itself. The claim is narrow: for a fixed set of cases, this
+codec produces the same bytes and the same decoding as `ord`'s own Rust code.
 
-`tests/vectors/ord-runestones.json` is written by `tests/vectors/ord-oracle`, a
-small Rust program around `ord`'s `ordinals` crate (ord 0.29.0, commit
-`7e37a3bd3391044b39f5f11f20dfdb8b3764cd0e`). `tests/ord-vectors.test.ts` asserts
-that the codec enciphers to the same bytes and deciphers to the same fields, the
-same cenotaph verdict and the same flaw: 13 runestones, 40 scripts (26
-cenotaphs, 12 valid edge cases, 2 non-runestones), plus rune names, commitments
-and spacers. It runs in `npm test`. To regenerate (Rust 1.89 or later):
+### How it works
+
+Three pieces, all under `tests/`:
+
+| Piece | What it is |
+| --- | --- |
+| `vectors/ord-oracle/` | The oracle: a small Rust program that imports `ord`'s `ordinals` crate and calls its `Runestone::encipher` and `Runestone::decipher`. None of this package's code runs in it. `Cargo.toml` pins the crate to ord 0.29.0, commit `7e37a3bd3391044b39f5f11f20dfdb8b3764cd0e`. |
+| `vectors/ord-runestones.json` | The oracle's output. Its `source` block records the ord tag and commit. |
+| `ord-vectors.test.ts` | Feeds the same inputs to this codec and asserts equality. It runs in `npm test`. |
+
+The vectors file holds 64 cases:
+
+| Block | Cases | What ord supplies | What the test asserts |
+| --- | --- | --- | --- |
+| `encipher` | 13 runestones | The script ord enciphers, and what ord deciphers from it. | Same script, byte for byte; deciphering it gives the same fields. |
+| `decipher` | 40 scripts: 26 cenotaphs, 12 valid edge cases, 2 non-runestones | Ord's verdict: a runestone and its fields, a cenotaph and its flaw, or nothing. | Same verdict, same flaw name, same fields. |
+| `runeNames` | 7 names | The rune number and the commitment bytes. | `runeNameToNumber`, `numberToRuneName` and `runeCommitment` agree. |
+| `spacedRunes` | 4 names | The name without spacers, and the spacer bitmask. | `parseSpacedRune` and `formatSpacedRune` agree. |
+
+### Checking it yourself
+
+**1. The oracle is ord 0.29.0.** Compare the `rev` in
+`tests/vectors/ord-oracle/Cargo.toml` with the commit the
+[0.29.0 tag](https://github.com/ordinals/ord/releases/tag/0.29.0) points to.
+Then read `src/main.rs`: `encipher_vector` takes its script from
+`runestone.encipher()`, and `deciphered` calls `Runestone::decipher`.
+
+**2. The vectors file is what the oracle prints.** Regenerate it and confirm
+nothing changes. This needs Rust 1.89 or later, and the first build takes a few
+minutes. If your default toolchain is older, set `RUSTUP_TOOLCHAIN` to a newer
+one that is installed.
 
 ```
 bash tests/vectors/ord-oracle/generate.sh
+git diff --stat -- tests/vectors
 ```
 
-This package has no regtest suite of its own. The codec is exercised against a
-live `ord` index by the regtest suites of `@sundial-protocol/solstice` and the
-CLI.
+An empty diff means the committed file is ord's output and was not edited by
+hand. The script builds outside the repository, under
+`~/.cache/btc-runes-ord-oracle`, unless `CARGO_TARGET_DIR` is set.
+
+**3. Decode a vector by hand.** The first `encipher` vector is
+
+```
+6a5d1c020504d3a9a8f9aff6d0260108034005240680809dd085bedd031600
+```
+
+| Bytes | Meaning |
+| --- | --- |
+| `6a 5d` | `OP_RETURN`, `OP_13`: the runestone marker |
+| `1c` | Push the next 28 bytes: the payload |
+| `02 05` | Tag 2 (flags) = 5: etching (bit 0) and turbo (bit 2) |
+| `04 d3a9a8f9aff6d026` | Tag 4 (rune) = 21748009270908115, the name `EXAMPLETOKEN` |
+| `01 08` | Tag 1 (divisibility) = 8 |
+| `03 40` | Tag 3 (spacers) = 64: bit 6, a spacer after the 7th letter, so `EXAMPLE•TOKEN` |
+| `05 24` | Tag 5 (symbol) = `$` |
+| `06 80809dd085bedd03` | Tag 6 (premine) = 2,100,000,000,000,000 |
+| `16 00` | Tag 22 (pointer) = output 0 |
+
+The payload is a list of tag and value pairs, each a LEB128 varint: 7 bits per
+byte, low bits first, and a set top bit means another byte follows. The fields
+match the `runestone` block of that vector in the JSON.
+
+**4. The test can fail.** Change one hex digit of a `scriptPubKey` in
+`ord-runestones.json` and run `npm test`. That vector fails. Revert the change.
+
+**5. Against a running ord.** This package has no regtest suite of its own. The
+regtest suites of `@sundial-protocol/solstice` and the CLI broadcast real
+transactions built with this codec and ask a live `ord` index what it recorded:
+that the rune exists, with the right supply at the right address. From the
+repository root:
+
+```
+npm run regtest --workspace=@sundial-protocol/solstice
+```
+
+To check one transaction without those suites, `ord decode --txid <txid>` (or
+`--file <raw transaction>`) prints the runestone ord reads from it.
+
+### What this does not prove
+
+It covers the 64 cases above, not every possible runestone, and it pins one ord
+release. See [Limits](#limits).
 
 ## Limits
 
