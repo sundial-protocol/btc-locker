@@ -4,7 +4,7 @@ import { NETWORKS } from "../src/utils/network";
 import * as bitcoin from "bitcoinjs-lib";
 import tinysecp from "@bitcoinerlab/secp256k1";
 import { ECPairFactory } from "ecpair";
-import FeeUtils from "../src/utils/fees";
+import BitcoinAPI from "../src/bitcoin-api";
 
 describe("TransactionManager (Dawn Staking)", () => {
   let manager: TransactionManager;
@@ -437,7 +437,7 @@ describe("TransactionManager (mocked fees)", () => {
     testAddress2 = makeAddress();
     testAddress3 = makeAddress();
 
-    vi.spyOn(FeeUtils, "queryChainFeeRates").mockResolvedValue(10);
+    vi.spyOn(BitcoinAPI.prototype, "queryChainFeeRates").mockResolvedValue(10);
 
     manager = new TransactionManager(NETWORKS.testnet);
     await manager.init();

@@ -7,6 +7,7 @@
 
 import { NETWORKS, type BitcoinNetwork, type NetworkName } from "./network.js";
 import { transactionId } from "./txid.js";
+import { FeePriorities, defaultFeeRate, feeRateForPriority } from "./fees.js";
 
 /**
  * Bitcoin UTXO with API status information
@@ -501,6 +502,20 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
     return this.tryProviders("get fee estimates", (provider) =>
       this.sendJson(provider, "/fee-estimates")
     );
+  }
+
+  /**
+   * Fee rate in sat/vB for a priority, from this API's providers. When none
+   * of them answers, the matching default rate is returned.
+   */
+  async queryChainFeeRates(
+    priority: FeePriorities = FeePriorities.MEDIUM,
+  ): Promise<number> {
+    try {
+      return feeRateForPriority(await this.getFeeEstimates(), priority);
+    } catch {
+      return defaultFeeRate(priority);
+    }
   }
 
   /**

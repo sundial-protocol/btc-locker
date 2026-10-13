@@ -35,11 +35,9 @@ CI runs it as the `regtest-core` job in `.github/workflows/ci.yml`.
 The suite does not change that. It builds the locker with an API object of its
 own, `new BTCLocker(NETWORKS.regtest, api)`, where `api` is the harness's
 `esploraOverRpc` (bitcoind's RPC behind `BitcoinAPI`'s method names) plus
-`networkType` and `provider`, cast to `BitcoinAPI`.
-
-`FeeUtils.queryChainFeeRates` is replaced with a fixed 3 sat/vB for the run,
-because regtest has no fee market and two builders would otherwise ask
-mempool.space (see below).
+`networkType`, `provider` and a `queryChainFeeRates` that answers a fixed
+3 sat/vB, cast to `BitcoinAPI`. Regtest has no fee market, and every builder
+asks the locker's API for its fee rate.
 
 ## Found by this suite, 2026-10-07
 
@@ -58,13 +56,16 @@ Fixed, each with a unit test:
    caller passed, and a locker could not be created for regtest at all. The
    components now share the locker's API (`tests/locker-index.test.ts`).
 
+3. **Distribute and withdraw asked for mainnet fee rates on every network.**
+   They called `FeeUtils.queryChainFeeRates(priority)` without the network, and
+   the default was mainnet. None of the four builders used the injected API for
+   fees: the function always created its own `BitcoinAPI`. Fixed 2026-10-13 by
+   moving the lookup to `BitcoinAPI.queryChainFeeRates` in
+   `@sundial-protocol/btc-provider`; all four builders now ask the locker's own
+   API, so its network, providers and fallback apply.
+
 Not fixed:
 
-3. **Distribute and withdraw ask for mainnet fee rates on every network.** They
-   call `FeeUtils.queryChainFeeRates(priority)` without the network, and the
-   default is mainnet. Deposit and claim pass the network. None of the four uses
-   the injected API for fees: `queryChainFeeRates` always creates its own
-   `BitcoinAPI`.
 4. **Claim and withdraw do not count the metadata output in the fee.** A claim
    to a P2WPKH address with metadata is 192 to 193 vB against an estimate of 194,
    so it passes by one or two bytes. To a P2WSH or taproot address it would be

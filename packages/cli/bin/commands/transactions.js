@@ -946,7 +946,7 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
     console.log(chalk.blue("Creating spending transaction..."));
 
     // Estimate fee before building the transaction so the output value is correct
-    const feeRate = await FeeUtils.queryChainFeeRates(undefined, networkType);
+    const feeRate = await api.queryChainFeeRates();
     const inputCount = spendableUtxos.length;
     const feeAmount = FeeUtils.estimateFee(inputCount, 1, feeRate);
     const outputValue = totalInputValue - feeAmount;

@@ -85,7 +85,7 @@ export async function createDistributionTransaction(
 
   const psbt = new bitcoin.Psbt({ network: ctx.network });
 
-  const feeRate = await FeeUtils.queryChainFeeRates(priority);
+  const feeRate = await ctx.api.queryChainFeeRates(priority);
   const outputCount = TransactionUtils.countOutputs(1, [
     protocolFeeAmount && feeAddress,
     metadata,

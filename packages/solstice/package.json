@@ -43,6 +43,7 @@
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.2.0",
     "@sundial-protocol/btc-locker": "*",
+    "@sundial-protocol/btc-provider": "*",
     "@sundial-protocol/btc-runes": "*",
     "bitcoinjs-lib": "^7.0.0"
   },
