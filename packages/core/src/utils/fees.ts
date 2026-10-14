@@ -1,11 +1,28 @@
-import {
-  DEFAULT_CHAIN_FEE_RATES,
-  FeePriorities,
-} from "@sundial-protocol/btc-provider";
+import { FeePriorities } from "@sundial-protocol/btc-provider";
 
 // Fee priorities and the chain fee lookup live in @sundial-protocol/btc-provider:
 // ask a `BitcoinAPI` with `api.queryChainFeeRates(priority)`.
 export { FeePriorities };
+
+/**
+ * The locker's fallback chain fee rates (sat/vB), for when no fee provider
+ * answers. The provider package has none of its own: the locker's
+ * `BitcoinAPI` passes these to it.
+ */
+export const DEFAULT_CHAIN_FEE_RATES = {
+  fastestFee: 20,
+  halfHourFee: 15,
+  hourFee: 10,
+  economyFee: 5,
+  minimumFee: 1,
+};
+
+/** {@link DEFAULT_CHAIN_FEE_RATES} by priority, as the provider takes them. */
+export const FALLBACK_FEE_RATES: Record<FeePriorities, number> = {
+  [FeePriorities.HIGH]: DEFAULT_CHAIN_FEE_RATES.fastestFee,
+  [FeePriorities.MEDIUM]: DEFAULT_CHAIN_FEE_RATES.hourFee,
+  [FeePriorities.LOW]: DEFAULT_CHAIN_FEE_RATES.economyFee,
+};
 
 /**
  * Fee calculation and transaction utilities

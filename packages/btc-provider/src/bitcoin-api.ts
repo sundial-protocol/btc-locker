@@ -7,12 +7,12 @@
 
 import { NETWORKS, type BitcoinNetwork, type NetworkName } from "./network.js";
 import { transactionId } from "./txid.js";
-import { FeePriorities, defaultFeeRate, feeRateForPriority } from "./fees.js";
+import { FeePriorities, feeRateForPriority } from "./fees.js";
 import {
   HEADER_HEX_LENGTH,
   blockHashOfHeader,
   headerMeetsItsTarget,
-  merkleBlockNames,
+  merkleBlockTransactions,
   previousBlockHashOfHeader,
   workOfBits,
   workOfHeader,
@@ -86,6 +86,17 @@ export interface BitcoinAPIOptions {
    * the provider that failed and its error.
    */
   onFallback?: (provider: ApiProvider, error: BitcoinAPIError) => void;
+  /**
+   * The User-Agent sent with each request outside a browser (browsers refuse
+   * one set by a page). Defaults to "btc-provider"; null sends none.
+   */
+  userAgent?: string | null;
+  /**
+   * Fee rates in sat/vB, by priority, for `queryChainFeeRates` to return when
+   * no provider answers. Without them it throws the providers' error, so a
+   * caller never gets a rate it did not choose.
+   */
+  fallbackFeeRates?: Record<FeePriorities, number>;
 }
 
 /**
@@ -178,7 +189,7 @@ const BASE_URLS: ApiUrls = {
 // Browsers refuse a User-Agent set by a page, so it is only sent elsewhere.
 const IN_BROWSER =
   typeof (globalThis as { document?: unknown }).document !== "undefined";
-const USER_AGENT = "btc-locker-cli/1.0.0";
+const DEFAULT_USER_AGENT = "btc-provider";
 
 /**
  * Whether a failure says the provider is the problem, so the next one is worth
@@ -217,6 +228,8 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
   private fetchFn: typeof fetch;
   private timeoutMs: number;
   private onFallback?: BitcoinAPIOptions["onFallback"];
+  private userAgent: string | null;
+  private fallbackFeeRates?: Record<FeePriorities, number>;
 
   /**
    * @param network - A network name ("bitcoin", "testnet", "testnet4") or an
@@ -273,6 +286,9 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
     this.apiProviders = serving;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.onFallback = options.onFallback;
+    this.userAgent =
+      options.userAgent === undefined ? DEFAULT_USER_AGENT : options.userAgent;
+    this.fallbackFeeRates = options.fallbackFeeRates;
     this.fetchFn =
       options.fetch ??
       ((input, init) => {
@@ -297,7 +313,7 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
   ): Promise<string> {
     const headers: Record<string, string> = {};
     if (contentType) headers["Content-Type"] = contentType;
-    if (!IN_BROWSER) headers["User-Agent"] = USER_AGENT;
+    if (!IN_BROWSER && this.userAgent) headers["User-Agent"] = this.userAgent;
 
     let response: Response;
     let text: string;
@@ -555,15 +571,18 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
 
   /**
    * Fee rate in sat/vB for a priority, from this API's providers. When none
-   * of them answers, the matching default rate is returned.
+   * of them answers, the `fallbackFeeRates` given to the constructor are used;
+   * without them, the providers' error is thrown.
    */
   async queryChainFeeRates(
     priority: FeePriorities = FeePriorities.MEDIUM,
   ): Promise<number> {
     try {
       return feeRateForPriority(await this.getFeeEstimates(), priority);
-    } catch {
-      return defaultFeeRate(priority);
+    } catch (error) {
+      const fallback = this.fallbackFeeRates?.[priority];
+      if (fallback === undefined) throw error;
+      return fallback;
     }
   }
 
@@ -707,10 +726,19 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
 
     const changed = `${cannot}: the pieces do not fit together. The chain may have changed while they were read; try again.`;
     // The transaction returned is the one asked for, and the proof shows it
-    // in a block: the block the provider said it is in.
+    // in a block: the block the provider said it is in. The proof matches that
+    // transaction and no other, the smallest proof there is, which also
+    // satisfies a verifier that reads only the first match, as Charms does.
+    let matched: string[] = [];
+    try {
+      matched = merkleBlockTransactions(proof);
+    } catch {
+      // A malformed proof matches nothing, and fails below.
+    }
     if (
       transactionId(tx) !== txid.toLowerCase() ||
-      !merkleBlockNames(proof, txid)
+      matched.length !== 1 ||
+      matched[0] !== txid.toLowerCase()
     ) {
       throw new Error(changed);
     }

@@ -1,20 +1,20 @@
 import { describe, expect, test, vi } from "vitest";
 import BitcoinAPI from "../src/bitcoin-api";
-import {
-  DEFAULT_CHAIN_FEE_RATES,
-  FeePriorities,
-  defaultFeeRate,
-  feeRateForPriority,
-} from "../src/fees";
+import { FeePriorities, feeRateForPriority } from "../src/fees";
 
 /** Fee estimates as Esplora returns them: sat/vB by confirmation target. */
 const ESTIMATES = { 1: 25.4, 2: 22, 3: 18.2, 6: 12, 12: 6.1, 144: 2 };
 
 /** An API whose every request is answered by `respond`. */
-function apiAnswering(respond: (url: string) => Response, providers?: ("mempool" | "blockstream")[]) {
+function apiAnswering(
+  respond: (url: string) => Response,
+  providers?: ("mempool" | "blockstream")[],
+  fallbackFeeRates?: Record<FeePriorities, number>,
+) {
   const fetch = vi.fn(async (url: string) => respond(url));
   const api = new BitcoinAPI("testnet", providers ?? "mempool", {
     fetch: fetch as unknown as typeof globalThis.fetch,
+    fallbackFeeRates,
   });
   return { api, fetch };
 }
@@ -52,13 +52,9 @@ describe("feeRateForPriority", () => {
     expect(feeRateForPriority({ 1: 20 }, FeePriorities.MEDIUM)).toBe(14);
     expect(feeRateForPriority({ 1: 20 }, FeePriorities.LOW)).toBe(7);
   });
-});
 
-describe("defaultFeeRate", () => {
-  test("uses the shared fallback rates", () => {
-    expect(defaultFeeRate(FeePriorities.HIGH)).toBe(DEFAULT_CHAIN_FEE_RATES.fastestFee);
-    expect(defaultFeeRate(FeePriorities.MEDIUM)).toBe(DEFAULT_CHAIN_FEE_RATES.hourFee);
-    expect(defaultFeeRate(FeePriorities.LOW)).toBe(DEFAULT_CHAIN_FEE_RATES.economyFee);
+  test("has no rate of its own to give when there are no estimates", () => {
+    expect(() => feeRateForPriority({}, FeePriorities.HIGH)).toThrow("no fee estimates");
   });
 });
 
@@ -87,10 +83,20 @@ describe("BitcoinAPI.queryChainFeeRates", () => {
     ]);
   });
 
-  test("returns the default rate when no provider answers", async () => {
+  test("throws when no provider answers and the caller gave no fallback", async () => {
     const { api } = apiAnswering(() => new Response("down", { status: 503 }));
-    expect(await api.queryChainFeeRates(FeePriorities.HIGH)).toBe(20);
-    expect(await api.queryChainFeeRates(FeePriorities.MEDIUM)).toBe(10);
-    expect(await api.queryChainFeeRates(FeePriorities.LOW)).toBe(5);
+    await expect(api.queryChainFeeRates(FeePriorities.HIGH)).rejects.toThrow("Failed to get fee estimates");
+    const empty = apiAnswering(() => json({})).api;
+    await expect(empty.queryChainFeeRates()).rejects.toThrow("no fee estimates");
+  });
+
+  test("returns the caller's fallback rate when no provider answers", async () => {
+    const fallback = { high: 30, medium: 12, low: 3 };
+    const { api } = apiAnswering(() => new Response("down", { status: 503 }), undefined, fallback);
+    expect(await api.queryChainFeeRates(FeePriorities.HIGH)).toBe(30);
+    expect(await api.queryChainFeeRates(FeePriorities.MEDIUM)).toBe(12);
+    expect(await api.queryChainFeeRates(FeePriorities.LOW)).toBe(3);
+    const empty = apiAnswering(() => json({}), undefined, fallback).api;
+    expect(await empty.queryChainFeeRates()).toBe(12);
   });
 });

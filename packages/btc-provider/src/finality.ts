@@ -168,13 +168,14 @@ export function merkleBlockTransactions(proofHex: string): string[] {
 
 /**
  * Whether a merkle block proves a transaction is in its block: the block is
- * well formed, its tree hashes to the header's merkle root, and the first
- * transaction it matches is this one. That is the test Charms applies.
+ * well formed, its tree hashes to the header's merkle root, and the
+ * transaction is among those it matches. A verifier with a stricter rule, such
+ * as only the first match counting, applies it to `merkleBlockTransactions`.
  */
 export function merkleBlockNames(proofHex: string, txid: string): boolean {
   if (!/^[0-9a-fA-F]{64}$/.test(txid)) return false;
   try {
-    return merkleBlockTransactions(proofHex)[0] === txid.toLowerCase();
+    return merkleBlockTransactions(proofHex).includes(txid.toLowerCase());
   } catch {
     return false;
   }

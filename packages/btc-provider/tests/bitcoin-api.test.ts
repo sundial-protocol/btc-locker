@@ -148,9 +148,21 @@ describe("BitcoinAPI", () => {
     test("should send a User-Agent outside the browser", async () => {
       mockRequest("{}");
       await new BitcoinAPI("testnet").makeRequest("/test");
-      expect(call(fetchMock).headers["User-Agent"]).toBe(
-        "btc-locker-cli/1.0.0"
+      expect(call(fetchMock).headers["User-Agent"]).toBe("btc-provider");
+    });
+
+    test("should send the caller's User-Agent, or none", async () => {
+      mockRequest("{}");
+      await new BitcoinAPI("testnet", undefined, {
+        userAgent: "sunbeam-worker/0.1",
+      }).makeRequest("/test");
+      expect(call(fetchMock).headers["User-Agent"]).toBe("sunbeam-worker/0.1");
+
+      mockRequest("{}");
+      await new BitcoinAPI("testnet", undefined, { userAgent: null }).makeRequest(
+        "/test"
       );
+      expect(call(fetchMock, 1).headers).not.toHaveProperty("User-Agent");
     });
 
     test("should report the cause of a failed fetch", async () => {

@@ -12,6 +12,7 @@ import {
 } from "../src/finality";
 import recorded from "./finality-fixture.json";
 import { LEGACY_TX } from "./fixtures";
+import { sha256 } from "../src/txid";
 
 // The work Charms requires: FINALITY_TARGET_BITS in charms-client's
 // bitcoin_tx.rs. The package takes it from the caller; it is here as the
@@ -87,12 +88,16 @@ function mineHeader(previousHash: string, merkleRoot: string, bits: number): str
  * A chain like a test network's: the transaction is alone in a block of the
  * least work there is, and the blocks after it are about 128 times harder.
  */
-function unevenChain(blocksAfter: number) {
+function unevenChain(blocksAfter: number, alsoMatched?: string) {
   const EASY = 0x207fffff; // work 2
   const HARD = 0x2000ffff; // work 256
-  const txBlock = mineHeader("00".repeat(32), txid, EASY);
   // One transaction: its hash is the merkle root, matched by a single flag.
-  const merkleBlock = txBlock + le(1, 4) + "01" + reversed(txid) + "01" + "01";
+  // With `alsoMatched`, two: that one and then ours, both matched.
+  const root = alsoMatched ? merkleParent(alsoMatched, txid) : txid;
+  const txBlock = mineHeader("00".repeat(32), root, EASY);
+  const merkleBlock = alsoMatched
+    ? txBlock + le(2, 4) + "02" + reversed(alsoMatched) + reversed(txid) + "01" + "07"
+    : txBlock + le(1, 4) + "01" + reversed(txid) + "01" + "01";
   const chainStatus = { confirmed: true, block_height: 100, block_hash: blockHashOfHeader(txBlock) };
   const after: { hash: string; header: string }[] = [];
   for (let i = 0; i < blocksAfter; i++) {
@@ -116,6 +121,12 @@ function unevenChain(blocksAfter: number) {
   });
   const api = new BitcoinAPI("bitcoin", "mempool", { fetch: fetch as unknown as typeof globalThis.fetch });
   return { api, asked, merkleBlock, headers: after.map((b) => b.header) };
+}
+
+/** The merkle node over two txids, as a txid (byte-reversed hex). */
+function merkleParent(left: string, right: string): string {
+  const bytes = Uint8Array.from(Buffer.from(reversed(left) + reversed(right), "hex"));
+  return reversed(Buffer.from(sha256(sha256(bytes))).toString("hex"));
 }
 
 /** A header that is `header` with one byte of its nonce changed. */
@@ -225,6 +236,14 @@ describe("merkle blocks", () => {
     expect(merkleBlockTransactions(proof)).toEqual([txid]);
     expect(merkleBlockNames(proof, txid)).toBe(true);
     expect(merkleBlockNames(proof, txid.toUpperCase())).toBe(true);
+  });
+
+  test("prove every transaction they match, not only the first", () => {
+    const other = "cd".repeat(32);
+    const { merkleBlock } = unevenChain(0, other);
+    expect(merkleBlockTransactions(merkleBlock)).toEqual([other, txid]);
+    expect(merkleBlockNames(merkleBlock, other)).toBe(true);
+    expect(merkleBlockNames(merkleBlock, txid)).toBe(true);
   });
 
   test("do not prove a transaction that is not matched", () => {
@@ -390,6 +409,15 @@ describe("getFinalityProof", () => {
       );
       expect(asked.filter((path) => path.endsWith("/header"))).toHaveLength(36);
     });
+  });
+
+  test("refuses a proof that matches another transaction too", async () => {
+    // A verifier reading only the first match, as Charms does, would see the
+    // other transaction here. The proof returned matches ours alone.
+    const { api } = unevenChain(4, "cd".repeat(32));
+    await expect(api.getFinalityProof(txid, { headerCount: 2 })).rejects.toThrow(
+      "the pieces do not fit together",
+    );
   });
 
   test("an exact count: six headers need 7 confirmations", async () => {

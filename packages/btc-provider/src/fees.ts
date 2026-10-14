@@ -15,31 +15,6 @@ export enum FeePriorities {
 }
 
 /**
- * Fallback chain fee rates (sat/vB) used when no provider returns fee estimates.
- * Shared so all fallbacks stay in sync.
- */
-export const DEFAULT_CHAIN_FEE_RATES = {
-  fastestFee: 20,
-  halfHourFee: 15,
-  hourFee: 10,
-  economyFee: 5,
-  minimumFee: 1,
-};
-
-/** The rate used for a priority when the chain could not be asked. */
-export function defaultFeeRate(priority: FeePriorities): number {
-  switch (priority) {
-    case FeePriorities.HIGH:
-      return DEFAULT_CHAIN_FEE_RATES.fastestFee;
-    case FeePriorities.LOW:
-      return DEFAULT_CHAIN_FEE_RATES.economyFee;
-    case FeePriorities.MEDIUM:
-    default:
-      return DEFAULT_CHAIN_FEE_RATES.hourFee;
-  }
-}
-
-/**
  * Pick the rate for a priority out of fee estimates keyed by confirmation
  * target in blocks, in sat/vB.
  */
@@ -60,11 +35,13 @@ export function feeRateForPriority(
     .map(Number)
     .sort((a, b) => a - b);
 
+  // No estimates is no answer: the caller's fallback, if any, applies.
+  if (blockTargets.length === 0) {
+    throw new Error("The provider returned no fee estimates.");
+  }
+
   // High priority: 1-2 blocks (next block confirmation)
-  result.high =
-    feeEstimates[1] || feeEstimates[2] || blockTargets[0]
-      ? feeEstimates[blockTargets[0]]
-      : DEFAULT_CHAIN_FEE_RATES.fastestFee;
+  result.high = feeEstimates[blockTargets[0]];
 
   // Medium priority: 3-6 blocks
   const mediumTarget = blockTargets.find((target) => target >= 3 && target <= 6);
