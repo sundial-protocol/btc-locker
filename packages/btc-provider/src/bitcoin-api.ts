@@ -9,7 +9,6 @@ import { NETWORKS, type BitcoinNetwork, type NetworkName } from "./network.js";
 import { transactionId } from "./txid.js";
 import { FeePriorities, defaultFeeRate, feeRateForPriority } from "./fees.js";
 import {
-  CHARMS_FINALITY_TARGET_BITS,
   HEADER_HEX_LENGTH,
   blockHashOfHeader,
   headerMeetsItsTarget,
@@ -119,24 +118,37 @@ export class BitcoinAPIError extends Error {
   }
 }
 
-export interface FinalityProofOptions {
-  /**
-   * Exactly this many headers after the transaction's block, whatever work
-   * they hold. Without it, headers are added until the work is enough.
-   */
-  headerCount?: number;
-  /**
-   * The work to reach, as compact target bits. Defaults to what Charms
-   * requires ({@link CHARMS_FINALITY_TARGET_BITS}). Ignored with `headerCount`.
-   */
-  targetBits?: number;
-  /**
-   * The most headers to fetch while adding up work (default 36). On a network
-   * whose difficulty is far below the target, the work is never enough, and
-   * the call fails after fetching this many.
-   */
-  maxHeaders?: number;
-}
+/**
+ * How many headers a finality proof carries. The caller says what its verifier
+ * requires: either an exact count, or the work to reach. This package does not
+ * know any verifier's rule.
+ */
+export type FinalityProofOptions =
+  | {
+      /**
+       * Exactly this many headers after the transaction's block, whatever work
+       * they hold.
+       */
+      headerCount: number;
+      targetBits?: never;
+      maxHeaders?: never;
+    }
+  | {
+      /**
+       * The work to reach, as compact target bits: headers are added until the
+       * transaction's block and the blocks after it hold at least the work of
+       * this target. Charms, for example, sets this as `FINALITY_TARGET_BITS`
+       * in charms-client's `bitcoin_tx.rs`.
+       */
+      targetBits: number;
+      /**
+       * The most headers to fetch while adding up work (default 36). On a
+       * network whose difficulty is far below the target, the work is never
+       * enough, and the call fails after fetching this many.
+       */
+      maxHeaders?: number;
+      headerCount?: never;
+    };
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -620,10 +632,10 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
    * transaction, the proof that its block includes it, and the headers of the
    * blocks mined after that block.
    *
-   * By default the headers are as many as it takes for the transaction's block
-   * and the blocks after it to hold the work Charms requires. That is six on
-   * mainnet at the difficulty of 2026-10, and more if difficulty falls. Pass a
-   * number, or `headerCount`, for an exact count instead.
+   * The caller says how many headers its verifier needs. With `targetBits`,
+   * the headers are as many as it takes for the transaction's block and the
+   * blocks after it to hold the work of that target. With a number, or
+   * `headerCount`, there are exactly that many.
    *
    * The pieces are checked against each other before they are returned: the
    * transaction hashes to the id asked for, the merkle block is for its block
@@ -632,19 +644,35 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
    * each one builds on the one before. Providers are not trusted to agree, and
    * the chain can change between two requests.
    *
-   * @throws If the transaction is unconfirmed, if there are not yet enough
-   * blocks after it, or if the pieces do not fit together.
+   * @throws If neither a count nor a target is given, if the transaction is
+   * unconfirmed, if there are not yet enough blocks after it, or if the pieces
+   * do not fit together.
    */
   async getFinalityProof(
     txid: string,
-    options: number | FinalityProofOptions = {}
+    options: number | FinalityProofOptions
   ): Promise<FinalityProof> {
     const {
       headerCount,
-      targetBits = CHARMS_FINALITY_TARGET_BITS,
+      targetBits,
       maxHeaders = DEFAULT_MAX_FINALITY_HEADERS,
-    }: FinalityProofOptions =
-      typeof options === "number" ? { headerCount: options } : options;
+    }: Partial<{ headerCount: number; targetBits: number; maxHeaders: number }> =
+      typeof options === "number" ? { headerCount: options } : options ?? {};
+    if ((headerCount === undefined) === (targetBits === undefined)) {
+      throw new Error(
+        "getFinalityProof needs either headerCount or targetBits, the work the verifier requires, and not both"
+      );
+    }
+    if (
+      targetBits !== undefined &&
+      (!Number.isInteger(targetBits) ||
+        targetBits <= 0 ||
+        targetBits > 0xffffffff)
+    ) {
+      throw new Error("targetBits must be compact target bits, a 32-bit unsigned integer");
+    }
+    // The work to reach; not used when an exact count is given.
+    const required = targetBits === undefined ? 0n : workOfBits(targetBits);
     if (
       headerCount !== undefined &&
       (!Number.isInteger(headerCount) || headerCount < 0)
@@ -726,7 +754,6 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
       return { tx, proof, headers };
     }
 
-    const required = workOfBits(targetBits);
     // No block's work says what the next one holds: difficulty changes, and a
     // test network mixes minimum-difficulty blocks with real ones. So the only
     // limits are the tip and maxHeaders, and the work is whatever the headers

@@ -1,7 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import BitcoinAPI from "../src/bitcoin-api";
 import {
-  CHARMS_FINALITY_TARGET_BITS,
   blockHashOfHeader,
   headerMeetsItsTarget,
   merkleBlockNames,
@@ -13,6 +12,12 @@ import {
 } from "../src/finality";
 import recorded from "./finality-fixture.json";
 import { LEGACY_TX } from "./fixtures";
+
+// The work Charms requires: FINALITY_TARGET_BITS in charms-client's
+// bitcoin_tx.rs. The package takes it from the caller; it is here as the
+// realistic case the recorded mainnet fixture was checked against.
+const CHARMS_FINALITY_TARGET_BITS = 0x16507000;
+const CHARMS = { targetBits: CHARMS_FINALITY_TARGET_BITS };
 
 const { txid, status, tx, proof, blocks } = recorded;
 const HEIGHT = status.block_height;
@@ -286,7 +291,7 @@ describe("proof of work", () => {
 describe("getFinalityProof", () => {
   test("returns the transaction, its merkle block and the headers that reach Charms' work", async () => {
     const { api } = chain(6);
-    expect(await api.getFinalityProof(txid)).toEqual({ tx, proof, headers });
+    expect(await api.getFinalityProof(txid, CHARMS)).toEqual({ tx, proof, headers });
   });
 
   test("stops at enough work, though more blocks exist", async () => {
@@ -310,7 +315,24 @@ describe("getFinalityProof", () => {
       [`/tx/${upper}/hex`]: () => text(tx),
       [`/tx/${upper}/merkleblock-proof`]: () => text(proof),
     });
-    expect(await api.getFinalityProof(upper)).toEqual({ tx, proof, headers });
+    expect(await api.getFinalityProof(upper, CHARMS)).toEqual({ tx, proof, headers });
+  });
+
+  test("needs the caller to say how many headers: a count or a target, not neither or both", async () => {
+    const { api, asked } = chain(6);
+    const message = "getFinalityProof needs either headerCount or targetBits";
+    // @ts-expect-error The options are required.
+    await expect(api.getFinalityProof(txid)).rejects.toThrow(message);
+    // @ts-expect-error One of the two is required.
+    await expect(api.getFinalityProof(txid, { maxHeaders: 6 })).rejects.toThrow(message);
+    await expect(
+      // @ts-expect-error The two exclude each other.
+      api.getFinalityProof(txid, { headerCount: 6, targetBits: CHARMS_FINALITY_TARGET_BITS }),
+    ).rejects.toThrow(message);
+    await expect(api.getFinalityProof(txid, { targetBits: -1 })).rejects.toThrow(
+      "targetBits must be compact target bits",
+    );
+    expect(asked).toEqual([]);
   });
 
   test("takes the number of headers", async () => {
@@ -324,21 +346,21 @@ describe("getFinalityProof", () => {
 
   test("refuses an unconfirmed transaction", async () => {
     const { api } = chain(6, { [`/tx/${txid}/status`]: () => json({ confirmed: false }) });
-    await expect(api.getFinalityProof(txid)).rejects.toThrow(
+    await expect(api.getFinalityProof(txid, CHARMS)).rejects.toThrow(
       `Cannot build a finality proof for ${txid}: it is not confirmed.`,
     );
   });
 
   test("refuses while the blocks after it do not hold enough work", async () => {
     const { api } = chain(5);
-    await expect(api.getFinalityProof(txid)).rejects.toThrow(
+    await expect(api.getFinalityProof(txid, CHARMS)).rejects.toThrow(
       "its block and the 5 block(s) after it hold 88.8% of the work required. It has 6 confirmation(s); wait for more.",
     );
   });
 
   test("gives up at maxHeaders, having counted the work of every header it may fetch", async () => {
     const { api, asked } = chain(6);
-    await expect(api.getFinalityProof(txid, { maxHeaders: 3 })).rejects.toThrow(
+    await expect(api.getFinalityProof(txid, { ...CHARMS, maxHeaders: 3 })).rejects.toThrow(
       "its block and the 3 block(s) after it hold 59.2% of the work required, after 3 header(s), the most this call fetches.",
     );
     expect(asked.filter((path) => path.endsWith("/header"))).toHaveLength(3);
@@ -389,7 +411,7 @@ describe("getFinalityProof", () => {
     const { api } = chain();
     await expect(api.getFinalityProof(txid, -1)).rejects.toThrow("non-negative integer");
     await expect(api.getFinalityProof(txid, 1.5)).rejects.toThrow("non-negative integer");
-    await expect(api.getFinalityProof(txid, { maxHeaders: -1 })).rejects.toThrow(
+    await expect(api.getFinalityProof(txid, { ...CHARMS, maxHeaders: -1 })).rejects.toThrow(
       "maxHeaders must be a non-negative integer",
     );
   });
@@ -399,7 +421,7 @@ describe("getFinalityProof", () => {
 
     test("a transaction other than the one asked for", async () => {
       const { api } = chain(6, { [`/tx/${txid}/hex`]: () => text(LEGACY_TX.hex) });
-      await expect(api.getFinalityProof(txid)).rejects.toThrow(mismatch);
+      await expect(api.getFinalityProof(txid, CHARMS)).rejects.toThrow(mismatch);
     });
 
     test("a merkle block that does not name the transaction", async () => {
@@ -409,7 +431,7 @@ describe("getFinalityProof", () => {
       const { api } = chain(6, {
         [`/tx/${txid}/merkleblock-proof`]: () => text(proof.replace(inBlockOrder, "00".repeat(32))),
       });
-      await expect(api.getFinalityProof(txid)).rejects.toThrow(mismatch);
+      await expect(api.getFinalityProof(txid, CHARMS)).rejects.toThrow(mismatch);
     });
 
     test("a merkle block whose tree does not lead to the header's root", async () => {
@@ -421,14 +443,14 @@ describe("getFinalityProof", () => {
       const forged = proof.slice(0, at + n * 64) + "11".repeat(32) + proof.slice(at + (n + 1) * 64);
       expect(forged).toContain(inBlockOrder);
       const { api } = chain(6, { [`/tx/${txid}/merkleblock-proof`]: () => text(forged) });
-      await expect(api.getFinalityProof(txid)).rejects.toThrow(mismatch);
+      await expect(api.getFinalityProof(txid, CHARMS)).rejects.toThrow(mismatch);
     });
 
     test("a header that is not the block asked for", async () => {
       const { api } = chain(6, {
         [`/block/${blocks[2].hash}/header`]: () => text(tampered(blocks[2].header)),
       });
-      await expect(api.getFinalityProof(txid)).rejects.toThrow(mismatch);
+      await expect(api.getFinalityProof(txid, CHARMS)).rejects.toThrow(mismatch);
     });
 
     test("a block that does not build on the one before", async () => {
@@ -436,14 +458,14 @@ describe("getFinalityProof", () => {
       const { api } = chain(6, {
         [`/block-height/${blocks[1].height}`]: () => text(blocks[2].hash),
       });
-      await expect(api.getFinalityProof(txid)).rejects.toThrow(mismatch);
+      await expect(api.getFinalityProof(txid, CHARMS)).rejects.toThrow(mismatch);
     });
 
     test("a merkle block for another block", async () => {
       const { api } = chain(6, {
         [`/tx/${txid}/merkleblock-proof`]: () => text(blocks[0].header + proof.slice(160)),
       });
-      await expect(api.getFinalityProof(txid)).rejects.toThrow(mismatch);
+      await expect(api.getFinalityProof(txid, CHARMS)).rejects.toThrow(mismatch);
     });
   });
 
@@ -451,7 +473,7 @@ describe("getFinalityProof", () => {
     const { api } = chain(6, {
       [`/tx/${txid}/merkleblock-proof`]: () => new Response("down", { status: 503 }),
     });
-    await expect(api.getFinalityProof(txid)).rejects.toThrow(
+    await expect(api.getFinalityProof(txid, CHARMS)).rejects.toThrow(
       "Failed to get merkle block proof: API Error 503",
     );
   });

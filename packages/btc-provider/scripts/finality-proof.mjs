@@ -4,28 +4,31 @@
  * from each provider, and check the two agree. Not run in CI: it needs the
  * network. Build the package first.
  *
- *   node scripts/finality-proof.mjs <txid> [network] [headers]
+ *   node scripts/finality-proof.mjs <txid> <network> <headers | target bits>
  *
- * `network` is bitcoin (default), testnet or testnet4. `headers` is an exact
- * count; without it, headers are added until the work Charms requires is
- * reached, which only mainnet can do. Prints the proof as JSON.
+ * `network` is bitcoin, testnet or testnet4. The last argument says how many
+ * headers: a decimal number is an exact count, and a hex value with `0x` is
+ * the compact target bits whose work the headers must reach. For Charms, pass
+ * its FINALITY_TARGET_BITS from charms-client's bitcoin_tx.rs (0x16507000 on
+ * 2026-10-14); only mainnet reaches it. Prints the proof as JSON.
  * Exits 1 if the providers disagree or a provider fails.
  */
 
 import { BitcoinAPI } from "../dist/esm/index.js";
 
-const [txid, network = "bitcoin", headers] = process.argv.slice(2);
-if (!txid) {
-  console.error("usage: node scripts/finality-proof.mjs <txid> [network] [headers]");
+const [txid, network, size] = process.argv.slice(2);
+if (!txid || !network || !size) {
+  console.error("usage: node scripts/finality-proof.mjs <txid> <network> <headers | 0x target bits>");
   process.exit(2);
 }
+const options = size.startsWith("0x") ? { targetBits: Number(size) } : Number(size);
 
 const providers = new BitcoinAPI(network).providers;
 const proofs = [];
 for (const provider of providers) {
   const api = new BitcoinAPI(network, provider);
   const started = Date.now();
-  const proof = await api.getFinalityProof(txid, headers === undefined ? {} : Number(headers));
+  const proof = await api.getFinalityProof(txid, options);
   console.error(
     `${provider}: tx ${proof.tx.length / 2} bytes, proof ${proof.proof.length / 2} bytes, ` +
       `${proof.headers.length} headers, ${await api.getConfirmations(txid)} confirmations, ` +

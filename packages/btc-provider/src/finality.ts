@@ -189,14 +189,6 @@ export function previousBlockHashOfHeader(headerHex: string): string {
 
 // ── Proof of work ────────────────────────────────────────────────────────────
 
-/**
- * The work Charms requires of a Bitcoin finality proof, as compact target bits:
- * `FINALITY_TARGET_BITS` in charms-client's `bitcoin_tx.rs`, about six blocks
- * at the mainnet difficulty of the time it was set. The transaction's block and
- * the headers after it must add up to at least the work of this target.
- */
-export const CHARMS_FINALITY_TARGET_BITS = 0x16507000;
-
 /** The target a compact `bits` value stands for. A hash must not exceed it. */
 export function targetOfBits(bits: number): bigint {
   const exponent = bits >>> 24;

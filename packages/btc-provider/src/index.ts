@@ -11,7 +11,6 @@ export { BitcoinAPIError } from "./bitcoin-api.js";
 export { transactionId } from "./txid.js";
 export { FeePriorities, DEFAULT_CHAIN_FEE_RATES } from "./fees.js";
 export {
-  CHARMS_FINALITY_TARGET_BITS,
   blockHashOfHeader,
   headerMeetsItsTarget,
   merkleBlockNames,
