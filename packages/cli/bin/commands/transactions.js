@@ -10,6 +10,7 @@ import {
   ScriptUtils,
   TransactionUtils,
   FeeUtils,
+  FeePriorities,
 } from "@sundial-protocol/btc-locker";
 import BitcoinAPI from "@sundial-protocol/btc-locker/bitcoin-api";
 import { NETWORKS } from "@sundial-protocol/btc-locker/utils/network";
@@ -255,15 +256,16 @@ function calculateTransactionFee(signedTxHex, inputUtxos) {
 }
 
 /**
- * Convert priority string to enum value
+ * Convert a --priority string to a FeePriorities value. An unknown one is
+ * medium.
  */
 function parsePriority(priorityStr) {
   const priorityMap = {
-    high: "HIGH",
-    medium: "MEDIUM",
-    low: "LOW",
+    high: FeePriorities.HIGH,
+    medium: FeePriorities.MEDIUM,
+    low: FeePriorities.LOW,
   };
-  return priorityMap[priorityStr.toLowerCase()] || "MEDIUM";
+  return priorityMap[priorityStr.toLowerCase()] || FeePriorities.MEDIUM;
 }
 
 async function handleLockCommand(cmdOptions, parentOptions) {
@@ -946,7 +948,7 @@ async function handleSpendCommand(cmdOptions, parentOptions) {
     console.log(chalk.blue("Creating spending transaction..."));
 
     // Estimate fee before building the transaction so the output value is correct
-    const feeRate = await api.queryChainFeeRates();
+    const feeRate = await api.queryChainFeeRates(priority);
     const inputCount = spendableUtxos.length;
     const feeAmount = FeeUtils.estimateFee(inputCount, 1, feeRate);
     const outputValue = totalInputValue - feeAmount;

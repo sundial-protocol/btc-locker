@@ -1,5 +1,11 @@
 # @sundial-protocol/btc-locker-cli
 
+## 3.0.1
+
+### Patch Changes
+
+- `--priority` now changes the fee rate. The CLI passed `"HIGH"`, `"MEDIUM"` or `"LOW"`, which are not `FeePriorities` values, so every command paid the medium rate whatever was asked, and when no fee provider answered the lookup threw instead of using the locker's fallback rates. The spend command also ignored `--priority`; it now passes it.
+
 ## 3.0.0
 
 ### Patch Changes
