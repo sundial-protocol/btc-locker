@@ -7,6 +7,7 @@
 
 import { NETWORKS, type BitcoinNetwork, type NetworkName } from "./network.js";
 import { transactionId } from "./txid.js";
+import { VERSION } from "./version.js";
 import { FeePriorities, feeRateForPriority } from "./fees.js";
 import {
   HEADER_HEX_LENGTH,
@@ -88,7 +89,9 @@ export interface BitcoinAPIOptions {
   onFallback?: (provider: ApiProvider, error: BitcoinAPIError) => void;
   /**
    * The User-Agent sent with each request outside a browser (browsers refuse
-   * one set by a page). Defaults to "btc-provider"; null sends none.
+   * one set by a page). Defaults to `btc-provider/<version> (+<repo URL>)`, so
+   * a provider can tell what is calling and where to report a problem. Set
+   * your own to label your product's traffic; null sends none.
    */
   userAgent?: string | null;
   /**
@@ -189,7 +192,7 @@ const BASE_URLS: ApiUrls = {
 // Browsers refuse a User-Agent set by a page, so it is only sent elsewhere.
 const IN_BROWSER =
   typeof (globalThis as { document?: unknown }).document !== "undefined";
-const DEFAULT_USER_AGENT = "btc-provider";
+const DEFAULT_USER_AGENT = `btc-provider/${VERSION} (+https://github.com/sundial-protocol/btc-locker)`;
 
 /**
  * Whether a failure says the provider is the problem, so the next one is worth

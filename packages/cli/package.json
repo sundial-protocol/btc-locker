@@ -1,6 +1,6 @@
 {
   "name": "@sundial-protocol/btc-locker-cli",
-  "version": "2.2.0",
+  "version": "3.0.0",
   "private": false,
   "type": "module",
   "description": "CLI for the BTC Locker Bitcoin timelock library",
