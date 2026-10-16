@@ -1,6 +1,6 @@
 {
   "name": "@sundial-protocol/btc-regtest",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local Bitcoin Core regtest (ord optional) and test helpers for Sundial packages",
   "type": "module",
   "main": "./dist/index.js",

@@ -16,7 +16,7 @@
     "docs": "typedoc",
     "demo": "npm run start --workspace=packages/demo",
     "demo:dev": "npm run dev --workspace=packages/demo",
-    "version": "changeset version",
+    "version": "changeset version && node scripts/sync-versions.mjs",
     "release": "npm run build && changeset publish",
     "test-all": "npm run type-check && npm run lint && npm run build && npm run test:coverage"
   },

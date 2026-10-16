@@ -1,6 +1,7 @@
 import { describe, test, expect } from "vitest";
 import FeeUtils from "../src/utils/fees";
-import { FeePriorities } from "../src/utils/fees";
+import { DEFAULT_CHAIN_FEE_RATES, FeePriorities } from "../src/utils/fees";
+import BitcoinAPI from "../src/bitcoin-api";
 
 describe("FeeUtils", () => {
   describe("constants", () => {
@@ -73,5 +74,25 @@ describe("FeeUtils", () => {
       const fee = FeeUtils.estimateFee(1, 1);
       expect(fee).toBe(1940);
     });
+  });
+});
+
+describe("the locker's BitcoinAPI fee fallback", () => {
+  const down = (async () => new Response("down", { status: 503 })) as unknown as typeof fetch;
+
+  test("returns the locker's default rates when no provider answers", async () => {
+    const api = new BitcoinAPI("testnet", undefined, { fetch: down });
+    expect(await api.queryChainFeeRates(FeePriorities.HIGH)).toBe(DEFAULT_CHAIN_FEE_RATES.fastestFee);
+    expect(await api.queryChainFeeRates(FeePriorities.MEDIUM)).toBe(DEFAULT_CHAIN_FEE_RATES.hourFee);
+    expect(await api.queryChainFeeRates(FeePriorities.LOW)).toBe(DEFAULT_CHAIN_FEE_RATES.economyFee);
+    expect(FeeUtils.DEFAULT_CHAIN_FEE_RATES).toBe(DEFAULT_CHAIN_FEE_RATES);
+  });
+
+  test("uses the caller's rates instead when given", async () => {
+    const api = new BitcoinAPI("testnet", undefined, {
+      fetch: down,
+      fallbackFeeRates: { high: 40, medium: 30, low: 20 },
+    });
+    expect(await api.queryChainFeeRates(FeePriorities.LOW)).toBe(20);
   });
 });

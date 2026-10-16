@@ -138,7 +138,7 @@ export async function createWithdrawalTransaction(
     0,
   );
   const totalInputValue = escrowValue + timelockValue;
-  const feeRate = await FeeUtils.queryChainFeeRates(priority);
+  const feeRate = await ctx.api.queryChainFeeRates(priority);
   const feeAmount = FeeUtils.estimateFee(
     escrowInputs.length + timelockInputs.length,
     1 + (protocolFeeAmount ? 1 : 0),

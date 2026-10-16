@@ -7,6 +7,19 @@
 
 import { NETWORKS, type BitcoinNetwork, type NetworkName } from "./network.js";
 import { transactionId } from "./txid.js";
+import { VERSION } from "./version.js";
+import { FeePriorities, feeRateForPriority } from "./fees.js";
+import {
+  HEADER_HEX_LENGTH,
+  blockHashOfHeader,
+  headerMeetsItsTarget,
+  merkleBlockTransactions,
+  previousBlockHashOfHeader,
+  workOfBits,
+  workOfHeader,
+  type FinalityProof,
+  type TransactionStatus,
+} from "./finality.js";
 
 /**
  * Bitcoin UTXO with API status information
@@ -74,6 +87,19 @@ export interface BitcoinAPIOptions {
    * the provider that failed and its error.
    */
   onFallback?: (provider: ApiProvider, error: BitcoinAPIError) => void;
+  /**
+   * The User-Agent sent with each request outside a browser (browsers refuse
+   * one set by a page). Defaults to `btc-provider/<version> (+<repo URL>)`, so
+   * a provider can tell what is calling and where to report a problem. Set
+   * your own to label your product's traffic; null sends none.
+   */
+  userAgent?: string | null;
+  /**
+   * Fee rates in sat/vB, by priority, for `queryChainFeeRates` to return when
+   * no provider answers. Without them it throws the providers' error, so a
+   * caller never gets a rate it did not choose.
+   */
+  fallbackFeeRates?: Record<FeePriorities, number>;
 }
 
 /**
@@ -106,7 +132,45 @@ export class BitcoinAPIError extends Error {
   }
 }
 
+/**
+ * How many headers a finality proof carries. The caller says what its verifier
+ * requires: either an exact count, or the work to reach. This package does not
+ * know any verifier's rule.
+ */
+export type FinalityProofOptions =
+  | {
+      /**
+       * Exactly this many headers after the transaction's block, whatever work
+       * they hold.
+       */
+      headerCount: number;
+      targetBits?: never;
+      maxHeaders?: never;
+    }
+  | {
+      /**
+       * The work to reach, as compact target bits: headers are added until the
+       * transaction's block and the blocks after it hold at least the work of
+       * this target. Charms, for example, sets this as `FINALITY_TARGET_BITS`
+       * in charms-client's `bitcoin_tx.rs`.
+       */
+      targetBits: number;
+      /**
+       * The most headers to fetch while adding up work (default 36). On a
+       * network whose difficulty is far below the target, the work is never
+       * enough, and the call fails after fetching this many.
+       */
+      maxHeaders?: number;
+      headerCount?: never;
+    };
+
 const DEFAULT_TIMEOUT_MS = 30_000;
+
+/** The most headers getFinalityProof fetches while adding up work. */
+const DEFAULT_MAX_FINALITY_HEADERS = 36;
+
+/** The most headers getFinalityProof asks for at once. */
+const FINALITY_HEADER_BATCH = 12;
 
 /** The providers tried, in order, when none is named. */
 const DEFAULT_PROVIDERS: ApiProvider[] = ["mempool", "blockstream"];
@@ -128,7 +192,7 @@ const BASE_URLS: ApiUrls = {
 // Browsers refuse a User-Agent set by a page, so it is only sent elsewhere.
 const IN_BROWSER =
   typeof (globalThis as { document?: unknown }).document !== "undefined";
-const USER_AGENT = "btc-locker-cli/1.0.0";
+const DEFAULT_USER_AGENT = `btc-provider/${VERSION} (+https://github.com/sundial-protocol/btc-locker)`;
 
 /**
  * Whether a failure says the provider is the problem, so the next one is worth
@@ -167,6 +231,8 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
   private fetchFn: typeof fetch;
   private timeoutMs: number;
   private onFallback?: BitcoinAPIOptions["onFallback"];
+  private userAgent: string | null;
+  private fallbackFeeRates?: Record<FeePriorities, number>;
 
   /**
    * @param network - A network name ("bitcoin", "testnet", "testnet4") or an
@@ -223,6 +289,9 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
     this.apiProviders = serving;
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.onFallback = options.onFallback;
+    this.userAgent =
+      options.userAgent === undefined ? DEFAULT_USER_AGENT : options.userAgent;
+    this.fallbackFeeRates = options.fallbackFeeRates;
     this.fetchFn =
       options.fetch ??
       ((input, init) => {
@@ -247,7 +316,7 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
   ): Promise<string> {
     const headers: Record<string, string> = {};
     if (contentType) headers["Content-Type"] = contentType;
-    if (!IN_BROWSER) headers["User-Agent"] = USER_AGENT;
+    if (!IN_BROWSER && this.userAgent) headers["User-Agent"] = this.userAgent;
 
     let response: Response;
     let text: string;
@@ -504,11 +573,248 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
   }
 
   /**
+   * Fee rate in sat/vB for a priority, from this API's providers. When none
+   * of them answers, the `fallbackFeeRates` given to the constructor are used;
+   * without them, the providers' error is thrown.
+   */
+  async queryChainFeeRates(
+    priority: FeePriorities = FeePriorities.MEDIUM,
+  ): Promise<number> {
+    try {
+      return feeRateForPriority(await this.getFeeEstimates(), priority);
+    } catch (error) {
+      const fallback = this.fallbackFeeRates?.[priority];
+      if (fallback === undefined) throw error;
+      return fallback;
+    }
+  }
+
+  /**
    * Get current block height
    */
   async getBlockHeight(): Promise<number> {
     return this.tryProviders("get block height", (provider) =>
       this.sendJson(provider, "/blocks/tip/height")
     );
+  }
+
+  // ── Confirmations and finality proofs ──────────────────────────────────────
+
+  /**
+   * Whether a transaction is confirmed, and in which block.
+   */
+  async getTransactionStatus(txid: string): Promise<TransactionStatus> {
+    return this.tryProviders("get transaction status", (provider) =>
+      this.sendJson(provider, `/tx/${txid}/status`)
+    );
+  }
+
+  /**
+   * Confirmations of a transaction: 0 while unconfirmed, 1 once it is in the
+   * tip block.
+   */
+  async getConfirmations(txid: string): Promise<number> {
+    const status = await this.getTransactionStatus(txid);
+    if (!status.confirmed || status.block_height === undefined) return 0;
+    // The tip can come from a provider that is a block behind the one that
+    // reported the status. A confirmed transaction has at least one.
+    return Math.max(1, (await this.getBlockHeight()) - status.block_height + 1);
+  }
+
+  /**
+   * Proof that a confirmed transaction is in its block: a BIP 37 merkle block,
+   * hex. The same bytes as bitcoind's `gettxoutproof`.
+   */
+  async getMerkleBlockProof(txid: string): Promise<string> {
+    return this.tryProviders("get merkle block proof", (provider) =>
+      this.sendText(provider, `/tx/${txid}/merkleblock-proof`)
+    );
+  }
+
+  /**
+   * Hash of the block at a height on the best chain.
+   */
+  async getBlockHash(height: number): Promise<string> {
+    return this.tryProviders("get block hash", (provider) =>
+      this.sendText(provider, `/block-height/${height}`)
+    );
+  }
+
+  /**
+   * The 80-byte header of a block, hex.
+   */
+  async getBlockHeader(blockHash: string): Promise<string> {
+    return this.tryProviders("get block header", (provider) =>
+      this.sendText(provider, `/block/${blockHash}/header`)
+    );
+  }
+
+  /**
+   * Everything a verifier needs to accept a transaction as final: the raw
+   * transaction, the proof that its block includes it, and the headers of the
+   * blocks mined after that block.
+   *
+   * The caller says how many headers its verifier needs. With `targetBits`,
+   * the headers are as many as it takes for the transaction's block and the
+   * blocks after it to hold the work of that target. With a number, or
+   * `headerCount`, there are exactly that many.
+   *
+   * The pieces are checked against each other before they are returned: the
+   * transaction hashes to the id asked for, the merkle block is for its block
+   * and its tree leads from the transaction to the header's merkle root, every
+   * header hashes to the block it was asked for and meets its own target, and
+   * each one builds on the one before. Providers are not trusted to agree, and
+   * the chain can change between two requests.
+   *
+   * @throws If neither a count nor a target is given, if the transaction is
+   * unconfirmed, if there are not yet enough blocks after it, or if the pieces
+   * do not fit together.
+   */
+  async getFinalityProof(
+    txid: string,
+    options: number | FinalityProofOptions
+  ): Promise<FinalityProof> {
+    const {
+      headerCount,
+      targetBits,
+      maxHeaders = DEFAULT_MAX_FINALITY_HEADERS,
+    }: Partial<{ headerCount: number; targetBits: number; maxHeaders: number }> =
+      typeof options === "number" ? { headerCount: options } : options ?? {};
+    if ((headerCount === undefined) === (targetBits === undefined)) {
+      throw new Error(
+        "getFinalityProof needs either headerCount or targetBits, the work the verifier requires, and not both"
+      );
+    }
+    if (
+      targetBits !== undefined &&
+      (!Number.isInteger(targetBits) ||
+        targetBits <= 0 ||
+        targetBits > 0xffffffff)
+    ) {
+      throw new Error("targetBits must be compact target bits, a 32-bit unsigned integer");
+    }
+    // The work to reach; not used when an exact count is given.
+    const required = targetBits === undefined ? 0n : workOfBits(targetBits);
+    if (
+      headerCount !== undefined &&
+      (!Number.isInteger(headerCount) || headerCount < 0)
+    ) {
+      throw new Error("headerCount must be a non-negative integer");
+    }
+    if (!Number.isInteger(maxHeaders) || maxHeaders < 0) {
+      throw new Error("maxHeaders must be a non-negative integer");
+    }
+    const cannot = `Cannot build a finality proof for ${txid}`;
+
+    const status = await this.getTransactionStatus(txid);
+    const { block_height: height, block_hash: blockHash } = status;
+    if (!status.confirmed || height === undefined || !blockHash) {
+      throw new Error(`${cannot}: it is not confirmed.`);
+    }
+    const confirmations = (await this.getBlockHeight()) - height + 1;
+    // Blocks after the transaction's own, as far as the tip.
+    const available = Math.max(0, confirmations - 1);
+    if (headerCount !== undefined && available < headerCount) {
+      throw new Error(
+        `${cannot}: it has ${confirmations} confirmation(s), and ${headerCount} header(s) after its block need ${
+          headerCount + 1
+        }.`
+      );
+    }
+
+    const [tx, proof] = await Promise.all([
+      this.getTransaction(txid),
+      this.getMerkleBlockProof(txid),
+    ]);
+
+    const changed = `${cannot}: the pieces do not fit together. The chain may have changed while they were read; try again.`;
+    // The transaction returned is the one asked for, and the proof shows it
+    // in a block: the block the provider said it is in. The proof matches that
+    // transaction and no other, the smallest proof there is, which also
+    // satisfies a verifier that reads only the first match, as Charms does.
+    let matched: string[] = [];
+    try {
+      matched = merkleBlockTransactions(proof);
+    } catch {
+      // A malformed proof matches nothing, and fails below.
+    }
+    if (
+      transactionId(tx) !== txid.toLowerCase() ||
+      matched.length !== 1 ||
+      matched[0] !== txid.toLowerCase()
+    ) {
+      throw new Error(changed);
+    }
+    // A merkle block starts with the header of the block it proves against.
+    const blockHeader = proof.slice(0, HEADER_HEX_LENGTH);
+    if (
+      blockHashOfHeader(blockHeader) !== blockHash ||
+      !headerMeetsItsTarget(blockHeader)
+    ) {
+      throw new Error(changed);
+    }
+
+    const headers: string[] = [];
+    let previous = blockHash;
+    let work = workOfHeader(blockHeader);
+    /** Fetch the next `count` headers, check them, and add their work. */
+    const extend = async (count: number): Promise<void> => {
+      const from = height + 1 + headers.length;
+      const blocks = await Promise.all(
+        Array.from({ length: count }, async (_, i) => {
+          const hash = await this.getBlockHash(from + i);
+          return { hash, header: await this.getBlockHeader(hash) };
+        })
+      );
+      for (const { hash, header } of blocks) {
+        if (
+          blockHashOfHeader(header) !== hash ||
+          previousBlockHashOfHeader(header) !== previous ||
+          !headerMeetsItsTarget(header)
+        ) {
+          throw new Error(changed);
+        }
+        previous = hash;
+        work += workOfHeader(header);
+        headers.push(header);
+      }
+    };
+
+    if (headerCount !== undefined) {
+      await extend(headerCount);
+      return { tx, proof, headers };
+    }
+
+    // No block's work says what the next one holds: difficulty changes, and a
+    // test network mixes minimum-difficulty blocks with real ones. So the only
+    // limits are the tip and maxHeaders, and the work is whatever the headers
+    // turn out to carry.
+    const limit = Math.min(available, maxHeaders);
+    while (work < required && headers.length < limit) {
+      // Size the batch from the last block's work, then top up. The guess only
+      // saves requests; a wrong one costs another round.
+      const each = workOfHeader(headers[headers.length - 1] ?? blockHeader);
+      const missing = (required - work + each - 1n) / each;
+      const room = Math.min(limit - headers.length, FINALITY_HEADER_BATCH);
+      await extend(missing < BigInt(room) ? Number(missing) : room);
+    }
+    // A batch sized from a light block overshoots when heavier ones follow.
+    // Return no more headers than the work needs.
+    while (headers.length > 0) {
+      const last = workOfHeader(headers[headers.length - 1]);
+      if (work - last < required) break;
+      work -= last;
+      headers.pop();
+    }
+    if (work < required) {
+      const percent = Number((work * 1000n) / required) / 10;
+      const held = `its block and the ${headers.length} block(s) after it hold ${percent}% of the work required`;
+      throw new Error(
+        headers.length < available
+          ? `${cannot}: ${held}, after ${maxHeaders} header(s), the most this call fetches.`
+          : `${cannot}: ${held}. It has ${confirmations} confirmation(s); wait for more.`
+      );
+    }
+    return { tx, proof, headers };
   }
 }

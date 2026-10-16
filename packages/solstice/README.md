@@ -18,6 +18,7 @@ btc-locker does not have: a Runes receipt token and an atomic BTC⇄RT swap.
 | Cenotaph guard | `encipherGuarded` | Round-trips every runestone before signing (Runes decision record requirement). From `@sundial-protocol/btc-runes`, re-exported here. |
 | Runestone codec | `RunestoneCodec` / `NativeRunestoneCodec` | Native implementation, checked against `ord`. The interface stays pluggable. From `@sundial-protocol/btc-runes`, re-exported here. |
 | Rune names | `runeNameToNumber`, `parseSpacedRune`, `runeCommitment` | Name, spacers and commitment bytes, as `ord` computes them. From `@sundial-protocol/btc-runes`, re-exported here. |
+| Chain connection | `Solstice` | Holds a network and a `BitcoinAPI`. Wraps the builders above with funding, fee rates, the commit checks and broadcast. |
 | Receipt rune (per-instance) | `ReceiptRune` | One per Solstice instance; each brands its own receipt Rune. |
 
 ## Design decisions
@@ -68,6 +69,67 @@ After the etching the reveal key has no further power: the supply sits at
 `vaultAddress` and moves only with that address's signatures.
 
 ## Usage
+
+There are two ways in. The `Solstice` class holds a network and a chain API and
+does the chain work for you. The builder functions under it are pure: you give
+them inputs, a fee rate and a network, and they return a PSBT.
+
+### With a chain connection: `Solstice`
+
+`Solstice` takes a network and an optional `BitcoinAPI` from
+`@sundial-protocol/btc-provider`, the same two arguments as btc-locker's
+`BTCLocker`. Without an API it creates the default one for the network.
+
+```ts
+import { BitcoinAPI } from "@sundial-protocol/btc-provider";
+import { Solstice } from "@sundial-protocol/solstice";
+
+const solstice = new Solstice("testnet");
+// or with your own provider order:
+// new Solstice("testnet", new BitcoinAPI("testnet", ["blockstream", "mempool"]));
+
+// C0, step 1: commit, funded from an address
+const commit = await solstice.buildEtchCommitTransaction({
+  rune: exampleRune,
+  revealPublicKey: adminPublicKey, // x-only or compressed
+  sourceAddress: adminAddress,     // funding inputs and change
+});
+const commitTxid = await solstice.broadcastTransaction(sign(commit.psbtBase64));
+
+// C0, step 2: the etching, once the commit has 5 confirmations
+const etch = await solstice.buildEtchTransaction({
+  rune: exampleRune,
+  vaultAddress,
+  commit: { txid: commitTxid, revealPublicKey: adminPublicKey },
+  sourceAddress: adminAddress,     // only used if the fee rose since the commit
+});
+const etchTxid = await solstice.broadcastTransaction(sign(etch.psbtBase64));
+```
+
+What the class adds to the builders:
+
+| Method | Chain work |
+| --- | --- |
+| `buildEtchCommitTransaction` | Without `inputs`, funds from the confirmed UTXOs of `sourceAddress`, largest first, using as few as cover the commit. Change goes back there. |
+| `buildEtchTransaction` | Reads the commit output from the chain. Refuses if it does not commit to this rune with this key, or has fewer than 5 confirmations. Tops up from `sourceAddress` if the commit output no longer covers the fee. |
+| `buildSwapTransaction`, `buildInvestTransaction`, `buildWithdrawTransaction` | Supplies the network and the fee rate. Inputs are always yours. |
+| `getFeeRate`, `getConfirmations`, `fetchFundingInputs`, `broadcastTransaction` | The reads and the broadcast the methods above use. |
+
+Every method takes `feeRate` (sat/vByte) or `priority`. With neither, it asks the
+chain for the medium rate. The class never takes a private key: you sign the
+PSBTs it returns.
+
+Two limits to know:
+
+- **It cannot see runes.** The chain API reports sats, not rune balances. If
+  `sourceAddress` holds a rune-carrying UTXO and the commit spends it, those
+  runes move into the commit output. Pass `inputs` yourself for such an address.
+  For the same reason swap inputs are never picked for you.
+- **Regtest needs an API.** `BitcoinAPI` has no regtest endpoint, so
+  `new Solstice("regtest")` throws. Pass an adapter, as the regtest suites do
+  with `esploraOverRpc` from `@sundial-protocol/btc-regtest`.
+
+### Pure builders
 
 ```ts
 import * as bitcoin from "bitcoinjs-lib";

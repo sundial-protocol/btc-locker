@@ -65,6 +65,8 @@ const stranger = party("stranger");
  */
 const api = {
   ...esploraOverRpc,
+  // Regtest has no fee market: every builder is told this rate.
+  queryChainFeeRates: async () => FEE_RATE,
   networkType: NETWORKS.regtest,
   provider: "mempool",
 } as unknown as BitcoinAPI;
@@ -240,10 +242,6 @@ async function spend(script: ScriptInfo, inputs: UTXO[], to: Party, signer: Part
 beforeAll(async () => {
   const info = await rpc<{ chain: string }>("getblockchaininfo");
   expect(info.chain).toBe("regtest");
-
-  // Every builder asks FeeUtils for the chain's rate. Regtest has no fee
-  // market, and without this distribute and withdraw would ask mempool.space.
-  vi.spyOn(FeeUtils, "queryChainFeeRates").mockResolvedValue(FEE_RATE);
 
   locker = new BTCLocker(NETWORKS.regtest, api);
   await locker.init();

@@ -178,6 +178,20 @@ async function addressUtxos(address: string): Promise<ApiUtxo[]> {
   }));
 }
 
+/** Where a transaction is on the chain, as Esplora reports it. */
+export interface TransactionStatus {
+  confirmed: boolean;
+  block_height?: number;
+  block_hash?: string;
+}
+
+async function transactionStatus(txid: string): Promise<TransactionStatus> {
+  const tx = await rpc<{ blockhash?: string }>("getrawtransaction", txid, true);
+  if (!tx.blockhash) return { confirmed: false };
+  const header = await rpc<{ height: number }>("getblockheader", tx.blockhash);
+  return { confirmed: true, block_height: header.height, block_hash: tx.blockhash };
+}
+
 /**
  * The Esplora-style calls Sundial code makes on a chain API, served from
  * bitcoind. Hand it to code that expects such an object.
@@ -190,13 +204,25 @@ export const esploraOverRpc = {
   async broadcastTransaction(hex: string): Promise<{ txid: string }> {
     return { txid: await broadcast(hex) };
   },
+  getTransactionStatus: transactionStatus,
+  /** 0 while unconfirmed. */
+  async getConfirmations(txid: string): Promise<number> {
+    const tx = await rpc<{ confirmations?: number }>("getrawtransaction", txid, true);
+    return tx.confirmations ?? 0;
+  },
+  /** The merkle block proving a confirmed transaction is in its block, hex. */
+  async getMerkleBlockProof(txid: string): Promise<string> {
+    const tx = await rpc<{ blockhash?: string }>("getrawtransaction", txid, true);
+    if (!tx.blockhash) throw new Error(`${txid} is not confirmed`);
+    return rpc<string>("gettxoutproof", [txid], tx.blockhash);
+  },
+  getBlockHash: (height: number) => rpc<string>("getblockhash", height),
+  /** The 80-byte header, hex. */
+  getBlockHeader: (blockHash: string) => rpc<string>("getblockheader", blockHash, false),
   /** Only `/tx/:txid/status` is served. */
-  async makeRequest(endpoint: string): Promise<{ confirmed: boolean; block_height?: number }> {
+  async makeRequest(endpoint: string): Promise<TransactionStatus> {
     const match = /^\/tx\/([0-9a-f]{64})\/status$/.exec(endpoint);
     if (!match) throw new Error(`esploraOverRpc: unsupported endpoint ${endpoint}`);
-    const tx = await rpc<{ blockhash?: string }>("getrawtransaction", match[1], true);
-    if (!tx.blockhash) return { confirmed: false };
-    const header = await rpc<{ height: number }>("getblockheader", tx.blockhash);
-    return { confirmed: true, block_height: header.height };
+    return transactionStatus(match[1]);
   },
 };

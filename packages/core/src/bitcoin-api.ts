@@ -6,8 +6,14 @@
  * `BitcoinAPI` export keep working.
  */
 
-import { BitcoinAPI as BaseBitcoinAPI } from "@sundial-protocol/btc-provider";
+import {
+  BitcoinAPI as BaseBitcoinAPI,
+  type ApiProvider,
+  type BitcoinAPIOptions,
+  type NetworkName,
+} from "@sundial-protocol/btc-provider";
 import type { NetworkType } from "./utils/network.js";
+import { FALLBACK_FEE_RATES } from "./utils/fees.js";
 
 export type {
   ApiProvider,
@@ -18,8 +24,21 @@ export type {
   BroadcastResult,
 } from "@sundial-protocol/btc-provider";
 
-/** The same class, typed with the locker's {@link NetworkType}. */
-const BitcoinAPI = BaseBitcoinAPI<NetworkType>;
-type BitcoinAPI = BaseBitcoinAPI<NetworkType>;
-
-export default BitcoinAPI;
+/**
+ * The provider's class, typed with the locker's {@link NetworkType}. When no
+ * provider answers a fee lookup it returns the locker's default rates
+ * ({@link FALLBACK_FEE_RATES}), as the locker always has, unless the options
+ * give other `fallbackFeeRates`.
+ */
+export default class BitcoinAPI extends BaseBitcoinAPI<NetworkType> {
+  constructor(
+    network: NetworkType | NetworkName,
+    apiProvider?: ApiProvider | ApiProvider[],
+    options: BitcoinAPIOptions = {},
+  ) {
+    super(network, apiProvider, {
+      fallbackFeeRates: FALLBACK_FEE_RATES,
+      ...options,
+    });
+  }
+}

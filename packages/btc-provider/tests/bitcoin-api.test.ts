@@ -1,6 +1,8 @@
 import { describe, test, expect, vi, beforeEach, afterAll } from "vitest";
 import BitcoinAPI from "../src/bitcoin-api";
 import { NETWORKS } from "../src/network";
+import { VERSION } from "../src/version";
+import pkg from "../package.json";
 
 // The class calls the global fetch unless one is passed in the options.
 const fetchMock = vi.fn();
@@ -149,8 +151,27 @@ describe("BitcoinAPI", () => {
       mockRequest("{}");
       await new BitcoinAPI("testnet").makeRequest("/test");
       expect(call(fetchMock).headers["User-Agent"]).toBe(
-        "btc-locker-cli/1.0.0"
+        `btc-provider/${pkg.version} (+https://github.com/sundial-protocol/btc-locker)`
       );
+    });
+
+    test("reports the version in package.json", () => {
+      // scripts/sync-versions.mjs writes it; run it after a version bump.
+      expect(VERSION).toBe(pkg.version);
+    });
+
+    test("should send the caller's User-Agent, or none", async () => {
+      mockRequest("{}");
+      await new BitcoinAPI("testnet", undefined, {
+        userAgent: "sunbeam-worker/0.1",
+      }).makeRequest("/test");
+      expect(call(fetchMock).headers["User-Agent"]).toBe("sunbeam-worker/0.1");
+
+      mockRequest("{}");
+      await new BitcoinAPI("testnet", undefined, { userAgent: null }).makeRequest(
+        "/test"
+      );
+      expect(call(fetchMock, 1).headers).not.toHaveProperty("User-Agent");
     });
 
     test("should report the cause of a failed fetch", async () => {
