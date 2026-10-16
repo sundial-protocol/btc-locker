@@ -3,7 +3,9 @@
  * a block includes it, and the headers of the blocks mined on top.
  */
 
-import { sha256 } from "./txid.js";
+import { Block, crypto } from "bitcoinjs-lib";
+import * as varuint from "varuint-bitcoin";
+import { fromHex, reversedHex } from "./bytes.js";
 
 /** Where a transaction is on the chain, as Esplora's `/tx/:txid/status` reports it. */
 export interface TransactionStatus {
@@ -29,21 +31,12 @@ export interface FinalityProof {
 /** A block header is 80 bytes. */
 export const HEADER_HEX_LENGTH = 160;
 
-function fromHex(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
+const EARLY_END = "merkle block ends early";
 
-/** Hex of `bytes` in reverse order: how block hashes are written. */
-function reversedHex(bytes: Uint8Array): string {
-  let hex = "";
-  for (let i = bytes.length - 1; i >= 0; i--) {
-    hex += bytes[i].toString(16).padStart(2, "0");
-  }
-  return hex;
+/** A block header, checked to be 80 bytes of hex. */
+function parseHeader(headerHex: string): Block {
+  assertHeader(headerHex);
+  return Block.fromHex(headerHex);
 }
 
 function assertHeader(headerHex: string): void {
@@ -54,25 +47,27 @@ function assertHeader(headerHex: string): void {
 
 /** The hash of the block a header belongs to. */
 export function blockHashOfHeader(headerHex: string): string {
-  assertHeader(headerHex);
-  return reversedHex(sha256(sha256(fromHex(headerHex))));
+  return parseHeader(headerHex).getId();
 }
 
-/** Double SHA-256, Bitcoin's hash for blocks, transactions and merkle nodes. */
-function hash256(data: Uint8Array): Uint8Array {
-  return sha256(sha256(data));
-}
-
-/** A Bitcoin variable-length integer at `offset`. Returns the value and the next offset. */
-function readVarInt(bytes: Uint8Array, offset: number): [number, number] {
-  const first = bytes[offset];
-  if (first === undefined) throw new Error("merkle block ends early");
-  if (first < 0xfd) return [first, offset + 1];
-  const size = first === 0xfd ? 2 : first === 0xfe ? 4 : 8;
-  if (offset + 1 + size > bytes.length) throw new Error("merkle block ends early");
-  let value = 0;
-  for (let i = size - 1; i >= 0; i--) value = value * 256 + bytes[offset + 1 + i];
-  return [value, offset + 1 + size];
+/**
+ * `varuint.decode` for the two counts in a merkle block, returning the value
+ * and the next offset. Only an adapter: the decoding is varuint-bitcoin's. It
+ * replaces that library's "Offset is outside the bounds" errors with one
+ * naming the merkle block, and turns a count too big for a `number` into the
+ * same error.
+ */
+function readMerkleCount(bytes: Uint8Array, offset: number): [number, number] {
+  let decoded: ReturnType<typeof varuint.decode>;
+  try {
+    decoded = varuint.decode(bytes, offset);
+  } catch {
+    throw new Error(EARLY_END);
+  }
+  // A count above 2^53 can't be met by the bytes that follow, so the proof
+  // ends before it does.
+  if (decoded.numberValue === null) throw new Error(EARLY_END);
+  return [decoded.numberValue, offset + decoded.bytes];
 }
 
 /**
@@ -88,12 +83,9 @@ function readVarInt(bytes: Uint8Array, offset: number): [number, number] {
  * hash to the header's merkle root.
  */
 export function merkleBlockTransactions(proofHex: string): string[] {
-  if (!/^([0-9a-fA-F]{2})+$/.test(proofHex)) {
-    throw new Error("A merkle block is hex");
-  }
-  const bytes = fromHex(proofHex);
+  const bytes = fromHex(proofHex, "A merkle block is hex");
   const HEADER = HEADER_HEX_LENGTH / 2;
-  if (bytes.length < HEADER + 4) throw new Error("merkle block ends early");
+  if (bytes.length < HEADER + 4) throw new Error(EARLY_END);
 
   const total =
     bytes[HEADER] +
@@ -102,11 +94,11 @@ export function merkleBlockTransactions(proofHex: string): string[] {
     bytes[HEADER + 3] * 0x1000000;
   if (total === 0) throw new Error("merkle block has no transactions");
 
-  const [hashCount, hashesAt] = readVarInt(bytes, HEADER + 4);
+  const [hashCount, hashesAt] = readMerkleCount(bytes, HEADER + 4);
   if (hashCount > total || hashesAt + hashCount * 32 > bytes.length) {
     throw new Error("merkle block has too many hashes");
   }
-  const [flagByteCount, flagsAt] = readVarInt(bytes, hashesAt + hashCount * 32);
+  const [flagByteCount, flagsAt] = readMerkleCount(bytes, hashesAt + hashCount * 32);
   if (flagsAt + flagByteCount !== bytes.length) {
     throw new Error("merkle block has the wrong length");
   }
@@ -149,7 +141,7 @@ export function merkleBlockTransactions(proofHex: string): string[] {
     const pair = new Uint8Array(64);
     pair.set(left, 0);
     pair.set(right, 32);
-    return hash256(pair);
+    return crypto.hash256(pair);
   };
 
   const root = walk(treeHeight, 0);
@@ -183,9 +175,10 @@ export function merkleBlockNames(proofHex: string, txid: string): boolean {
 
 /** The hash of the block before the one a header belongs to. */
 export function previousBlockHashOfHeader(headerHex: string): string {
-  assertHeader(headerHex);
-  // After the 4-byte version comes the previous block's hash, 32 bytes.
-  return reversedHex(fromHex(headerHex.slice(8, 72)));
+  const { prevHash } = parseHeader(headerHex);
+  // bitcoinjs-lib types it as optional; an 80-byte header always has one.
+  if (!prevHash) throw new Error("A block header has no previous block hash");
+  return reversedHex(prevHash);
 }
 
 // ── Proof of work ────────────────────────────────────────────────────────────
@@ -206,9 +199,7 @@ export function workOfBits(bits: number): bigint {
 
 /** The compact target a header states, from its `bits` field. */
 function bitsOfHeader(headerHex: string): number {
-  assertHeader(headerHex);
-  const bits = fromHex(headerHex.slice(144, 152));
-  return (bits[0] | (bits[1] << 8) | (bits[2] << 16) | (bits[3] << 24)) >>> 0;
+  return parseHeader(headerHex).bits;
 }
 
 /** The work a header states it took, from its `bits` field. */

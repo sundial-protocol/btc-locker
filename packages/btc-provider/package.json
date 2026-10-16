@@ -62,5 +62,9 @@
   ],
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "bitcoinjs-lib": "^7.0.0",
+    "varuint-bitcoin": "^2.0.0"
   }
 }

@@ -12,7 +12,10 @@ import {
 } from "../src/finality";
 import recorded from "./finality-fixture.json";
 import { LEGACY_TX } from "./fixtures";
-import { sha256 } from "../src/txid";
+import { createHash } from "node:crypto";
+
+const sha256 = (bytes: Uint8Array) =>
+  new Uint8Array(createHash("sha256").update(bytes).digest());
 
 // The work Charms requires: FINALITY_TARGET_BITS in charms-client's
 // bitcoin_tx.rs. The package takes it from the caller; it is here as the
@@ -269,6 +272,10 @@ describe("merkle blocks", () => {
     expect(() => merkleBlockTransactions(proof + "00")).toThrow("wrong length");
     expect(() => merkleBlockTransactions(proof.slice(0, -2))).toThrow("wrong length");
     expect(() => merkleBlockTransactions(proof.slice(0, 160))).toThrow("ends early");
+    // A hash count that says three more bytes follow, with one left.
+    expect(() =>
+      merkleBlockTransactions("00".repeat(80) + "01000000" + "fd01")
+    ).toThrow("ends early");
     expect(() => merkleBlockTransactions("zz")).toThrow("is hex");
     // A transaction count of zero.
     expect(() => merkleBlockTransactions(proof.slice(0, 160) + "00000000" + proof.slice(168))).toThrow(
