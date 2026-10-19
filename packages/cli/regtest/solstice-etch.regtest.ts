@@ -9,8 +9,8 @@
 
 import { expect, test } from "vitest";
 import { createBTCLocker } from "@sundial-protocol/btc-locker";
-import { formatSpacedRune, type ReceiptRune } from "@sundial-protocol/solstice";
-import { NETWORK, esploraOverRpc, party, rpc } from "@sundial-protocol/btc-regtest";
+import { Solstice, formatSpacedRune, type ReceiptRune } from "@sundial-protocol/solstice";
+import { esploraOverRpc, party, rpc } from "@sundial-protocol/btc-regtest";
 import { mine, ord, runeBalances } from "@sundial-protocol/btc-regtest/ord";
 // @ts-expect-error the CLI is plain JavaScript with no type declarations
 import * as cli from "../bin/commands/solstice.js";
@@ -33,10 +33,10 @@ test("commit, refuse to etch early, etch: ord shows the full premine at the vaul
   await rpc("generatetoaddress", 2, admin.address);
   await mine(100, miner);
 
-  // BitcoinAPI has no regtest endpoint, so the locker gets bitcoind's RPC
-  // behind the same method names.
+  // BitcoinAPI has no regtest endpoint, so the locker and Solstice get
+  // bitcoind's RPC behind the same method names.
   const locker = await createBTCLocker("regtest", esploraOverRpc as never);
-  const ctx = { api: esploraOverRpc, locker, network: NETWORK };
+  const ctx = { solstice: new Solstice("regtest", esploraOverRpc as never), locker };
   const rune = receiptRune("SOLSTICECLIRUNE", 0b1000_0000);
   const fromKey = admin.privateKeyHex;
   const step2 = { rune, fromKey, vaultAddress: vault.address, feeRate: FEE_RATE };

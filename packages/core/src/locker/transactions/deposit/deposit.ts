@@ -70,11 +70,7 @@ export async function createDepositTransaction(
       : 0;
 
   let inputs: UTXO[];
-  const feeRate = await FeeUtils.queryChainFeeRates(
-    priority,
-    ctx.api.networkType,
-    ctx.api.provider,
-  );
+  const feeRate = await ctx.api.queryChainFeeRates(priority);
 
   if (providedInputs) {
     inputs = providedInputs;

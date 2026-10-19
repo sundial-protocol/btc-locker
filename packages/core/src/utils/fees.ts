@@ -1,17 +1,28 @@
-import BitcoinAPI, { type ApiProvider } from "../bitcoin-api.js";
-import { type NetworkType, NETWORKS } from "./network.js";
+import { FeePriorities } from "@sundial-protocol/btc-provider";
+
+// Fee priorities and the chain fee lookup live in @sundial-protocol/btc-provider:
+// ask a `BitcoinAPI` with `api.queryChainFeeRates(priority)`.
+export { FeePriorities };
 
 /**
- * Fee priority levels for user-friendly fee selection
+ * The locker's fallback chain fee rates (sat/vB), for when no fee provider
+ * answers. The provider package has none of its own: the locker's
+ * `BitcoinAPI` passes these to it.
  */
-export enum FeePriorities {
-  /** Fast confirmation (next block) */
-  HIGH = "high",
-  /** Medium confirmation (~6 blocks) */
-  MEDIUM = "medium",
-  /** Slow confirmation (~1 day) */
-  LOW = "low",
-}
+export const DEFAULT_CHAIN_FEE_RATES = {
+  fastestFee: 20,
+  halfHourFee: 15,
+  hourFee: 10,
+  economyFee: 5,
+  minimumFee: 1,
+};
+
+/** {@link DEFAULT_CHAIN_FEE_RATES} by priority, as the provider takes them. */
+export const FALLBACK_FEE_RATES: Record<FeePriorities, number> = {
+  [FeePriorities.HIGH]: DEFAULT_CHAIN_FEE_RATES.fastestFee,
+  [FeePriorities.MEDIUM]: DEFAULT_CHAIN_FEE_RATES.hourFee,
+  [FeePriorities.LOW]: DEFAULT_CHAIN_FEE_RATES.economyFee,
+};
 
 /**
  * Fee calculation and transaction utilities
@@ -31,13 +42,7 @@ export default class FeeUtils {
    * Fallback chain fee rates (sat/vB) used when a fee estimation API is unavailable.
    * Shared so all fallbacks (core and consumers) stay in sync.
    */
-  static readonly DEFAULT_CHAIN_FEE_RATES = {
-    fastestFee: 20,
-    halfHourFee: 15,
-    hourFee: 10,
-    economyFee: 5,
-    minimumFee: 1,
-  };
+  static readonly DEFAULT_CHAIN_FEE_RATES = DEFAULT_CHAIN_FEE_RATES;
 
   /**
    * Assert that an amount is above the dust threshold
@@ -106,81 +111,5 @@ export default class FeeUtils {
     // Transaction overhead: 10 bytes (4 version + 1 input count + 1 output count + 4 locktime).
     const estimatedSize = inputCount * 150 + outputCount * 34 + 10;
     return Math.ceil(estimatedSize * feeRate);
-  }
-
-  /**
-   * Query the blockchain for current fee rates
-   * @param network - Network to query (default: bitcoin mainnet)
-   * @param apiProvider - API provider to use (default: mempool)
-   * @returns Fee priorities with sat/byte rates for different confirmation times
-   */
-  static async queryChainFeeRates(
-    priority: FeePriorities = FeePriorities.MEDIUM,
-    network: NetworkType = NETWORKS.bitcoin,
-    apiProvider: ApiProvider = "mempool",
-  ): Promise<number> {
-    try {
-      const api = new BitcoinAPI(network, apiProvider);
-      const feeEstimates = await api.getFeeEstimates();
-
-      // Convert raw fee estimates to user-friendly priorities
-      const result = {
-        high: 0,
-        medium: 0,
-        low: 0,
-      };
-
-      // Map common block targets to priorities
-      // Look for closest matches to standard confirmation targets
-      const blockTargets = Object.keys(feeEstimates)
-        .map(Number)
-        .sort((a, b) => a - b);
-
-      // High priority: 1-2 blocks (next block confirmation)
-      result.high =
-        feeEstimates[1] || feeEstimates[2] || blockTargets[0]
-          ? feeEstimates[blockTargets[0]]
-          : this.DEFAULT_CHAIN_FEE_RATES.fastestFee;
-
-      // Medium priority: 3-6 blocks
-      const mediumTarget = blockTargets.find(
-        (target) => target >= 3 && target <= 6,
-      );
-      result.medium = mediumTarget
-        ? feeEstimates[mediumTarget]
-        : feeEstimates[6] || result.high * 0.7;
-
-      // Low priority: 12+ blocks (lower cost)
-      const lowTarget = blockTargets.find((target) => target >= 12);
-      result.low = lowTarget
-        ? feeEstimates[lowTarget]
-        : feeEstimates[144] || result.medium * 0.5;
-
-      // Ensure fees are reasonable (min 1 sat/byte, max 1000 sat/byte)
-      result.high = Math.min(Math.max(Math.ceil(result.high), 1), 1000);
-      result.medium = Math.min(Math.max(Math.ceil(result.medium), 1), 1000);
-      result.low = Math.min(Math.max(Math.ceil(result.low), 1), 1000);
-
-      switch (priority) {
-        case FeePriorities.HIGH:
-          return result.high;
-        case FeePriorities.MEDIUM:
-          return result.medium;
-        case FeePriorities.LOW:
-          return result.low;
-        default:
-          return result.medium;
-      }
-    } catch {
-      switch (priority) {
-        case FeePriorities.HIGH:
-          return this.DEFAULT_CHAIN_FEE_RATES.fastestFee;
-        case FeePriorities.LOW:
-          return this.DEFAULT_CHAIN_FEE_RATES.economyFee;
-        case FeePriorities.MEDIUM:
-        default:
-          return this.DEFAULT_CHAIN_FEE_RATES.hourFee;
-      }
-    }
   }
 }

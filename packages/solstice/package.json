@@ -1,6 +1,6 @@
 {
   "name": "@sundial-protocol/solstice",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Solstice receipt-token (Runes) + atomic-swap layer for the Solstice value-accrual vault. Reuses @sundial-protocol/btc-locker script/PSBT/signing primitives.",
   "main": "dist/cjs/index.js",
   "types": "dist/cjs/index.d.ts",
@@ -43,6 +43,7 @@
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.2.0",
     "@sundial-protocol/btc-locker": "*",
+    "@sundial-protocol/btc-provider": "*",
     "@sundial-protocol/btc-runes": "*",
     "bitcoinjs-lib": "^7.0.0"
   },

@@ -13,6 +13,10 @@
  *   • C2  Standard Withdrawal→ {@link buildWithdrawTransaction} (generic swap)
  *   • Cenotaph guard (Runes record) → {@link encipherGuarded}
  *
+ * Chain access: {@link Solstice} holds a network and a `BitcoinAPI`, as
+ * btc-locker's `BTCLocker` does, and wraps the builders with the funding, fee
+ * rate, commit checks and broadcast they need. The builders stay pure.
+ *
  * Multi-instance: every builder is parameterized by a {@link ReceiptRune}, so one
  * code path serves every YP instance (each brands its own receipt Rune). YP type
  * (BTC-returning vs asset-backed) does not reach this layer —
@@ -71,6 +75,17 @@ export {
   type ReceiptRune,
   type EtchedReceiptRune,
 } from "./receipt/receipt-rune.js";
+
+// ── Chain-connected entry point ──────────────────────────────────────────────
+export {
+  Solstice,
+  type FeeOptions,
+  type SolsticeEtchCommitParams,
+  type SolsticeEtchParams,
+  type SolsticeSwapParams,
+  type SolsticeInvestParams,
+  type SolsticeWithdrawParams,
+} from "./solstice.js";
 
 // ── Transaction builders ─────────────────────────────────────────────────────
 export {

@@ -9,6 +9,19 @@ import BitcoinAPI from "./bitcoin-api.js";
 
 export { BitcoinAPIError } from "./bitcoin-api.js";
 export { transactionId } from "./txid.js";
+export { FeePriorities } from "./fees.js";
+export {
+  blockHashOfHeader,
+  headerMeetsItsTarget,
+  merkleBlockNames,
+  merkleBlockTransactions,
+  previousBlockHashOfHeader,
+  targetOfBits,
+  workOfBits,
+  workOfHeader,
+  type FinalityProof,
+  type TransactionStatus,
+} from "./finality.js";
 
 export type {
   ApiProvider,
@@ -18,6 +31,7 @@ export type {
   FeeEstimates,
   BroadcastResult,
   BitcoinAPIOptions,
+  FinalityProofOptions,
 } from "./bitcoin-api.js";
 
 export {
