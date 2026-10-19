@@ -1,6 +1,6 @@
 {
   "name": "@sundial-protocol/btc-locker",
-  "version": "3.0.0",
+  "version": "3.0.2",
   "description": "A comprehensive Bitcoin timelock script library for creating and managing time-locked transactions",
   "main": "dist/cjs/index.js",
   "types": "dist/cjs/index.d.ts",
@@ -89,7 +89,7 @@
   "homepage": "https://github.com/sundial-protocol/btc-locker#readme",
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.2.0",
-    "@sundial-protocol/btc-provider": "^1.1.0",
+    "@sundial-protocol/btc-provider": "^1.2.0",
     "bip32": "^5.0.0",
     "bitcoinjs-lib": "^7.0.0",
     "ecpair": "^2.1.0",

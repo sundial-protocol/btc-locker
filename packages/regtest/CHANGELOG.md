@@ -1,5 +1,11 @@
 # @sundial-protocol/btc-regtest
 
+## 0.2.1
+
+### Patch Changes
+
+- 8428539: Each package now ships the MIT license text in a `LICENSE` file, and its `package.json` has a `license` field and a `repository.directory` pointing at its folder in this repo. Earlier releases said MIT in most `package.json` files, but the repository had no license file.
+
 ## 0.2.0
 
 ### Minor Changes

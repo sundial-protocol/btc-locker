@@ -1,6 +1,6 @@
 {
   "name": "@sundial-protocol/btc-runes",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Bitcoin Runes primitives: runestone encode and decode checked against ord, rune names, rune ids and varints. No dependencies.",
   "main": "dist/cjs/index.js",
   "types": "dist/cjs/index.d.ts",
