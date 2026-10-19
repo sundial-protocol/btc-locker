@@ -43,7 +43,8 @@
     "directory": "packages/btc-provider"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   },
   "bugs": {
     "url": "https://github.com/sundial-protocol/btc-locker/issues"
@@ -58,7 +59,8 @@
   "files": [
     "src/",
     "dist/",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18.0.0"

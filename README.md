@@ -66,14 +66,14 @@ This is a **Turborepo monorepo** containing the following packages under `packag
 
 ## Installation
 
-This package sits in a private GitHub Package Registry, so npm needs a GitHub token to install it. The token goes in the `.npmrc` in your home directory (`~/.npmrc`, or `C:\Users\<you>\.npmrc` on Windows), never in a repository:
+The packages are MIT-licensed and published publicly to GitHub Packages. GitHub Packages still asks for a token to install any npm package, public or not, so npm needs a GitHub token. Any GitHub account can create one. The token goes in the `.npmrc` in your home directory (`~/.npmrc`, or `C:\Users\<you>\.npmrc` on Windows), never in a repository:
 
 ```ini
 @sundial-protocol:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=ghp_yourgithubtokenhere
 ```
 
-Create the token at GitHub → Settings → Developer settings → Personal access tokens (classic). It needs the `read:packages` scope to install, and `write:packages` as well to publish. If the `sundial-protocol` organization asks for it, authorize the token for single sign-on.
+Create the token at GitHub → Settings → Developer settings → Personal access tokens (classic). It needs the `read:packages` scope to install, and `write:packages` as well to publish. Members of the `sundial-protocol` organization may also need to authorize the token for single sign-on.
 
 The first line can also live in a project's own `.npmrc`, as it does in this repository. Do not add an `_authToken` line there: a project `.npmrc` overrides the one in your home directory, so an empty or stale token in the project gives a 401 even when your own token is valid.
 
@@ -233,6 +233,10 @@ Publishing uses the token in your `~/.npmrc` (see [Installation](#installation))
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+MIT. See [LICENSE](LICENSE). Each package ships its own copy.
 
 ## Links
 

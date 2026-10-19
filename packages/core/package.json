@@ -76,10 +76,12 @@
   "author": "Sundial Protocol",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sundial-protocol/btc-locker.git"
+    "url": "https://github.com/sundial-protocol/btc-locker.git",
+    "directory": "packages/core"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   },
   "bugs": {
     "url": "https://github.com/sundial-protocol/btc-locker/issues"
@@ -121,5 +123,6 @@
   ],
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "license": "MIT"
 }

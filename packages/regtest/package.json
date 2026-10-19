@@ -32,7 +32,8 @@
   "files": [
     "dist/",
     "src/",
-    "regtest.sh"
+    "regtest.sh",
+    "LICENSE"
   ],
   "dependencies": {
     "@bitcoinerlab/secp256k1": "^1.2.0",
@@ -51,7 +52,8 @@
     "directory": "packages/regtest"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   },
   "engines": {
     "node": ">=18.0.0"

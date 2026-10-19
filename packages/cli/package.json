@@ -26,7 +26,8 @@
     "vitest": "^4.0.18"
   },
   "files": [
-    "bin/"
+    "bin/",
+    "LICENSE"
   ],
   "keywords": [
     "bitcoin",
@@ -43,7 +44,8 @@
     "directory": "packages/cli"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   },
   "engines": {
     "node": ">=14.0.0"
