@@ -71,13 +71,19 @@ Fixed, each with a unit test:
    count it, as deposit and distribute already did (`tests/escrow.test.ts`,
    `tests/deposit-withdraw.test.ts`).
 
+5. **Builders compared a locktime with the clock; consensus does not.** For a
+   block-height locktime the guard always passed. For a time-based one, the
+   builder allowed the spend as soon as the clock passed the deadline, and nodes
+   rejected it as non-final until the median time past did, about an hour later
+   on mainnet. Fixed 2026-11-04: the claim, withdrawal and spending builders ask
+   the locker's API for the chain tip (`BitcoinAPI.getChainTip`) and apply the
+   node's rule, a height locktime against the tip's height and a time locktime
+   against its median time past. A `chainTip` parameter builds ahead of time,
+   which this suite uses to show the node refusing early spends
+   (`tests/locktime.test.ts`).
+
 Not fixed:
 
-5. **Builders compare the locktime with the clock; consensus does not.** For a
-   block-height locktime the guard always passes. For a time-based one, the
-   builder allows the spend as soon as the clock passes the deadline, and nodes
-   reject it as non-final until the median time past does, about an hour later
-   on mainnet.
 6. **`estimateFee` assumes 150 bytes per input and 34 per output.** Real inputs
    here are 68 to 111 vB, so transactions paid 3.0 to 5.7 sat/vB against a
    target of 3. The 34 also undercounts the metadata output, which is about 71

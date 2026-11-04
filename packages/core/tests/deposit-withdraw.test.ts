@@ -439,6 +439,12 @@ describe("TransactionManager (mocked fees)", () => {
     testAddress3 = makeAddress();
 
     vi.spyOn(BitcoinAPI.prototype, "queryChainFeeRates").mockResolvedValue(10);
+    // A tip whose median time past is ten minutes behind the clock.
+    vi.spyOn(BitcoinAPI.prototype, "getChainTip").mockResolvedValue({
+      height: 900_000,
+      hash: "0".repeat(64),
+      medianTimePast: Math.floor(Date.now() / 1000) - 600,
+    });
 
     manager = new TransactionManager(NETWORKS.testnet);
     await manager.init();

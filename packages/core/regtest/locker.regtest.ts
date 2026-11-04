@@ -30,6 +30,7 @@ import {
   NETWORKS,
   TxType,
   type BitcoinAPI,
+  type LocktimeTip,
   type ScriptInfo,
   type SundialMetadata,
   type UTXO,
@@ -194,8 +195,14 @@ async function deposit(flow: string, deadline: number): Promise<Position> {
 }
 
 /** A claim of a position's escrow output, on either branch. */
-function claim(position: Position, to: Party, spendAfterDeadline: boolean): Promise<string> {
+function claim(
+  position: Position,
+  to: Party,
+  spendAfterDeadline: boolean,
+  chainTip?: Partial<LocktimeTip>,
+): Promise<string> {
   return locker.createClaimTransaction({
+    chainTip,
     scriptData: position.escrow,
     utxoTxId: position.escrowUtxo.txid,
     utxoIndex: position.escrowUtxo.vout,
@@ -227,9 +234,16 @@ async function fund(flow: string, from: Party, script: ScriptInfo, amount: numbe
 }
 
 /** Spend script outputs to `to` with the generic spending builder, signed by `signer`. */
-async function spend(script: ScriptInfo, inputs: UTXO[], to: Party, signer: Party): Promise<string> {
+async function spend(
+  script: ScriptInfo,
+  inputs: UTXO[],
+  to: Party,
+  signer: Party,
+  chainTip?: Partial<LocktimeTip>,
+): Promise<string> {
   const total = inputs.reduce((sum, u) => sum + u.value, 0);
   const psbt = await locker.createSpendingTransaction({
+    chainTip,
     inputs,
     outputs: [
       { address: to.address, value: total - FeeUtils.estimateFee(inputs.length, 1, FEE_RATE) },
@@ -276,9 +290,11 @@ describe("a Dawn position the provider claims", () => {
     await expect(locker.signTransaction(psbt, stranger.privateKeyHex)).rejects.toThrow(
       /Can not sign for this input/,
     );
-    // The provider's signature on the after branch, before the deadline.
+    // The after branch, before the deadline: the builder refuses, and built
+    // ahead of time anyway, consensus refuses it too.
+    await expect(claim(position, provider, true)).rejects.toThrow(/Cannot spend after deadline yet/);
     const early = await locker.signTransaction(
-      await claim(position, provider, true),
+      await claim(position, provider, true, { height: deadline }),
       provider.privateKeyHex,
       { spendAfterDeadline: true },
     );
@@ -315,9 +331,12 @@ describe("a Dawn position the provider claims", () => {
     const inputs = [position.timelockUtxo, yieldUtxo];
     expect(await height()).toBeLessThan(deadline - 1);
 
-    // The builder compares a locktime with the clock, so a block height always
-    // looks expired to it. Consensus is what holds the coins.
-    const hex = await spend(position.timelock, inputs, user, user);
+    // The builder refuses until the tip reaches the deadline height. Built
+    // ahead of time anyway, consensus holds the coins too.
+    await expect(spend(position.timelock, inputs, user, user)).rejects.toThrow(
+      /Timelock has not expired yet\. Chain height/,
+    );
+    const hex = await spend(position.timelock, inputs, user, user, { height: deadline });
     await rejected(hex, NON_FINAL);
 
     // Claiming an earlier locktime does not help: the script checks it.
@@ -326,6 +345,7 @@ describe("a Dawn position the provider claims", () => {
       inputs,
       outputs: [{ address: user.address, value: total - FeeUtils.estimateFee(2, 1, FEE_RATE) }],
       redeemScript: position.timelock.redeemScript,
+      chainTip: { height: deadline },
     });
     const lying = await locker.signTransaction(
       withLocktime(psbt, await height()),
@@ -337,6 +357,7 @@ describe("a Dawn position the provider claims", () => {
     await mineTo(deadline - 1);
     await rejected(hex, NON_FINAL);
     await mineTo(deadline);
+    await expect(spend(position.timelock, inputs, user, user)).resolves.toBeTypeOf("string");
 
     await expect(spend(position.timelock, inputs, provider, provider)).rejects.toThrow(
       /Can not sign for this input/,
@@ -358,13 +379,20 @@ describe("a Dawn position nobody claims", () => {
 
   test("withdraw: rejected until the deadline, then the user takes escrow and timelock together", async () => {
     // Inputs are looked up through the API the locker was given.
-    const psbt = await locker.createWithdrawalTransaction({
+    const params = {
       escrowRedeemScript: position.escrow.redeemScript,
       timelockRedeemScript: position.timelock.redeemScript,
       destination: user.address,
       feeAddress: protocol.address,
       protocolFeeAmount: PROTOCOL_FEE,
       metadata: metadata(TxType.Withdrawal),
+    };
+    await expect(locker.createWithdrawalTransaction(params)).rejects.toThrow(
+      /Cannot withdraw from escrow script yet\. Chain height/,
+    );
+    const psbt = await locker.createWithdrawalTransaction({
+      ...params,
+      chainTip: { height: deadline },
     });
     const hex = await locker.signTransaction(psbt, user.privateKeyHex, {
       spendAfterDeadline: true,
@@ -393,7 +421,8 @@ describe("a Dawn position nobody claims", () => {
   test("escrow, after branch: the user's claim alone, once the deadline has passed", async () => {
     const later = (await height()) + 3;
     const second = await deposit("deposit (third position)", later);
-    const psbt = await claim(second, user, true);
+    await expect(claim(second, user, true)).rejects.toThrow(/Cannot spend after deadline yet/);
+    const psbt = await claim(second, user, true, { height: later });
     const hex = await locker.signTransaction(psbt, user.privateKeyHex, { spendAfterDeadline: true });
 
     await rejected(hex, NON_FINAL);
@@ -434,35 +463,38 @@ describe("timelock scripts on their own", () => {
     await mine(1, miner);
   });
 
-  test("time-based deadline: consensus waits for median time past, not the clock", async () => {
+  test("time-based deadline: the builder and consensus wait for median time past, not the clock", async () => {
     const deadline = (await medianTime()) + 3_600;
     const script = await locker.createTimelockScript(deadline, user.publicKeyHex);
     const utxo = await fund("fund a time-based timelock", user, script, 500_000);
 
-    // The builder refuses while the clock is short of the deadline.
+    // The clock and the node's clock are past the deadline, with a block
+    // already mined after it. Consensus compares the locktime with the median
+    // of the last 11 block times, and so does the builder.
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime((deadline - 1) * 1000);
-    await expect(spend(script, [utxo], user, user)).rejects.toThrow(/Timelock has not expired yet/);
-
-    // One second past the deadline the builder allows the spend...
     vi.setSystemTime((deadline + 1) * 1000);
-    const hex = await spend(script, [utxo], user, user);
-    // ...and so does the node's clock, with a block already mined after the
-    // deadline. Consensus still says no: it compares the locktime with the
-    // median of the last 11 block times.
     await rpc("setmocktime", deadline + 1);
     await mine(1, miner);
     const tip = await rpc<{ time: number }>("getblockheader", await rpc("getbestblockhash"));
     expect(tip.time).toBeGreaterThan(deadline);
+    await expect(spend(script, [utxo], user, user)).rejects.toThrow(
+      /Timelock has not expired yet\. Median time past/,
+    );
+
+    // Built ahead of time anyway, the node refuses it.
+    const hex = await spend(script, [utxo], user, user, { medianTimePast: deadline + 1 });
     await rejected(hex, NON_FINAL);
 
     // Six of the last eleven blocks have to be past the deadline.
     await mine(4, miner);
     expect(await medianTime()).toBeLessThan(deadline);
+    await expect(spend(script, [utxo], user, user)).rejects.toThrow(/Timelock has not expired yet/);
     await rejected(hex, NON_FINAL);
     await mine(1, miner);
     expect(await medianTime()).toBeGreaterThan(deadline);
-    await accepted("timelock spend (time-based)", hex, { inputs: 1, outputs: 1 });
+    // Now the builder agrees with the node.
+    const onTime = await spend(script, [utxo], user, user);
+    await accepted("timelock spend (time-based)", onTime, { inputs: 1, outputs: 1 });
     await mine(1, miner);
   });
 });

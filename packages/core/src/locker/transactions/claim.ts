@@ -1,6 +1,7 @@
 ﻿import * as bitcoin from "bitcoinjs-lib";
 import { assertAll } from "../../errors.js";
-import { FeeUtils, TransactionUtils } from "../../utils/index.js";
+import { FeeUtils, LocktimeUtils, TransactionUtils } from "../../utils/index.js";
+import type { LocktimeTip } from "../../utils/locktime.js";
 import { FeePriorities } from "../../utils/fees.js";
 import MetadataUtils, { TxType } from "../../utils/metadata.js";
 import type { LockerContext } from "../core.js";
@@ -25,8 +26,16 @@ export interface ClaimParams extends BaseTransactionParams {
   outputAddress: string;
   /** Whether to spend after deadline (true) or before (false) */
   spendAfterDeadline: boolean;
-  /** Current time for validation (defaults to Date.now()) */
+  /**
+   * @deprecated Use `chainTip.medianTimePast`. When given, its value in
+   * milliseconds, in seconds, stands in for the chain's median time past.
+   */
   currentTime?: number;
+  /**
+   * The chain tip to check the locktime against. Missing values are asked of
+   * the locker's API. Pass them to build a transaction ahead of time.
+   */
+  chainTip?: Partial<LocktimeTip>;
   /** Previous transaction buffer (for testing/validation) */
   previousTransaction?: Buffer | null;
 }
@@ -43,7 +52,8 @@ export async function createClaimTransaction(
     outputAddress,
     spendAfterDeadline,
     priority = FeePriorities.MEDIUM,
-    currentTime = Date.now(),
+    currentTime,
+    chainTip,
     previousTransaction = null,
   } = params;
 
@@ -67,14 +77,17 @@ export async function createClaimTransaction(
     [typeof outputAddress === "string", "outputAddress must be a string"],
   ]);
 
-  const currentTimeSeconds = Math.floor(currentTime / 1000);
-  if (
-    spendAfterDeadline &&
-    scriptData.locktime &&
-    currentTimeSeconds <= scriptData.locktime
-  ) {
-    throw new Error(
-      `Cannot spend after deadline yet. Current time: ${currentTimeSeconds}, Deadline: ${scriptData.locktime}`,
+  if (spendAfterDeadline && scriptData.locktime) {
+    await LocktimeUtils.assertFinal(
+      ctx.api,
+      [scriptData.locktime],
+      "Cannot spend after deadline yet.",
+      {
+        ...(currentTime !== undefined && {
+          medianTimePast: Math.floor(currentTime / 1000),
+        }),
+        ...chainTip,
+      },
     );
   }
 

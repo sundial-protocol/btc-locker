@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll } from "vitest";
+import { describe, test, expect, beforeAll, vi } from "vitest";
 import { TransactionManager } from "../src/locker/transaction-manager";
 import { NETWORKS } from "../src/utils/network";
 import * as bitcoin from "bitcoinjs-lib";
@@ -23,6 +23,12 @@ describe("TransactionManager", () => {
 
     txManager = new TransactionManager(NETWORKS.testnet);
     await txManager.init();
+    // A tip whose median time past is ten minutes behind the clock.
+    vi.spyOn(txManager.api, "getChainTip").mockResolvedValue({
+      height: 900_000,
+      hash: "0".repeat(64),
+      medianTimePast: Math.floor(Date.now() / 1000) - 600,
+    });
   });
 
   describe("createSpendingTransaction", () => {

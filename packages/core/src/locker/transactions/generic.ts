@@ -5,7 +5,12 @@
 import * as bitcoin from "bitcoinjs-lib";
 import { LockerContext } from "../core.js";
 import type { UTXO, BaseTransactionParams } from "../../types.js";
-import { TransactionUtils, ScriptUtils } from "../../utils/index.js";
+import {
+  TransactionUtils,
+  ScriptUtils,
+  LocktimeUtils,
+} from "../../utils/index.js";
+import type { LocktimeTip } from "../../utils/locktime.js";
 import BitcoinAPI from "../../bitcoin-api.js";
 
 /**
@@ -35,6 +40,11 @@ export interface SpendingTransactionParams extends BaseTransactionParams {
   redeemScript: string;
   /** Optional locktime for the transaction */
   locktime?: number;
+  /**
+   * The chain tip to check the locktime against. Missing values are asked of
+   * the locker's API. Pass them to build a transaction ahead of time.
+   */
+  chainTip?: Partial<LocktimeTip>;
 }
 
 /**
@@ -95,7 +105,7 @@ export async function createSpendingTransaction(
   ctx: LockerContext,
   params: SpendingTransactionParams,
 ): Promise<string> {
-  const { inputs, outputs, redeemScript } = params;
+  const { inputs, outputs, redeemScript, chainTip } = params;
 
   const locktime = ScriptUtils.extractLocktimeFromScript(redeemScript);
   // Only look for CSV if the script is not CLTV
@@ -105,17 +115,12 @@ export async function createSpendingTransaction(
       : null;
 
   if (locktime !== null) {
-    const currentTime = Math.floor(Date.now() / 1000);
-    if (currentTime < locktime) {
-      const timeRemaining = locktime - currentTime;
-      const expiryDate = new Date(locktime * 1000).toISOString();
-      throw new Error(
-        `Timelock has not expired yet. ` +
-          `Current time: ${currentTime}, Locktime: ${locktime}. ` +
-          `Time remaining: ${timeRemaining} seconds. ` +
-          `Expires at: ${expiryDate}`,
-      );
-    }
+    await LocktimeUtils.assertFinal(
+      ctx.api,
+      [locktime],
+      "Timelock has not expired yet.",
+      chainTip,
+    );
   }
 
   const psbt = new bitcoin.Psbt({ network: ctx.network });

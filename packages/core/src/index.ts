@@ -18,6 +18,7 @@ import {
   FeeUtils,
   ValidationUtils,
   MetadataUtils,
+  LocktimeUtils,
   Utils,
 } from "./utils/index.js";
 import { BTCLockerError, ValidationError, TimelockError } from "./errors.js";
@@ -46,6 +47,7 @@ export { TxType, packMetadata, unpackMetadata } from "./utils/metadata.js";
 
 // Export additional interfaces from individual modules
 export type { SundialMetadata } from "./utils/metadata.js";
+export type { LocktimeTip } from "./utils/locktime.js";
 
 export type { DepositParams } from "./locker/transactions/deposit/deposit.js";
 
@@ -76,6 +78,7 @@ export type {
   ApiUTXO,
   FeeEstimates,
   BroadcastResult,
+  ChainTip,
 } from "./bitcoin-api.js";
 
 import { NETWORKS } from "./utils/network.js";
@@ -117,6 +120,7 @@ export {
   FeeUtils,
   ValidationUtils,
   MetadataUtils,
+  LocktimeUtils,
   Utils,
   BTCLockerError,
   ValidationError,
@@ -139,6 +143,7 @@ export default {
   FeeUtils,
   ValidationUtils,
   MetadataUtils,
+  LocktimeUtils,
   Utils,
   BTCLockerError,
   ValidationError,

@@ -6,6 +6,7 @@ import type {
 } from "../../types.js";
 import {
   FeeUtils,
+  LocktimeUtils,
   ScriptUtils,
   TransactionUtils,
   ValidationUtils,
@@ -13,6 +14,7 @@ import {
 import { FeePriorities } from "../../utils/fees.js";
 import { TxType } from "../../utils/metadata.js";
 import type { LockerContext } from "../core.js";
+import type { LocktimeTip } from "../../utils/locktime.js";
 
 /**
  * Parameters for Dawn withdrawal
@@ -38,6 +40,11 @@ export interface WithdrawalParams
   timelockRedeemScript: string;
   /** Destination address for withdrawn funds */
   destination: string;
+  /**
+   * The chain tip to check the locktime against. Missing values are asked of
+   * the locker's API. Pass them to build a transaction ahead of time.
+   */
+  chainTip?: Partial<LocktimeTip>;
 }
 
 export async function createWithdrawalTransaction(
@@ -55,6 +62,7 @@ export async function createWithdrawalTransaction(
     priority = FeePriorities.MEDIUM,
     feeAddress,
     metadata,
+    chainTip,
   } = params;
 
   ValidationUtils.assertProtocolFeeParams(feeAddress, params.protocolFeeAmount);
@@ -67,23 +75,27 @@ export async function createWithdrawalTransaction(
       : 0;
 
   let maxLocktime = 0;
-  const currentTime = Math.floor(Date.now() / 1000);
-
-  for (const [scriptHex, label] of [
-    [escrowRedeemScript, "escrow"],
-    [timelockRedeemScript, "timelock"],
-  ] as const) {
-    const timestamp = ScriptUtils.extractLocktimeFromScript(scriptHex);
-    if (timestamp !== null) {
-      if (currentTime < timestamp) {
-        throw new Error(
-          `Cannot withdraw from ${label} script yet. Current time: ${currentTime}, Deadline: ${timestamp}. Wait until ${new Date(
-            timestamp * 1000,
-          ).toISOString()}`,
-        );
-      }
-      maxLocktime = Math.max(maxLocktime, timestamp);
+  const locktimes = (
+    [
+      [escrowRedeemScript, "escrow"],
+      [timelockRedeemScript, "timelock"],
+    ] as const
+  ).flatMap(([scriptHex, label]) => {
+    const locktime = ScriptUtils.extractLocktimeFromScript(scriptHex);
+    return locktime === null ? [] : [{ locktime, label }];
+  });
+  const tip = await LocktimeUtils.tipFor(
+    ctx.api,
+    locktimes.map(({ locktime }) => locktime),
+    chainTip,
+  );
+  for (const { locktime, label } of locktimes) {
+    if (!LocktimeUtils.isFinal(locktime, tip)) {
+      throw new Error(
+        `Cannot withdraw from ${label} script yet. ${LocktimeUtils.describeWait(locktime, tip)}`,
+      );
     }
+    maxLocktime = Math.max(maxLocktime, locktime);
   }
 
   const escrowAddress =

@@ -201,6 +201,13 @@ export const esploraOverRpc = {
   fetchConfirmedUtxos: addressUtxos,
   getTransaction: (txid: string) => rpc<string>("getrawtransaction", txid),
   getBlockHeight: () => rpc<number>("getblockcount"),
+  /** Height, hash and median time past of the tip. */
+  async getChainTip(): Promise<{ height: number; hash: string; medianTimePast: number }> {
+    const info = await rpc<{ blocks: number; bestblockhash: string; mediantime: number }>(
+      "getblockchaininfo",
+    );
+    return { height: info.blocks, hash: info.bestblockhash, medianTimePast: info.mediantime };
+  },
   async broadcastTransaction(hex: string): Promise<{ txid: string }> {
     return { txid: await broadcast(hex) };
   },
