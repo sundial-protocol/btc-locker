@@ -64,29 +64,34 @@ Fixed, each with a unit test:
    `@sundial-protocol/btc-provider`; all four builders now ask the locker's own
    API, so its network, providers and fallback apply.
 
+4. **Claim and withdraw did not count the metadata output in the fee.** A claim
+   to a P2WPKH address with metadata was 192 to 193 vB against an estimate of
+   194, so it passed by one or two bytes; to a P2WSH or taproot address it would
+   have paid slightly under the target rate. Fixed 2026-11-04: both builders now
+   count it, as deposit and distribute already did (`tests/escrow.test.ts`,
+   `tests/deposit-withdraw.test.ts`).
+
 Not fixed:
 
-4. **Claim and withdraw do not count the metadata output in the fee.** A claim
-   to a P2WPKH address with metadata is 192 to 193 vB against an estimate of 194,
-   so it passes by one or two bytes. To a P2WSH or taproot address it would be
-   about 12 vB larger and pay slightly under the target rate.
 5. **Builders compare the locktime with the clock; consensus does not.** For a
    block-height locktime the guard always passes. For a time-based one, the
    builder allows the spend as soon as the clock passes the deadline, and nodes
    reject it as non-final until the median time past does, about an hour later
    on mainnet.
-6. **`estimateFee` assumes 150 bytes per input.** Real inputs here are 68 to 111
-   vB, so transactions paid 3.0 to 5.7 sat/vB against a target of 3.
+6. **`estimateFee` assumes 150 bytes per input and 34 per output.** Real inputs
+   here are 68 to 111 vB, so transactions paid 3.0 to 5.7 sat/vB against a
+   target of 3. The 34 also undercounts the metadata output, which is about 71
+   bytes; the input overestimate covers it today.
 
 Measured sizes, at 3 sat/vB:
 
 | Transaction | vsize | Estimated size | Fee paid | sat/vB |
 | --- | --- | --- | --- | --- |
 | Deposit (1 input, 5 outputs) | 298 | 330 | 990 | 3.32 |
-| Claim, before branch | 192 | 194 | 582 | 3.03 |
-| Claim, after branch | 193 | 194 | 582 | 3.02 |
+| Claim, before branch | 192 | 228 | 684 | 3.56 |
+| Claim, after branch | 193 | 228 | 684 | 3.54 |
 | Distribute (1 input, 4 outputs) | 255 | 296 | 888 | 3.48 |
 | Timelock spend, 2 inputs | 181 | 344 | 1032 | 5.70 |
 | Timelock spend, 1 input | 112 | 194 | 582 | 5.20 |
-| Withdraw (escrow + timelock) | 293 | 378 | 1134 | 3.87 |
+| Withdraw (escrow + timelock) | 293 | 412 | 1236 | 4.22 |
 | Funding (1 input, 2 outputs) | 153 | 228 | 684 | 4.47 |

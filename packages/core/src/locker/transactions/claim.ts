@@ -1,6 +1,6 @@
 ﻿import * as bitcoin from "bitcoinjs-lib";
 import { assertAll } from "../../errors.js";
-import { FeeUtils } from "../../utils/index.js";
+import { FeeUtils, TransactionUtils } from "../../utils/index.js";
 import { FeePriorities } from "../../utils/fees.js";
 import MetadataUtils, { TxType } from "../../utils/metadata.js";
 import type { LockerContext } from "../core.js";
@@ -128,7 +128,8 @@ export async function createClaimTransaction(
     });
 
     const feeRate = await ctx.api.queryChainFeeRates(priority);
-    const estimatedFee = FeeUtils.estimateFee(1, 1, feeRate);
+    const outputCount = TransactionUtils.countOutputs(1, [params.metadata]);
+    const estimatedFee = FeeUtils.estimateFee(1, outputCount, feeRate);
     const outputAmount = amount - estimatedFee;
 
     if (outputAmount <= 0) {

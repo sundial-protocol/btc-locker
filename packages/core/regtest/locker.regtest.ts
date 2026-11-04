@@ -285,8 +285,8 @@ describe("a Dawn position the provider claims", () => {
     await rejected(early, NON_FINAL);
 
     const hex = await locker.signTransaction(psbt, provider.privateKeyHex);
-    // The builder counts one input and one output; it also adds the metadata output.
-    await accepted("claim (before branch)", hex, { inputs: 1, outputs: 1 });
+    // One input; the destination and the metadata output.
+    await accepted("claim (before branch)", hex, { inputs: 1, outputs: 2 });
     await mine(1, miner);
     expect(await utxosOf(position.escrow.address)).toEqual([]);
   });
@@ -383,8 +383,8 @@ describe("a Dawn position nobody claims", () => {
     const beforeBranch = await claim(position, user, false);
     await rejected(await locker.signTransaction(beforeBranch, user.privateKeyHex), BAD_SIGNATURE);
 
-    // The builder counts the destination and the protocol fee; it also adds metadata.
-    await accepted("withdraw (escrow + timelock)", hex, { inputs: 2, outputs: 2 });
+    // The destination, the protocol fee and the metadata output.
+    await accepted("withdraw (escrow + timelock)", hex, { inputs: 2, outputs: 3 });
     await mine(1, miner);
     expect(await utxosOf(position.escrow.address)).toEqual([]);
     expect(await utxosOf(position.timelock.address)).toEqual([]);
@@ -398,7 +398,7 @@ describe("a Dawn position nobody claims", () => {
 
     await rejected(hex, NON_FINAL);
     await mineTo(later);
-    await accepted("claim (after branch)", hex, { inputs: 1, outputs: 1 });
+    await accepted("claim (after branch)", hex, { inputs: 1, outputs: 2 });
     await mine(1, miner);
   });
 });

@@ -2,7 +2,7 @@
  * @fileoverview Vitest tests for EscrowManager
  */
 
-import { describe, test, expect, beforeAll, beforeEach } from "vitest";
+import { describe, test, expect, beforeAll, beforeEach, vi } from "vitest";
 import { TransactionManager } from "../src/locker/transaction-manager";
 import { ScriptManager } from "../src/locker/script-manager";
 import { ECPairFactory, ECPairInterface } from "ecpair";
@@ -168,6 +168,49 @@ describe("EscrowManager", () => {
 
       expect(typeof result).toBe("string");
       expect(result.length).toBeGreaterThan(0);
+    });
+
+    test("should count the metadata output in the fee", async () => {
+      const feeRate = 10;
+      const spy = vi
+        .spyOn(txManager.api, "queryChainFeeRates")
+        .mockResolvedValue(feeRate);
+      const currentTime = (deadline - 3600) * 1000;
+      const claim = async (metadata?: string) => {
+        const result = await txManager.createClaimTransaction({
+          scriptData,
+          utxoTxId,
+          utxoIndex,
+          amount,
+          outputAddress,
+          spendAfterDeadline: false,
+          currentTime,
+          previousTransaction: createMockTransaction(),
+          metadata,
+        });
+        return bitcoin.Psbt.fromBase64(result, {
+          network: bitcoin.networks.testnet,
+        }).txOutputs;
+      };
+
+      try {
+        const plain = await claim();
+        const withMetadata = await claim(
+          JSON.stringify({
+            txType: 2,
+            subjectId: "550e8400-e29b-41d4-a716-446655440000",
+            providerXonlyPubkey: "a".repeat(64),
+          }),
+        );
+        expect(plain).toHaveLength(1);
+        expect(withMetadata).toHaveLength(2);
+        // One more 34-byte output at the fee rate
+        expect(plain[0].value - withMetadata[0].value).toBe(
+          BigInt(34 * feeRate),
+        );
+      } finally {
+        spy.mockRestore();
+      }
     });
 
     test("should create spending transaction after deadline", async () => {
