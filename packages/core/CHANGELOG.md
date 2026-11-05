@@ -1,5 +1,25 @@
 # @sundial-protocol/btc-locker
 
+## 3.1.0
+
+### Minor Changes
+
+- df950bc: Fees are sized from the transaction's real inputs and outputs. The deposit, distribution, claim and withdrawal builders, and `calculateDepositAmounts`, now size each input by the script it spends and each output by its script, with the new `FeeUtils.estimateTransactionFee` (also `estimateVsize`, `inputWeight` and `outputWeight`). Before, every input counted as 150 bytes and every output as 34, so transactions overpaid by up to about 90% on segwit inputs and undercounted the 71-byte metadata output. Fees from these builders are lower as a result.
+
+  A P2WSH input is sized from its witness script on the costliest path: a signature per signature check, the required count plus an empty item for `OP_CHECKMULTISIG`, and a selector per `OP_IF`. A P2SH input is sized from `redeemScript` when given (nested P2WPKH, nested P2WSH, or a legacy script spend) and otherwise taken as P2SH-P2WPKH. A P2PKH input is sized for an uncompressed key unless `publicKey` is given. P2WPKH and P2TR key-path inputs have fixed sizes.
+
+  `FeeUtils.estimateFee(inputCount, outputCount, feeRate)` is unchanged and deprecated.
+
+- c0343e0: Locktimes are checked the way nodes check them. `createClaimTransaction` (after the deadline), `createWithdrawalTransaction` and `createSpendingTransaction` now compare a block-height locktime with the chain tip's height and a time locktime with the tip's median time past, which runs about an hour behind the clock. Before, all three compared any locktime with the clock, so a height locktime always passed and a time locktime passed about an hour before nodes would accept the spend.
+
+  The builders ask the locker's API for the tip with the new `BitcoinAPI.getChainTip()` (height, hash and median time past, from one provider). A new `chainTip` parameter supplies the tip instead, for building ahead of time. `createClaimTransaction`'s `currentTime` still works, standing in for the median time past, and is deprecated. `LocktimeUtils` holds the rule. `esploraOverRpc` in btc-regtest serves `getChainTip`.
+
+### Patch Changes
+
+- 6d0eac9: Claim and withdrawal transactions now count the metadata output when estimating the fee, as deposit and distribute already did. With metadata, they pay slightly more (34 bytes at the fee rate) and no longer risk falling under the target rate.
+- Updated dependencies [c0343e0]
+  - @sundial-protocol/btc-provider@1.3.0
+
 ## 3.0.2
 
 ### Patch Changes
