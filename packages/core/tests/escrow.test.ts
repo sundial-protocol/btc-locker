@@ -204,9 +204,9 @@ describe("EscrowManager", () => {
         );
         expect(plain).toHaveLength(1);
         expect(withMetadata).toHaveLength(2);
-        // One more 34-byte output at the fee rate
+        // One more output: the 60-byte OP_RETURN is 71 bytes in all.
         expect(plain[0].value - withMetadata[0].value).toBe(
-          BigInt(34 * feeRate),
+          BigInt(71 * feeRate),
         );
       } finally {
         spy.mockRestore();

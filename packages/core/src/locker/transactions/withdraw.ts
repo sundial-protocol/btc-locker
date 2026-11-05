@@ -151,9 +151,27 @@ export async function createWithdrawalTransaction(
   );
   const totalInputValue = escrowValue + timelockValue;
   const feeRate = await ctx.api.queryChainFeeRates(priority);
-  const feeAmount = FeeUtils.estimateFee(
-    escrowInputs.length + timelockInputs.length,
-    TransactionUtils.countOutputs(1, [protocolFeeAmount, metadata]),
+  const sized = (inputs: UTXO[], redeemScriptHex: string) => {
+    const witnessScript = Buffer.from(redeemScriptHex, "hex");
+    const { output: scriptPubKey } = bitcoin.payments.p2wsh({
+      redeem: { output: witnessScript, network: ctx.network },
+      network: ctx.network,
+    });
+    if (!scriptPubKey) {
+      throw new Error("Failed to derive P2WSH output from redeem script");
+    }
+    return inputs.map(() => ({ scriptPubKey, witnessScript }));
+  };
+  const feeAmount = FeeUtils.estimateTransactionFee(
+    [
+      ...sized(escrowInputs, escrowRedeemScript),
+      ...sized(timelockInputs, timelockRedeemScript),
+    ],
+    TransactionUtils.outputScripts(
+      ctx.network,
+      [destination, !!protocolFeeAmount && feeAddress],
+      metadata,
+    ),
     feeRate,
   );
   const totalFees = feeAmount + (protocolFeeAmount || 0);

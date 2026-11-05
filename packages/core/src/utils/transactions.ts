@@ -2,6 +2,7 @@ import * as bitcoin from "bitcoinjs-lib";
 import { UTXO } from "../types.js";
 import MetadataUtils, { TxType, SundialMetadata } from "./metadata.js";
 import { FeeUtils } from "../index.js";
+import type { SizedInput } from "./fees.js";
 
 /**
  * Transaction utilities
@@ -63,6 +64,38 @@ export default class TransactionUtils {
    */
   static countOutputs(base: number, extras: unknown[]): number {
     return base + extras.filter(Boolean).length;
+  }
+
+  /**
+   * Output scripts to size a transaction with: one for each address given
+   * (falsy entries are skipped), then the metadata output if there is one.
+   */
+  static outputScripts(
+    network: bitcoin.Network,
+    addresses: Array<string | false | null | undefined | 0>,
+    metadata?: SundialMetadata | string,
+  ): Uint8Array[] {
+    const scripts = addresses
+      .filter((address): address is string => !!address)
+      .map((address) => bitcoin.address.toOutputScript(address, network));
+    if (metadata) scripts.push(MetadataUtils.toOutput(metadata).script);
+    return scripts;
+  }
+
+  /**
+   * Inputs to size a transaction with: each UTXO's `scriptPubKey`, or
+   * `fallbackScript` when it has none. With neither, the input is sized
+   * at 150 vB.
+   */
+  static sizedInputs(
+    inputs: UTXO[],
+    fallbackScript?: Uint8Array,
+  ): SizedInput[] {
+    return inputs.map((input) => ({
+      scriptPubKey: input.scriptPubKey
+        ? Buffer.from(input.scriptPubKey, "hex")
+        : (fallbackScript ?? new Uint8Array()),
+    }));
   }
 
   /**

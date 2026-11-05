@@ -5,7 +5,6 @@ import * as bitcoin from "bitcoinjs-lib";
 import tinysecp from "@bitcoinerlab/secp256k1";
 import { ECPairFactory } from "ecpair";
 import BitcoinAPI from "../src/bitcoin-api";
-import { FeeUtils } from "../src/utils/index";
 
 describe("TransactionManager (Dawn Staking)", () => {
   let manager: TransactionManager;
@@ -761,10 +760,10 @@ describe("TransactionManager (mocked fees)", () => {
         network: bitcoin.networks.testnet,
       });
       expect(psbt.txOutputs).toHaveLength(2); // destination + metadata
-      // The fee covers both outputs: 1 input, 2 outputs at 10 sat/vB
-      expect(psbt.txOutputs[0].value).toBe(
-        BigInt(500000 - FeeUtils.estimateFee(1, 2, 10)),
-      );
+      // The fee covers both outputs at 10 sat/vB, in weight units: overhead 42,
+      // the P2WSH input with its 35-byte script 275, the P2WPKH destination
+      // 124, the metadata output 284. 725 WU is 182 vB.
+      expect(psbt.txOutputs[0].value).toBe(BigInt(500000 - 1820));
     });
 
     test("should reject below dust destination value", async () => {

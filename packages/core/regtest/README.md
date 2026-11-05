@@ -82,22 +82,29 @@ Fixed, each with a unit test:
    which this suite uses to show the node refusing early spends
    (`tests/locktime.test.ts`).
 
-Not fixed:
+6. **`estimateFee` assumed 150 bytes per input and 34 per output.** Real
+   inputs here are 68 to 111 vB, so transactions paid 3.0 to 5.7 sat/vB
+   against a target of 3, and the 71-byte metadata output was undercounted.
+   Fixed 2026-11-04: the deposit, distribution, claim and withdrawal builders
+   size each input by the script it spends (P2WSH from its witness script, with
+   the branch selector when it has one) and each output by its real script,
+   with `FeeUtils.estimateTransactionFee`. Every transaction now pays 3.00 to
+   3.03 sat/vB (`tests/fee-size.test.ts`). `FeeUtils.estimateFee` is kept,
+   deprecated, because Solstice's builders still use it.
 
-6. **`estimateFee` assumes 150 bytes per input and 34 per output.** Real inputs
-   here are 68 to 111 vB, so transactions paid 3.0 to 5.7 sat/vB against a
-   target of 3. The 34 also undercounts the metadata output, which is about 71
-   bytes; the input overestimate covers it today.
+Every finding from this suite is now fixed. Each accepted transaction is also
+checked to overpay by no more than about 1 vB per input, the allowance the
+estimate makes for signature length.
 
 Measured sizes, at 3 sat/vB:
 
-| Transaction | vsize | Estimated size | Fee paid | sat/vB |
-| --- | --- | --- | --- | --- |
-| Deposit (1 input, 5 outputs) | 298 | 330 | 990 | 3.32 |
-| Claim, before branch | 192 | 228 | 684 | 3.56 |
-| Claim, after branch | 193 | 228 | 684 | 3.54 |
-| Distribute (1 input, 4 outputs) | 255 | 296 | 888 | 3.48 |
-| Timelock spend, 2 inputs | 181 | 344 | 1032 | 5.70 |
-| Timelock spend, 1 input | 112 | 194 | 582 | 5.20 |
-| Withdraw (escrow + timelock) | 293 | 412 | 1236 | 4.22 |
-| Funding (1 input, 2 outputs) | 153 | 228 | 684 | 4.47 |
+| Transaction | vsize | Fee paid | sat/vB |
+| --- | --- | --- | --- |
+| Deposit (1 input, 5 outputs) | 298 | 894 | 3.00 |
+| Claim, before branch | 192 | 579 | 3.02 |
+| Claim, after branch | 193 | 579 | 3.00 |
+| Distribute (1 input, 4 outputs) | 255 | 765 | 3.00 |
+| Timelock spend, 2 inputs | 181 | 546 | 3.02 |
+| Timelock spend, 1 input | 111 to 112 | 333 to 336 | 3.00 to 3.03 |
+| Withdraw (escrow + timelock) | 293 | 882 | 3.01 |
+| Funding (1 input, 2 outputs) | 153 | 459 | 3.00 |

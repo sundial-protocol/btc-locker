@@ -140,15 +140,6 @@ export async function createClaimTransaction(
       },
     });
 
-    const feeRate = await ctx.api.queryChainFeeRates(priority);
-    const outputCount = TransactionUtils.countOutputs(1, [params.metadata]);
-    const estimatedFee = FeeUtils.estimateFee(1, outputCount, feeRate);
-    const outputAmount = amount - estimatedFee;
-
-    if (outputAmount <= 0) {
-      throw new Error("Amount too small to cover fee");
-    }
-
     let outputScript: Buffer;
     try {
       outputScript = Buffer.from(
@@ -156,6 +147,21 @@ export async function createClaimTransaction(
       );
     } catch (error) {
       throw new Error(`Invalid output address: ${(error as Error).message}`);
+    }
+
+    const feeRate = await ctx.api.queryChainFeeRates(priority);
+    const estimatedFee = FeeUtils.estimateTransactionFee(
+      [{ scriptPubKey: p2wsh.output, witnessScript }],
+      [
+        outputScript,
+        ...TransactionUtils.outputScripts(ctx.network, [], params.metadata),
+      ],
+      feeRate,
+    );
+    const outputAmount = amount - estimatedFee;
+
+    if (outputAmount <= 0) {
+      throw new Error("Amount too small to cover fee");
     }
 
     psbt.addOutput({

@@ -108,27 +108,25 @@ function metadata(txType: TxType): SundialMetadata {
 const feeRows: Array<Record<string, string | number>> = [];
 
 /**
- * Check that bitcoind accepts a signed transaction and that it pays at least
- * `FEE_RATE` for its real size, then broadcast it. `estimate` is the
- * `FeeUtils.estimateFee` input and output count the builder used.
+ * Check that bitcoind accepts a signed transaction, that it pays at least
+ * `FEE_RATE` for its real size, and that it overpays by no more than the
+ * estimate's allowance for signature length (about 1 vB per input), then
+ * broadcast it.
  */
-async function accepted(
-  flow: string,
-  hex: string,
-  estimate: { inputs: number; outputs: number },
-): Promise<string> {
+async function accepted(flow: string, hex: string): Promise<string> {
   const check = await mempoolAccept(hex);
   expect(check, `${flow}: ${check.reason}`).toMatchObject({ allowed: true });
-  const estimated = FeeUtils.estimateFee(estimate.inputs, estimate.outputs, FEE_RATE);
+  const inputs = bitcoin.Transaction.fromHex(hex).ins.length;
+  const overpaid = check.fee! / FEE_RATE - check.vsize!;
   feeRows.push({
     flow,
     vsize: check.vsize!,
     "fee paid": check.fee!,
     "sat/vB": Number((check.fee! / check.vsize!).toFixed(2)),
-    "estimated size": estimated / FEE_RATE,
+    "overpaid vB": Number(overpaid.toFixed(2)),
   });
   expect(check.fee, `${flow}: fee paid`).toBeGreaterThanOrEqual(check.vsize! * FEE_RATE);
-  expect(estimated, `${flow}: estimateFee`).toBeGreaterThanOrEqual(check.vsize! * FEE_RATE);
+  expect(overpaid, `${flow}: overpaid vB`).toBeLessThanOrEqual(inputs + 1);
   return broadcast(hex);
 }
 
@@ -143,6 +141,14 @@ const NON_FINAL = /^non-final$/;
 const CLTV_FAILED = /Locktime requirement not satisfied/;
 // The signature is well formed but made by the other key, so OP_CHECKSIG is false.
 const BAD_SIGNATURE = /finished with a false\/empty top stack element|Signature must be zero for failed CHECK/;
+
+const outputScript = (address: string) => bitcoin.address.toOutputScript(address, NETWORK);
+
+/** A P2WSH script output, as FeeUtils sizes it. */
+const scriptInput = (script: ScriptInfo) => ({
+  scriptPubKey: outputScript(script.address),
+  witnessScript: Buffer.from(script.redeemScript, "hex"),
+});
 
 /** Re-point a PSBT's locktime, to test the script and not only the builder. */
 function withLocktime(psbtBase64: string, locktime: number): string {
@@ -181,7 +187,7 @@ async function deposit(flow: string, deadline: number): Promise<Position> {
   });
   const hex = await locker.signTransaction(psbt, user.privateKeyHex);
   // escrow, timelock, protocol fee, change, metadata
-  const txid = await accepted(flow, hex, { inputs: 1, outputs: 5 });
+  const txid = await accepted(flow, hex);
   await mine(1, miner);
 
   const [escrowUtxo] = await utxosOf(escrow.address);
@@ -216,7 +222,11 @@ function claim(
 /** Pay to a script address from a party's coinbase, with the generic funding builder. */
 async function fund(flow: string, from: Party, script: ScriptInfo, amount: number): Promise<UTXO> {
   const input = await fresh(from);
-  const fee = FeeUtils.estimateFee(1, 2, FEE_RATE);
+  const fee = FeeUtils.estimateTransactionFee(
+    [{ scriptPubKey: outputScript(from.address) }],
+    [outputScript(script.address), outputScript(from.address)],
+    FEE_RATE,
+  );
   const psbt = await locker.createFundingTransaction({
     inputs: [input],
     sourceAddress: from.address,
@@ -225,10 +235,7 @@ async function fund(flow: string, from: Party, script: ScriptInfo, amount: numbe
       { address: from.address, value: input.value - amount - fee },
     ],
   });
-  const txid = await accepted(flow, await locker.signTransaction(psbt, from.privateKeyHex), {
-    inputs: 1,
-    outputs: 2,
-  });
+  const txid = await accepted(flow, await locker.signTransaction(psbt, from.privateKeyHex));
   await mine(1, miner);
   return { txid, vout: 0, value: amount };
 }
@@ -242,12 +249,15 @@ async function spend(
   chainTip?: Partial<LocktimeTip>,
 ): Promise<string> {
   const total = inputs.reduce((sum, u) => sum + u.value, 0);
+  const fee = FeeUtils.estimateTransactionFee(
+    inputs.map(() => scriptInput(script)),
+    [outputScript(to.address)],
+    FEE_RATE,
+  );
   const psbt = await locker.createSpendingTransaction({
     chainTip,
     inputs,
-    outputs: [
-      { address: to.address, value: total - FeeUtils.estimateFee(inputs.length, 1, FEE_RATE) },
-    ],
+    outputs: [{ address: to.address, value: total - fee }],
     redeemScript: script.redeemScript,
   });
   return locker.signTransaction(psbt, signer.privateKeyHex);
@@ -302,7 +312,7 @@ describe("a Dawn position the provider claims", () => {
 
     const hex = await locker.signTransaction(psbt, provider.privateKeyHex);
     // One input; the destination and the metadata output.
-    await accepted("claim (before branch)", hex, { inputs: 1, outputs: 2 });
+    await accepted("claim (before branch)", hex);
     await mine(1, miner);
     expect(await utxosOf(position.escrow.address)).toEqual([]);
   });
@@ -321,7 +331,7 @@ describe("a Dawn position the provider claims", () => {
     });
     const hex = await locker.signTransaction(psbt, provider.privateKeyHex);
     // timelock, protocol fee, change, metadata
-    const txid = await accepted("distribute", hex, { inputs: 1, outputs: 4 });
+    const txid = await accepted("distribute", hex);
     await mine(1, miner);
     yieldUtxo = { txid, vout: 0, value: amount };
     expect(await utxosOf(position.timelock.address)).toHaveLength(2);
@@ -343,7 +353,7 @@ describe("a Dawn position the provider claims", () => {
     const total = TIMELOCK_AMOUNT + yieldUtxo.value;
     const psbt = await locker.createSpendingTransaction({
       inputs,
-      outputs: [{ address: user.address, value: total - FeeUtils.estimateFee(2, 1, FEE_RATE) }],
+      outputs: [{ address: user.address, value: total - 5_000 }],
       redeemScript: position.timelock.redeemScript,
       chainTip: { height: deadline },
     });
@@ -362,7 +372,7 @@ describe("a Dawn position the provider claims", () => {
     await expect(spend(position.timelock, inputs, provider, provider)).rejects.toThrow(
       /Can not sign for this input/,
     );
-    await accepted("timelock spend (2 inputs)", hex, { inputs: 2, outputs: 1 });
+    await accepted("timelock spend (2 inputs)", hex);
     await mine(1, miner);
     expect(await utxosOf(position.timelock.address)).toEqual([]);
   });
@@ -412,7 +422,7 @@ describe("a Dawn position nobody claims", () => {
     await rejected(await locker.signTransaction(beforeBranch, user.privateKeyHex), BAD_SIGNATURE);
 
     // The destination, the protocol fee and the metadata output.
-    await accepted("withdraw (escrow + timelock)", hex, { inputs: 2, outputs: 3 });
+    await accepted("withdraw (escrow + timelock)", hex);
     await mine(1, miner);
     expect(await utxosOf(position.escrow.address)).toEqual([]);
     expect(await utxosOf(position.timelock.address)).toEqual([]);
@@ -427,7 +437,7 @@ describe("a Dawn position nobody claims", () => {
 
     await rejected(hex, NON_FINAL);
     await mineTo(later);
-    await accepted("claim (after branch)", hex, { inputs: 1, outputs: 2 });
+    await accepted("claim (after branch)", hex);
     await mine(1, miner);
   });
 });
@@ -442,10 +452,7 @@ describe("timelock scripts on their own", () => {
     const script = await locker.createTimelockScript(await height(), owner.publicKeyHex);
     const utxo = await fund("fund a timelock", user, script, 500_000);
 
-    await accepted("timelock spend (key with 0x63)", await spend(script, [utxo], owner, owner), {
-      inputs: 1,
-      outputs: 1,
-    });
+    await accepted("timelock spend (key with 0x63)", await spend(script, [utxo], owner, owner));
     await mine(1, miner);
   });
 
@@ -459,7 +466,7 @@ describe("timelock scripts on their own", () => {
     await mine(blocks - 2, miner);
     await rejected(hex, /^non-BIP68-final$/);
     await mine(1, miner);
-    await accepted("relative timelock spend", hex, { inputs: 1, outputs: 1 });
+    await accepted("relative timelock spend", hex);
     await mine(1, miner);
   });
 
@@ -494,7 +501,7 @@ describe("timelock scripts on their own", () => {
     expect(await medianTime()).toBeGreaterThan(deadline);
     // Now the builder agrees with the node.
     const onTime = await spend(script, [utxo], user, user);
-    await accepted("timelock spend (time-based)", onTime, { inputs: 1, outputs: 1 });
+    await accepted("timelock spend (time-based)", onTime);
     await mine(1, miner);
   });
 });
