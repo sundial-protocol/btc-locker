@@ -1,6 +1,6 @@
 import { describe, test, expect, vi } from "vitest";
 import BitcoinAPI, { BitcoinAPIError } from "../src/bitcoin-api";
-import type { ApiProvider } from "../src/bitcoin-api";
+import type { ProviderName } from "../src/bitcoin-api";
 import { NETWORKS } from "../src/network";
 import { SEGWIT_TX } from "./fixtures";
 
@@ -282,7 +282,7 @@ describe("when every provider fails", () => {
 describe("onFallback", () => {
   test("is told which provider failed, and why", async () => {
     const warn = vi.spyOn(console, "warn");
-    const seen: Array<[ApiProvider, number | undefined]> = [];
+    const seen: Array<[ProviderName, number | undefined]> = [];
     const { fetch } = hosts({
       [MEMPOOL]: status(429, "slow down"),
       [BLOCKSTREAM]: ok("3"),

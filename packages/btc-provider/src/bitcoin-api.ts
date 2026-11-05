@@ -45,6 +45,12 @@ export interface ApiUTXO {
 
 export type ApiProvider = "mempool" | "blockstream";
 
+/**
+ * The name a provider goes by in errors and `onFallback`: one of the public
+ * {@link ApiProvider}s, or "custom" for a server given as `baseUrl`.
+ */
+export type ProviderName = ApiProvider | "custom";
+
 export interface ApiUrls {
   [provider: string]: {
     [network: string]: string;
@@ -100,7 +106,17 @@ export interface BitcoinAPIOptions {
    * Called when a provider fails and the next one is about to be tried, with
    * the provider that failed and its error.
    */
-  onFallback?: (provider: ApiProvider, error: BitcoinAPIError) => void;
+  onFallback?: (provider: ProviderName, error: BitcoinAPIError) => void;
+  /**
+   * The base URL of your own Esplora-compatible server (a self-hosted
+   * mempool or Esplora instance), such as `http://localhost:3002` or
+   * `https://mempool.example.com/api`, without a trailing path for the
+   * network. Every request goes there and nowhere else: the public providers
+   * are not asked, and the `apiProvider` argument is ignored. It is the only
+   * way to use regtest, or any network the public providers do not serve.
+   * Errors name this server "custom".
+   */
+  baseUrl?: string;
   /**
    * The User-Agent sent with each request outside a browser (browsers refuse
    * one set by a page). Defaults to `btc-provider/<version> (+<repo URL>)`, so
@@ -122,7 +138,7 @@ export interface BitcoinAPIOptions {
  * providers were tried, these describe the last one and `attempts` holds all.
  */
 export class BitcoinAPIError extends Error {
-  readonly provider: ApiProvider;
+  readonly provider: ProviderName;
   readonly status?: number;
   readonly body?: string;
   readonly attempts: BitcoinAPIError[];
@@ -130,7 +146,7 @@ export class BitcoinAPIError extends Error {
   constructor(
     message: string,
     details: {
-      provider: ApiProvider;
+      provider: ProviderName;
       status?: number;
       body?: string;
       cause?: unknown;
@@ -221,21 +237,43 @@ function isProviderFailure(error: BitcoinAPIError): boolean {
   return error.body?.includes("invalid network") ?? false;
 }
 
+/**
+ * Check a `baseUrl` and drop its trailing slashes, since endpoints start with
+ * one.
+ */
+function normalizeBaseUrl(baseUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new Error(`baseUrl '${baseUrl}' is not a URL.`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(`baseUrl '${baseUrl}' must be an http or https URL.`);
+  }
+  if (url.search || url.hash) {
+    throw new Error(`baseUrl '${baseUrl}' must not have a query or fragment.`);
+  }
+  return baseUrl.replace(/\/+$/, "");
+}
+
 /** What nodes answer when asked to broadcast a transaction they already have. */
 const ALREADY_KNOWN =
   /txn-already-known|txn-already-in-mempool|already in (the )?block ?chain|outputs already in utxo set/i;
 
 export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
   private network: N;
-  private apiProviders: ApiProvider[];
+  private apiProviders: ProviderName[];
+  /** Base URL of each provider asked, for this network. */
+  private baseUrls: Partial<Record<ProviderName, string>>;
 
-  /** The provider asked first. */
-  get provider(): ApiProvider {
+  /** The provider asked first; "custom" when the options give a `baseUrl`. */
+  get provider(): ProviderName {
     return this.apiProviders[0];
   }
 
   /** The providers asked, in order. */
-  get providers(): ApiProvider[] {
+  get providers(): ProviderName[] {
     return [...this.apiProviders];
   }
 
@@ -254,6 +292,7 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
    * @param apiProvider - One provider, or several to try in order: when one
    * fails the next is asked. Defaults to mempool.space, then Blockstream.
    * Providers in a list that do not serve the network are left out.
+   * Ignored when the options give a `baseUrl`.
    */
   constructor(
     network: N | NetworkName,
@@ -271,10 +310,33 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
       );
     }
 
+    this.network = resolved;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.onFallback = options.onFallback;
+    this.userAgent =
+      options.userAgent === undefined ? DEFAULT_USER_AGENT : options.userAgent;
+    this.fallbackFeeRates = options.fallbackFeeRates;
+    this.fetchFn =
+      options.fetch ??
+      ((input, init) => {
+        if (typeof globalThis.fetch !== "function") {
+          throw new Error(
+            "No global fetch. Use Node 18 or later, or pass one in the options."
+          );
+        }
+        return globalThis.fetch(input, init);
+      });
+
+    if (options.baseUrl !== undefined) {
+      this.apiProviders = ["custom"];
+      this.baseUrls = { custom: normalizeBaseUrl(options.baseUrl) };
+      return;
+    }
+
     // Validate network support
     if (resolved.name === "regtest") {
       throw new Error(
-        "Regtest network is not supported. Use 'bitcoin', 'testnet' or 'testnet4' instead."
+        "Regtest network is not supported by the public providers. Use 'bitcoin', 'testnet' or 'testnet4', or give a baseUrl for your own server."
       );
     }
 
@@ -299,30 +361,17 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
       );
     }
 
-    this.network = resolved;
     this.apiProviders = serving;
-    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.onFallback = options.onFallback;
-    this.userAgent =
-      options.userAgent === undefined ? DEFAULT_USER_AGENT : options.userAgent;
-    this.fallbackFeeRates = options.fallbackFeeRates;
-    this.fetchFn =
-      options.fetch ??
-      ((input, init) => {
-        if (typeof globalThis.fetch !== "function") {
-          throw new Error(
-            "No global fetch. Use Node 18 or later, or pass one in the options."
-          );
-        }
-        return globalThis.fetch(input, init);
-      });
+    this.baseUrls = Object.fromEntries(
+      serving.map((provider) => [provider, BASE_URLS[provider][resolved.name]])
+    );
   }
 
   /**
    * Send one request to one provider and return the body of a 2xx response.
    */
   private async send(
-    provider: ApiProvider,
+    provider: ProviderName,
     endpoint: string,
     method: "GET" | "POST",
     contentType?: string,
@@ -336,7 +385,7 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
     let text: string;
     try {
       response = await this.fetchFn(
-        `${BASE_URLS[provider][this.network.name]}${endpoint}`,
+        `${this.baseUrls[provider]}${endpoint}`,
         {
           method,
           headers,
@@ -372,14 +421,14 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
   }
 
   private async sendText(
-    provider: ApiProvider,
+    provider: ProviderName,
     endpoint: string
   ): Promise<string> {
     return (await this.send(provider, endpoint, "GET")).trim();
   }
 
   private async sendJson(
-    provider: ApiProvider,
+    provider: ProviderName,
     endpoint: string,
     method: "GET" | "POST" = "GET",
     data: any = null
@@ -405,7 +454,7 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
   }
 
   private async sendBroadcast(
-    provider: ApiProvider,
+    provider: ProviderName,
     endpoint: string,
     txHex: string
   ): Promise<BroadcastResult> {
@@ -428,7 +477,7 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
    */
   private async tryProviders<T>(
     what: string,
-    ask: (provider: ApiProvider) => Promise<T>
+    ask: (provider: ProviderName) => Promise<T>
   ): Promise<T> {
     const providers = this.apiProviders;
     const attempts: BitcoinAPIError[] = [];

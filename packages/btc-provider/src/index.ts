@@ -25,6 +25,7 @@ export {
 
 export type {
   ApiProvider,
+  ProviderName,
   ApiUrls,
   AddressInfo,
   ApiUTXO,
