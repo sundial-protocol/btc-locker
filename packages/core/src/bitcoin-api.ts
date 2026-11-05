@@ -22,6 +22,7 @@ export type {
   ApiUTXO,
   FeeEstimates,
   BroadcastResult,
+  ChainTip,
 } from "@sundial-protocol/btc-provider";
 
 /**

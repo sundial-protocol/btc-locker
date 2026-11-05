@@ -441,4 +441,45 @@ describe("BitcoinAPI", () => {
       );
     });
   });
+
+  describe("getChainTip", () => {
+    const hash = "ab".repeat(32);
+
+    function mockTip(block: object) {
+      fetchMock.mockImplementation(async (url: string) =>
+        url.endsWith("/blocks/tip/hash")
+          ? new Response(`${hash}
+`)
+          : new Response(JSON.stringify(block))
+      );
+    }
+
+    test("returns the tip's height, hash and median time past", async () => {
+      mockTip({ id: hash, height: 974600, mediantime: 1793831637 });
+      const api = new BitcoinAPI(NETWORKS.bitcoin, "mempool");
+      expect(await api.getChainTip()).toEqual({
+        height: 974600,
+        hash,
+        medianTimePast: 1793831637,
+      });
+      expect(call(fetchMock, 1).url).toBe(
+        `https://mempool.space/api/block/${hash}`
+      );
+    });
+
+    test("falls back when a provider's block has no mediantime", async () => {
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url.endsWith("/blocks/tip/hash")) return new Response(hash);
+        return url.includes("mempool.space")
+          ? new Response(JSON.stringify({ height: 1 }))
+          : new Response(JSON.stringify({ height: 2, mediantime: 3 }));
+      });
+      const api = new BitcoinAPI(NETWORKS.bitcoin, ["mempool", "blockstream"]);
+      expect(await api.getChainTip()).toEqual({
+        height: 2,
+        hash,
+        medianTimePast: 3,
+      });
+    });
+  });
 });

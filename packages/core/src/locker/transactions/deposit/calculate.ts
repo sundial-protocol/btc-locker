@@ -1,6 +1,10 @@
 ﻿import type { LockerContext } from "../../core.js";
 import { assertAll } from "../../../errors.js";
+import * as bitcoin from "bitcoinjs-lib";
 import { FeeUtils, TransactionUtils } from "../../../utils/index.js";
+
+/** A P2WSH output script's length: the escrow and timelock are P2WSH. */
+const P2WSH_SCRIPT = new Uint8Array(34);
 
 /**
  * Parameters for Dawn staking amount calculation
@@ -62,11 +66,23 @@ export async function calculateDepositAmounts(
   } = params;
 
   let inputs: Array<{ value: number }>;
-  const outputCount = TransactionUtils.countOutputs(2, [
-    protocolFeeAmount > 0,
-    includeChange,
-    metadata,
-  ]);
+  // The escrow and timelock addresses are not known here, but both are
+  // P2WSH. The protocol fee address is not known either, so it is sized as
+  // P2WSH, the larger case. Change goes back to the source address.
+  const sourceScript = bitcoin.address.toOutputScript(sourceAddress, ctx.network);
+  const outputScripts = [
+    P2WSH_SCRIPT,
+    P2WSH_SCRIPT,
+    ...(protocolFeeAmount > 0 ? [P2WSH_SCRIPT] : []),
+    ...(includeChange ? [sourceScript] : []),
+    ...TransactionUtils.outputScripts(ctx.network, [], metadata),
+  ];
+  const feeFor = (inputCount: number) =>
+    FeeUtils.estimateTransactionFee(
+      Array.from({ length: inputCount }, () => ({ scriptPubKey: sourceScript })),
+      outputScripts,
+      feeRate,
+    );
   const minimumCost =
     desiredEscrowAmount + desiredTimelockAmount + protocolFeeAmount;
 
@@ -84,11 +100,7 @@ export async function calculateDepositAmounts(
       );
     }
 
-    const approxFee = FeeUtils.estimateFee(
-      Math.min(availableInputs.length, 3),
-      outputCount,
-      feeRate,
-    );
+    const approxFee = feeFor(Math.min(availableInputs.length, 3));
     try {
       inputs = TransactionUtils.selectUtxos(
         availableInputs,
@@ -112,11 +124,7 @@ export async function calculateDepositAmounts(
 
   const totalInputValue = inputs.reduce((sum, input) => sum + input.value, 0);
 
-  const estimatedFee = FeeUtils.estimateFee(
-    inputs.length,
-    outputCount,
-    feeRate,
-  );
+  const estimatedFee = feeFor(inputs.length);
 
   const totalRequired = minimumCost + estimatedFee;
   const changeAmount = totalInputValue - totalRequired;

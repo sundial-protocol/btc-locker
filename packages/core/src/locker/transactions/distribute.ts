@@ -86,14 +86,21 @@ export async function createDistributionTransaction(
   const psbt = new bitcoin.Psbt({ network: ctx.network });
 
   const feeRate = await ctx.api.queryChainFeeRates(priority);
-  const outputCount = TransactionUtils.countOutputs(1, [
-    protocolFeeAmount && feeAddress,
-    metadata,
-    params.changeAddress,
-  ]);
-  const estimatedFee = FeeUtils.estimateFee(
-    inputs.length,
-    outputCount,
+  const sourceScript = sourceAddress
+    ? bitcoin.address.toOutputScript(sourceAddress, ctx.network)
+    : undefined;
+  // Change, when there is any, goes to changeAddress or back to the timelock.
+  const estimatedFee = FeeUtils.estimateTransactionFee(
+    TransactionUtils.sizedInputs(inputs, sourceScript),
+    TransactionUtils.outputScripts(
+      ctx.network,
+      [
+        timelockAddress,
+        !!protocolFeeAmount && feeAddress,
+        params.changeAddress || timelockAddress,
+      ],
+      metadata,
+    ),
     feeRate,
   );
 
@@ -104,13 +111,7 @@ export async function createDistributionTransaction(
     estimatedFee,
   );
 
-  TransactionUtils.addWitnessInputs(
-    psbt,
-    inputs,
-    sourceAddress
-      ? bitcoin.address.toOutputScript(sourceAddress, ctx.network)
-      : undefined,
-  );
+  TransactionUtils.addWitnessInputs(psbt, inputs, sourceScript);
 
   psbt.addOutput({
     address: timelockAddress,

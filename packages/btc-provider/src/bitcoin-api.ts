@@ -73,6 +73,20 @@ export interface FeeEstimates {
   [blocks: number]: number;
 }
 
+/**
+ * The best chain's tip, as far as locktimes are concerned. A transaction whose
+ * locktime is a block height can be mined once `height` reaches it; one whose
+ * locktime is a time can be mined once `medianTimePast` passes it (BIP 113).
+ */
+export interface ChainTip {
+  /** Height of the tip block. */
+  height: number;
+  /** Hash of the tip block. */
+  hash: string;
+  /** Median of the timestamps of the tip and the 10 blocks before it, in seconds. */
+  medianTimePast: number;
+}
+
 export interface BroadcastResult {
   txid: string;
 }
@@ -596,6 +610,24 @@ export default class BitcoinAPI<N extends BitcoinNetwork = BitcoinNetwork> {
     return this.tryProviders("get block height", (provider) =>
       this.sendJson(provider, "/blocks/tip/height")
     );
+  }
+
+  /**
+   * The tip's height, hash and median time past, all from one provider, so
+   * they describe the same block.
+   */
+  async getChainTip(): Promise<ChainTip> {
+    return this.tryProviders("get chain tip", async (provider) => {
+      const hash = await this.sendText(provider, "/blocks/tip/hash");
+      const block = await this.sendJson(provider, `/block/${hash}`);
+      if (
+        !Number.isInteger(block?.height) ||
+        !Number.isInteger(block?.mediantime)
+      ) {
+        throw new Error(`Block ${hash} has no height or mediantime`);
+      }
+      return { height: block.height, hash, medianTimePast: block.mediantime };
+    });
   }
 
   // ── Confirmations and finality proofs ──────────────────────────────────────

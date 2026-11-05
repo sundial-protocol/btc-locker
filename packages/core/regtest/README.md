@@ -64,29 +64,47 @@ Fixed, each with a unit test:
    `@sundial-protocol/btc-provider`; all four builders now ask the locker's own
    API, so its network, providers and fallback apply.
 
-Not fixed:
+4. **Claim and withdraw did not count the metadata output in the fee.** A claim
+   to a P2WPKH address with metadata was 192 to 193 vB against an estimate of
+   194, so it passed by one or two bytes; to a P2WSH or taproot address it would
+   have paid slightly under the target rate. Fixed 2026-11-04: both builders now
+   count it, as deposit and distribute already did (`tests/escrow.test.ts`,
+   `tests/deposit-withdraw.test.ts`).
 
-4. **Claim and withdraw do not count the metadata output in the fee.** A claim
-   to a P2WPKH address with metadata is 192 to 193 vB against an estimate of 194,
-   so it passes by one or two bytes. To a P2WSH or taproot address it would be
-   about 12 vB larger and pay slightly under the target rate.
-5. **Builders compare the locktime with the clock; consensus does not.** For a
-   block-height locktime the guard always passes. For a time-based one, the
-   builder allows the spend as soon as the clock passes the deadline, and nodes
-   reject it as non-final until the median time past does, about an hour later
-   on mainnet.
-6. **`estimateFee` assumes 150 bytes per input.** Real inputs here are 68 to 111
-   vB, so transactions paid 3.0 to 5.7 sat/vB against a target of 3.
+5. **Builders compared a locktime with the clock; consensus does not.** For a
+   block-height locktime the guard always passed. For a time-based one, the
+   builder allowed the spend as soon as the clock passed the deadline, and nodes
+   rejected it as non-final until the median time past did, about an hour later
+   on mainnet. Fixed 2026-11-04: the claim, withdrawal and spending builders ask
+   the locker's API for the chain tip (`BitcoinAPI.getChainTip`) and apply the
+   node's rule, a height locktime against the tip's height and a time locktime
+   against its median time past. A `chainTip` parameter builds ahead of time,
+   which this suite uses to show the node refusing early spends
+   (`tests/locktime.test.ts`).
+
+6. **`estimateFee` assumed 150 bytes per input and 34 per output.** Real
+   inputs here are 68 to 111 vB, so transactions paid 3.0 to 5.7 sat/vB
+   against a target of 3, and the 71-byte metadata output was undercounted.
+   Fixed 2026-11-04: the deposit, distribution, claim and withdrawal builders
+   size each input by the script it spends (P2WSH from its witness script, with
+   the branch selector when it has one) and each output by its real script,
+   with `FeeUtils.estimateTransactionFee`. Every transaction now pays 3.00 to
+   3.03 sat/vB (`tests/fee-size.test.ts`). `FeeUtils.estimateFee` is kept,
+   deprecated, because Solstice's builders still use it.
+
+Every finding from this suite is now fixed. Each accepted transaction is also
+checked to overpay by no more than about 1 vB per input, the allowance the
+estimate makes for signature length.
 
 Measured sizes, at 3 sat/vB:
 
-| Transaction | vsize | Estimated size | Fee paid | sat/vB |
-| --- | --- | --- | --- | --- |
-| Deposit (1 input, 5 outputs) | 298 | 330 | 990 | 3.32 |
-| Claim, before branch | 192 | 194 | 582 | 3.03 |
-| Claim, after branch | 193 | 194 | 582 | 3.02 |
-| Distribute (1 input, 4 outputs) | 255 | 296 | 888 | 3.48 |
-| Timelock spend, 2 inputs | 181 | 344 | 1032 | 5.70 |
-| Timelock spend, 1 input | 112 | 194 | 582 | 5.20 |
-| Withdraw (escrow + timelock) | 293 | 378 | 1134 | 3.87 |
-| Funding (1 input, 2 outputs) | 153 | 228 | 684 | 4.47 |
+| Transaction | vsize | Fee paid | sat/vB |
+| --- | --- | --- | --- |
+| Deposit (1 input, 5 outputs) | 298 | 894 | 3.00 |
+| Claim, before branch | 192 | 579 | 3.02 |
+| Claim, after branch | 193 | 579 | 3.00 |
+| Distribute (1 input, 4 outputs) | 255 | 765 | 3.00 |
+| Timelock spend, 2 inputs | 181 | 546 | 3.02 |
+| Timelock spend, 1 input | 111 to 112 | 333 to 336 | 3.00 to 3.03 |
+| Withdraw (escrow + timelock) | 293 | 882 | 3.01 |
+| Funding (1 input, 2 outputs) | 153 | 459 | 3.00 |

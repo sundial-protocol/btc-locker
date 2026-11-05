@@ -5,6 +5,7 @@ import ValidationUtils from "./validation.js";
 import TransactionUtils from "./transactions.js";
 import ScriptUtils from "./scripts.js";
 import MetadataUtils from "./metadata.js";
+import LocktimeUtils from "./locktime.js";
 
 export {
   FeeUtils,
@@ -14,6 +15,7 @@ export {
   TransactionUtils,
   ScriptUtils,
   MetadataUtils,
+  LocktimeUtils,
 };
 
 // Combined Utils object containing all utilities
@@ -25,4 +27,5 @@ export const Utils = {
   Transaction: TransactionUtils,
   Script: ScriptUtils,
   Metadata: MetadataUtils,
+  Locktime: LocktimeUtils,
 };

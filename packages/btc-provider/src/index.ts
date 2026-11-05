@@ -31,6 +31,7 @@ export type {
   FeeEstimates,
   BroadcastResult,
   BitcoinAPIOptions,
+  ChainTip,
   FinalityProofOptions,
 } from "./bitcoin-api.js";
 

@@ -438,6 +438,12 @@ describe("TransactionManager (mocked fees)", () => {
     testAddress3 = makeAddress();
 
     vi.spyOn(BitcoinAPI.prototype, "queryChainFeeRates").mockResolvedValue(10);
+    // A tip whose median time past is ten minutes behind the clock.
+    vi.spyOn(BitcoinAPI.prototype, "getChainTip").mockResolvedValue({
+      height: 900_000,
+      hash: "0".repeat(64),
+      medianTimePast: Math.floor(Date.now() / 1000) - 600,
+    });
 
     manager = new TransactionManager(NETWORKS.testnet);
     await manager.init();
@@ -754,6 +760,10 @@ describe("TransactionManager (mocked fees)", () => {
         network: bitcoin.networks.testnet,
       });
       expect(psbt.txOutputs).toHaveLength(2); // destination + metadata
+      // The fee covers both outputs at 10 sat/vB, in weight units: overhead 42,
+      // the P2WSH input with its 35-byte script 275, the P2WPKH destination
+      // 124, the metadata output 284. 725 WU is 182 vB.
+      expect(psbt.txOutputs[0].value).toBe(BigInt(500000 - 1820));
     });
 
     test("should reject below dust destination value", async () => {

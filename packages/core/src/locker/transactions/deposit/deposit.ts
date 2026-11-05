@@ -38,6 +38,24 @@ export interface DepositParams
   timelockAmount: number;
 }
 
+/** The scripts of a deposit's outputs, in the order the builder adds them. */
+function depositOutputScripts(
+  ctx: LockerContext,
+  params: DepositParams,
+  protocolFeeAmount: number,
+): Uint8Array[] {
+  return TransactionUtils.outputScripts(
+    ctx.network,
+    [
+      params.escrowAddress,
+      params.timelockAddress,
+      !!protocolFeeAmount && params.feeAddress,
+      params.changeAddress,
+    ],
+    params.metadata,
+  );
+}
+
 export async function createDepositTransaction(
   ctx: LockerContext,
   params: DepositParams,
@@ -83,16 +101,14 @@ export async function createDepositTransaction(
       );
     }
 
-    const outputCount = TransactionUtils.countOutputs(2, [
-      protocolFeeAmount && feeAddress,
-      changeAddress,
-      metadata,
-    ]);
-
-    const estimatedInputCount = Math.min(availableInputs.length, 3);
-    const estimatedFee = FeeUtils.estimateFee(
-      estimatedInputCount,
-      outputCount,
+    // Sized as if the first three UTXOs were spent; the real fee is worked
+    // out below, once the inputs are chosen.
+    const estimatedFee = FeeUtils.estimateTransactionFee(
+      TransactionUtils.sizedInputs(
+        availableInputs.slice(0, 3),
+        bitcoin.address.toOutputScript(sourceAddress, ctx.network),
+      ),
+      depositOutputScripts(ctx, params, protocolFeeAmount),
       feeRate,
     );
     const targetAmount =
@@ -121,14 +137,12 @@ export async function createDepositTransaction(
     return sum + input.value;
   }, 0);
 
-  const outputCount = TransactionUtils.countOutputs(2, [
-    protocolFeeAmount && feeAddress,
-    changeAddress,
-    metadata,
-  ]);
-  const estimatedFee = FeeUtils.estimateFee(
-    inputs.length,
-    outputCount,
+  const estimatedFee = FeeUtils.estimateTransactionFee(
+    TransactionUtils.sizedInputs(
+      inputs,
+      bitcoin.address.toOutputScript(sourceAddress, ctx.network),
+    ),
+    depositOutputScripts(ctx, params, protocolFeeAmount),
     feeRate,
   );
 
